@@ -221,14 +221,14 @@ export default function ExperiencesContent() {
             continuamente e desenvolver soluções cada
             vez mais úteis.
           </p>
-
-          <a href="/contato" className={styles.secondaryButton}>
-            Fale com a VALLEX
-          </a>
-
-          <a href="/avaliar" className={styles.secondaryButton}>
-            Avaliar minha experiência
-          </a>
+          <div className={styles.invitationActions}>
+              <a href="/contato" className={styles.secondaryButton}>
+                  Fale com a VALLEX
+              </a>
+                  <a href="/avaliar" className={styles.secondaryButton}>
+                  Avaliar minha experiência
+              </a>
+          </div>
         </div>
       </section>
     </div>
