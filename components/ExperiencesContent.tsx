@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import styles from "@/app/experiencias/experiencias.module.css";
 
 const categories = [
@@ -11,44 +10,74 @@ const categories = [
   "Suporte Técnico",
   "Informática",
   "Elétrica",
+  "Consultoria",
+  "Outro",
 ];
 
-const testimonials = [
-  {
-    id: 1,
-    category: "Gestão",
-    title: "Experiência com sistemas de gestão",
-    description:
-      "Espaço reservado para apresentar a experiência de um cliente com uma solução de gestão da VALLEX.",
-    type: "video",
-  },
-  {
-    id: 2,
-    category: "Aplicações Web",
-    title: "Nossa experiência com aplicações web",
-    description:
-      "Espaço reservado para um depoimento sobre a utilização de uma aplicação desenvolvida pela VALLEX.",
-    type: "video",
-  },
-  {
-    id: 3,
-    category: "Suporte Técnico",
-    title: "Atendimento e suporte técnico",
-    description:
-      "Espaço reservado para apresentar uma avaliação sobre o atendimento e suporte técnico.",
-    type: "review",
-  },
-];
+type Evaluation = {
+  id: string;
+  nome: string;
+  empresa: string | null;
+  servico: string;
+  nota: number;
+  depoimento: string;
+  video_url: string | null;
+  status: string;
+  criado_em: string;
+};
+
+function getCategory(service: string) {
+  switch (service) {
+    case "Sistemas de Gestão":
+      return "Gestão";
+    case "Serviços Elétricos":
+      return "Elétrica";
+    default:
+      return service;
+  }
+}
 
 export default function ExperiencesContent() {
-  const [selectedCategory, setSelectedCategory] =
-    useState("Todos");
+  const [selectedCategory, setSelectedCategory] = useState("Todos");
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const filteredTestimonials =
+  useEffect(() => {
+    async function loadEvaluations() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await fetch("/api/avaliacoes", {
+          cache: "no-store",
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+          throw new Error(
+            result.message || "Não foi possível carregar as avaliações."
+          );
+        }
+
+        setEvaluations(result.evaluations ?? []);
+      } catch (err) {
+        console.error("Erro ao carregar avaliações:", err);
+        setError("Não foi possível carregar as experiências neste momento.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadEvaluations();
+  }, []);
+
+  const filteredEvaluations =
     selectedCategory === "Todos"
-      ? testimonials
-      : testimonials.filter(
-          (item) => item.category === selectedCategory
+      ? evaluations
+      : evaluations.filter(
+          (item) => getCategory(item.servico) === selectedCategory
         );
 
   return (
@@ -77,10 +106,7 @@ export default function ExperiencesContent() {
         </div>
       </section>
 
-      <section
-        id="depoimentos"
-        className={styles.testimonials}
-      >
+      <section id="depoimentos" className={styles.testimonials}>
         <div className={styles.container}>
           <div className={styles.sectionHeading}>
             <span className={styles.eyebrow}>
@@ -116,42 +142,71 @@ export default function ExperiencesContent() {
             ))}
           </div>
 
-          <div className={styles.cards}>
-            {filteredTestimonials.map((item) => (
-              <article key={item.id} className={styles.card}>
-                <div className={styles.mediaPlaceholder}>
-                  <span className={styles.playIcon}>
-                    {item.type === "video" ? "▶" : "★"}
-                  </span>
-
-                  <span className={styles.mediaLabel}>
-                    {item.type === "video"
-                      ? "Vídeo de depoimento"
-                      : "Avaliação de cliente"}
-                  </span>
-
-                  <span className={styles.comingSoon}>
-                    Conteúdo em preparação
-                  </span>
-                </div>
-
-                <div className={styles.cardContent}>
-                  <span className={styles.category}>
-                    {item.category}
-                  </span>
-
-                  <h3>{item.title}</h3>
-
-                  <p>{item.description}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-
-          {filteredTestimonials.length === 0 && (
+          {loading && (
             <p className={styles.empty}>
-              Ainda não há experiências cadastradas
-              nesta categoria.
+              Carregando experiências...
+            </p>
+          )}
+
+          {!loading && error && (
+            <p className={styles.empty} role="alert">
+              {error}
+            </p>
+          )}
+
+          {!loading && !error && filteredEvaluations.length > 0 && (
+            <div className={styles.cards}>
+              {filteredEvaluations.map((item) => (
+                <article key={item.id} className={styles.card}>
+                  <div className={styles.mediaPlaceholder}>
+                    <span className={styles.playIcon}>
+                      {item.video_url ? "▶" : "★"}
+                    </span>
+
+                    <span className={styles.mediaLabel}>
+                      {item.video_url
+                        ? "Vídeo de depoimento"
+                        : "Avaliação de cliente"}
+                    </span>
+
+                    {item.video_url && (
+                      <a
+                        href={item.video_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.comingSoon}
+                      >
+                        Assistir depoimento
+                      </a>
+                    )}
+                  </div>
+
+                  <div className={styles.cardContent}>
+                    <span className={styles.category}>
+                      {getCategory(item.servico)}
+                    </span>
+
+                    <h3>{item.nome}</h3>
+
+                    {item.empresa && <p>{item.empresa}</p>}
+
+                    <p aria-label={`Nota ${item.nota} de 5`}>
+                      {"★".repeat(item.nota)}
+                      {"☆".repeat(5 - item.nota)}
+                    </p>
+
+                    <p>{item.depoimento}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+
+          {!loading && !error && filteredEvaluations.length === 0 && (
+            <p className={styles.empty}>
+              {evaluations.length === 0
+                ? "As experiências dos clientes serão exibidas aqui após revisão e aprovação pela equipe VALLEX."
+                : "Ainda não há experiências aprovadas nesta categoria."}
             </p>
           )}
         </div>
@@ -170,6 +225,7 @@ export default function ExperiencesContent() {
           <a href="/contato" className={styles.secondaryButton}>
             Fale com a VALLEX
           </a>
+
           <a href="/avaliar" className={styles.secondaryButton}>
             Avaliar minha experiência
           </a>
