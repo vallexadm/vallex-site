@@ -18,6 +18,16 @@ type Contato = {
   status: string;
   criado_em: string;
 };
+type Historico = {
+  id: string;
+  contato_id: string;
+  tipo: "status_alterado" | "anotacao";
+  status_anterior: string | null;
+  status_novo: string | null;
+  observacao: string | null;
+  criado_por: string | null;
+  criado_em: string;
+};
 
 export default function SolicitacoesPage() {
   const router = useRouter();
@@ -29,6 +39,12 @@ export default function SolicitacoesPage() {
   const [erro, setErro] = useState("");
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
+  const [historicos, setHistoricos] = useState<Record<string, Historico[]>>({});
+  const [historicoAberto, setHistoricoAberto] = useState<string | null>(null);
+  const [anotacoes, setAnotacoes] = useState<Record<string, string>>({});
+  const [carregandoHistorico, setCarregandoHistorico] = useState<string | null>(null);
+  const [salvandoAnotacao, setSalvandoAnotacao] = useState<string | null>(null);
+  const [mensagensHistorico, setMensagensHistorico] = useState<Record<string, string>>({});
 
   useEffect(() => {
     async function carregarSolicitacoes() {
@@ -138,6 +154,126 @@ export default function SolicitacoesPage() {
     );
   } finally {
     setSalvandoId(null);
+  }
+}
+
+async function carregarHistorico(contatoId: string) {
+  setCarregandoHistorico(contatoId);
+  setMensagensHistorico((atuais) => ({
+    ...atuais,
+    [contatoId]: "",
+  }));
+
+  try {
+    const { data, error } = await supabase.auth.getSession();
+
+    if (error || !data.session) {
+      router.replace("/sistema/login");
+      return;
+    }
+
+    const response = await fetch(
+      `/api/contatos/historico?contatoId=${encodeURIComponent(contatoId)}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${data.session.access_token}`,
+        },
+        cache: "no-store",
+      }
+    );
+
+    const resultado = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        resultado.message || "Não foi possível carregar o histórico."
+      );
+    }
+
+    setHistoricos((atuais) => ({
+      ...atuais,
+      [contatoId]: resultado.historico ?? [],
+    }));
+  } catch (error) {
+    setMensagensHistorico((atuais) => ({
+      ...atuais,
+      [contatoId]:
+        error instanceof Error
+          ? error.message
+          : "Erro ao carregar o histórico.",
+    }));
+  } finally {
+    setCarregandoHistorico(null);
+  }
+}
+
+async function salvarAnotacao(contatoId: string) {
+  const observacao = (anotacoes[contatoId] ?? "").trim();
+
+  if (!observacao) {
+    setMensagensHistorico((atuais) => ({
+      ...atuais,
+      [contatoId]: "Digite uma anotação antes de salvar.",
+    }));
+    return;
+  }
+
+  setSalvandoAnotacao(contatoId);
+  setMensagensHistorico((atuais) => ({
+    ...atuais,
+    [contatoId]: "",
+  }));
+
+  try {
+    const { data, error } = await supabase.auth.getSession();
+
+    if (error || !data.session) {
+      router.replace("/sistema/login");
+      return;
+    }
+
+    const response = await fetch("/api/contatos/historico", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${data.session.access_token}`,
+      },
+      body: JSON.stringify({
+        contatoId,
+        observacao,
+      }),
+    });
+
+    const resultado = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        resultado.message || "Não foi possível salvar a anotação."
+      );
+    }
+
+    setAnotacoes((atuais) => ({
+      ...atuais,
+      [contatoId]: "",
+    }));
+
+    await carregarHistorico(contatoId);
+
+    setMensagensHistorico((atuais) => ({
+      ...atuais,
+      [contatoId]: "Anotação salva com sucesso.",
+    }));
+  } catch (error) {
+    setMensagensHistorico((atuais) => ({
+      ...atuais,
+      [contatoId]:
+        error instanceof Error
+          ? error.message
+          : "Erro ao salvar a anotação.",
+    }));
+  } finally {
+    setSalvandoAnotacao(null);
   }
 }
 const contatosFiltrados = contatos.filter((contato) => {
@@ -360,10 +496,10 @@ return (
                     </div>
 
                     <div className="flex flex-col gap-1">
-  <label
-    htmlFor={`status-${contato.id}`}
-    className="text-xs font-medium text-slate-500"
-  >
+                    <label
+                    htmlFor={`status-${contato.id}`}
+                    className="text-xs font-medium text-slate-500"
+                  >
     Status do atendimento
   </label>
 
@@ -388,8 +524,8 @@ return (
   <p className="text-xs text-slate-500">Salvando...</p>
 )}
 
-</div>
-</div>
+                </div>
+                </div>
 
 
 
@@ -473,6 +609,129 @@ return (
                       </a>
                     )}
                   </div>
+                  <div className="mt-5 border-t border-slate-200 pt-4">
+  <button
+    type="button"
+    onClick={() => {
+      if (historicoAberto === contato.id) {
+        setHistoricoAberto(null);
+      } else {
+        setHistoricoAberto(contato.id);
+        carregarHistorico(contato.id);
+      }
+    }}
+    className="rounded-lg border border-purple-200 px-4 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50"
+  >
+    {historicoAberto === contato.id
+      ? "Fechar histórico"
+      : "Ver histórico e anotações"}
+  </button>
+
+  {historicoAberto === contato.id && (
+    <div className="mt-4 rounded-lg bg-slate-50 p-4">
+      <h3 className="text-base font-semibold text-slate-800">
+        Histórico interno da solicitação
+      </h3>
+      <p className="mt-1 text-xs text-slate-500">
+        Visível somente no painel administrativo.
+      </p>
+
+      <div className="mt-4">
+        <label
+          htmlFor={`anotacao-${contato.id}`}
+          className="block text-sm font-medium text-slate-700"
+        >
+          Nova anotação interna
+        </label>
+
+        <textarea
+          id={`anotacao-${contato.id}`}
+          rows={3}
+          maxLength={2000}
+          value={anotacoes[contato.id] ?? ""}
+          onChange={(event) =>
+            setAnotacoes((atuais) => ({
+              ...atuais,
+              [contato.id]: event.target.value,
+            }))
+          }
+          placeholder="Ex.: Cliente solicitou retorno na sexta-feira."
+          className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200"
+        />
+
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => salvarAnotacao(contato.id)}
+            disabled={salvandoAnotacao === contato.id}
+            className="rounded-lg bg-purple-700 px-4 py-2 text-sm font-medium text-white hover:bg-purple-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {salvandoAnotacao === contato.id
+              ? "Salvando anotação..."
+              : "Salvar anotação"}
+          </button>
+
+          <span className="text-xs text-slate-500">
+            {(anotacoes[contato.id] ?? "").length}/2000 caracteres
+          </span>
+        </div>
+      </div>
+
+      {mensagensHistorico[contato.id] && (
+        <p className="mt-3 text-sm text-slate-600" role="status">
+          {mensagensHistorico[contato.id]}
+        </p>
+      )}
+
+      <div className="mt-5">
+        <h4 className="text-sm font-semibold text-slate-800">
+          Registros anteriores
+        </h4>
+
+        {carregandoHistorico === contato.id ? (
+          <p className="mt-3 text-sm text-slate-500">
+            Carregando histórico...
+          </p>
+        ) : (historicos[contato.id] ?? []).length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">
+            Nenhum registro no histórico ainda.
+          </p>
+        ) : (
+          <ol className="mt-3 space-y-3">
+            {(historicos[contato.id] ?? []).map((item) => (
+              <li
+                key={item.id}
+                className="border-l-2 border-purple-300 pl-4"
+              >
+                <p className="text-xs text-slate-500">
+                  {formatarData(item.criado_em)}
+                </p>
+
+                {item.tipo === "status_alterado" ? (
+                  <p className="mt-1 text-sm text-slate-700">
+                    Status alterado:{" "}
+                    <strong>{item.status_anterior || "Inicial"}</strong>
+                    {" → "}
+                    <strong>{item.status_novo}</strong>
+                  </p>
+                ) : (
+                  <>
+                    <p className="mt-1 text-xs font-semibold uppercase text-purple-700">
+                      Anotação interna
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                      {item.observacao}
+                    </p>
+                  </>
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </div>
+  )}
+</div>
                 </article>
               ))}
             </div>
