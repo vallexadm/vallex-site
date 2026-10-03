@@ -9,19 +9,55 @@ export default function SistemaPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [checking, setChecking] = useState(true);
+  const [organizationName, setOrganizationName] = useState("");
+  const [role, setRole] = useState("");
+  const [contextError, setContextError] = useState("");
 
   useEffect(() => {
     async function checkSession() {
-      const { data, error } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getUser();
 
-      if (error || !data.user) {
-        router.replace("/sistema/login");
-        return;
-      }
+  if (error || !data.user) {
+    router.replace("/sistema/login");
+    return;
+  }
 
-      setEmail(data.user.email ?? "");
+  setEmail(data.user.email ?? "");
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+
+  if (!accessToken) {
+    setContextError("Não foi possível obter a sessão autenticada.");
+    setChecking(false);
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/sistema/organizacao", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.ok) {
+      setContextError(
+        result.message ?? "Não foi possível carregar a organização."
+      );
       setChecking(false);
+      return;
     }
+
+    setOrganizationName(result.organization.name);
+    setRole(result.role);
+  } catch {
+    setContextError("Erro ao consultar os dados da organização.");
+  }
+
+  setChecking(false);
+}
 
     checkSession();
   }, [router]);
@@ -66,9 +102,24 @@ export default function SistemaPage() {
           Bem-vindo ao ServiçoFácil!
         </h2>
 
-        <p className="mt-2 text-slate-600">
-          Acesso autenticado: {email}
-        </p>
+    <p className="mt-2 text-slate-600">
+  Acesso autenticado: {email}
+</p>
+
+{contextError ? (
+  <p className="mt-2 text-sm text-red-600">
+    {contextError}
+  </p>
+) : (
+  <p className="mt-2 text-sm text-slate-600">
+    Organização: <strong>{organizationName}</strong>
+    {" · "}
+    Perfil: <strong>
+      {role === "owner" ? "Proprietário" : "Colaborador"}
+    </strong>
+  </p>
+)}
+        {role === "owner" && (
         <div className="mt-6">
   <Link
     href="/sistema/solicitacoes"
@@ -89,49 +140,71 @@ export default function SistemaPage() {
     </span>
   </Link>
 </div>
+)}
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            {
-              title: "Clientes",
-              description: "Cadastro e organização dos clientes.",
-            },
-            {
-              title: "Orçamentos",
-              description: "Registro e acompanhamento de propostas.",
-            },
-            {
-              title: "Agenda",
-              description: "Agendamento de visitas e atendimentos.",
-            },
-            {
-              title: "Serviços",
-              description: "Catálogo de serviços e valores.",
-            },
-            {
-              title: "Financeiro",
-              description: "Controle de receitas e despesas.",
-            },
-            {
-              title: "Configurações",
-              description: "Dados do profissional e do negócio.",
-            },
-          ].map((item) => (
-            <article
-              key={item.title}
-              className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
-            >
-              <h3 className="text-lg font-semibold text-slate-900">
-                {item.title}
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                {item.description}
-              </p>
-              <span className="mt-4 inline-block text-xs font-medium text-purple-700">
-                Módulo planejado
-              </span>
-            </article>
-          ))}
-        </div>
+  {[
+    {
+      title: "Clientes",
+      description: "Cadastro e organização dos clientes.",
+    },
+    {
+      title: "Orçamentos",
+      description: "Registro e acompanhamento de propostas.",
+    },
+    {
+      title: "Agenda",
+      description: "Agendamento de visitas e atendimentos.",
+    },
+    {
+      title: "Serviços",
+      description: "Catálogo de serviços e valores.",
+    },
+    {
+      title: "Financeiro",
+      description: "Controle de receitas e despesas.",
+    },
+    {
+      title: "Configurações",
+      description: "Dados do profissional e do negócio.",
+    },
+  ].map((item) => (
+    <article
+      key={item.title}
+      className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+    >
+      <h3 className="text-lg font-semibold text-slate-900">
+        {item.title}
+      </h3>
+
+      <p className="mt-2 text-sm leading-6 text-slate-600">
+        {item.description}
+      </p>
+
+      <span className="mt-4 inline-block text-xs font-medium text-purple-700">
+        Módulo planejado
+      </span>
+    </article>
+  ))}
+
+  {role === "owner" && (
+    <Link
+      href="/sistema/equipe"
+      className="rounded-xl border border-purple-200 bg-white p-6 shadow-sm transition hover:border-purple-400 hover:shadow-md"
+    >
+      <h3 className="text-lg font-semibold text-slate-900">
+        Equipe
+      </h3>
+
+      <p className="mt-2 text-sm leading-6 text-slate-600">
+        Gerencie colaboradores, convites e acessos da organização.
+      </p>
+
+      <span className="mt-4 inline-block text-xs font-medium text-purple-700">
+        Gerenciar equipe →
+      </span>
+    </Link>
+  )}
+</div>
       </section>
     </main>
   );

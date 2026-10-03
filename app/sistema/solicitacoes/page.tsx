@@ -67,11 +67,21 @@ export default function SolicitacoesPage() {
 
         const resultado = await response.json();
 
-        if (!response.ok) {
-          throw new Error(
-            resultado.message || "Não foi possível carregar as solicitações."
-          );
-        }
+      if (response.status === 403) {
+        router.replace("/sistema");
+        return;
+      }
+
+      if (response.status === 401) {
+        router.replace("/sistema/login");
+        return;
+      }
+
+if (!response.ok) {
+  throw new Error(
+    resultado.message || "Não foi possível carregar as solicitações."
+  );
+}
 
         setContatos(resultado.contatos ?? []);
       } catch (error) {
