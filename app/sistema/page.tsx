@@ -143,48 +143,58 @@ export default function SistemaPage() {
 )}
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
   {[
-    {
-      title: "Clientes",
-      description: "Cadastro e organização dos clientes.",
-    },
-    {
-      title: "Orçamentos",
-      description: "Registro e acompanhamento de propostas.",
-    },
-    {
-      title: "Agenda",
-      description: "Agendamento de visitas e atendimentos.",
-    },
-    {
-      title: "Serviços",
-      description: "Catálogo de serviços e valores.",
-    },
-    {
-      title: "Financeiro",
-      description: "Controle de receitas e despesas.",
-    },
-    {
-      title: "Configurações",
-      description: "Dados do profissional e do negócio.",
-    },
-  ].map((item) => (
-    <article
-      key={item.title}
-      className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
-    >
-      <h3 className="text-lg font-semibold text-slate-900">
-        {item.title}
-      </h3>
+  {
+    title: "Clientes",
+    description: "Cadastro e organização dos clientes.",
+    href: "/sistema/clientes",
+  },
+  {
+    title: "Orçamentos",
+    description: "Registro e acompanhamento de propostas.",
+  },
+  {
+    title: "Agenda",
+    description: "Agendamento de visitas e atendimentos.",
+  },
+  {
+    title: "Serviços",
+    description: "Catálogo de serviços e valores.",
+  },
+  {
+    title: "Financeiro",
+    description: "Controle de receitas e despesas.",
+  },
+  {
+    title: "Configurações",
+    description: "Dados do profissional e do negócio.",
+  },
+].map((item) => (
+  <article
+    key={item.title}
+    className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+  >
+    <h3 className="text-lg font-semibold text-slate-900">
+      {item.title}
+    </h3>
 
-      <p className="mt-2 text-sm leading-6 text-slate-600">
-        {item.description}
-      </p>
+    <p className="mt-2 text-sm leading-6 text-slate-600">
+      {item.description}
+    </p>
 
+    {item.href ? (
+      <Link
+        href={item.href}
+        className="mt-4 inline-flex items-center rounded-lg bg-purple-700 px-4 py-2 text-xs font-medium text-white transition hover:bg-purple-800"
+      >
+        Acessar módulo →
+      </Link>
+    ) : (
       <span className="mt-4 inline-block text-xs font-medium text-purple-700">
         Módulo planejado
       </span>
-    </article>
-  ))}
+    )}
+  </article>
+))}
 
   {role === "owner" && (
     <Link
