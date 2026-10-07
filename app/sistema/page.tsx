@@ -195,6 +195,24 @@ export default function SistemaPage() {
     )}
   </article>
 ))}
+{role === "owner" && (
+  <Link
+    href="/sistema/vitrine"
+    className="rounded-xl border border-purple-200 bg-white p-6 shadow-sm transition hover:border-purple-400 hover:shadow-md"
+  >
+    <h3 className="text-lg font-semibold text-slate-900">
+      Vitrine pública
+    </h3>
+
+    <p className="mt-2 text-sm leading-6 text-slate-600">
+      Configure e publique sua apresentação no ServiçoFácil.
+    </p>
+
+    <span className="mt-4 inline-block text-xs font-medium text-purple-700">
+      Configurar Vitrine →
+    </span>
+  </Link>
+)}
 
   {role === "owner" && (
     <Link
