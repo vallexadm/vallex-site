@@ -1,54 +1,143 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 
-type Contato = {
+type VitrineService = {
   id: string;
+  name: string;
+  description: string | null;
+  price: number | null;
+};
+
+type Solicitacao = {
+  id: string;
+  organization_id: string;
+  vitrine_service_id: string | null;
+  customer_id: string | null;
+  orcamento_id: string | null;
   nome: string;
   telefone: string;
-  email: string | null;
-  servico: string;
-  descricao: string;
+  email: string;
+  descricao: string | null;
+  endereco: string | null;
   data_preferida: string | null;
   horario_preferido: string | null;
-  sugestao_futura: string | null;
+  observacoes: string | null;
   status: string;
-  criado_em: string;
+  created_at: string;
+  updated_at: string;
+  vitrine_services: VitrineService | VitrineService[] | null;
 };
-type Historico = {
-  id: string;
-  contato_id: string;
-  tipo: "status_alterado" | "anotacao";
-  status_anterior: string | null;
-  status_novo: string | null;
-  observacao: string | null;
-  criado_por: string | null;
-  criado_em: string;
+
+type ApiResponse = {
+  ok: boolean;
+  message?: string;
+  organization?: {
+    id: string;
+    name: string;
+  };
+  solicitacoes?: Solicitacao[];
 };
+
+const STATUS_LABELS: Record<string, string> = {
+  nova: "Nova",
+  em_analise: "Em análise",
+  cliente_cadastrado: "Cliente cadastrado",
+  orcamento_criado: "Orçamento criado",
+  concluida: "Concluída",
+  cancelada: "Cancelada",
+};
+
+function obterServico(
+  servico: Solicitacao["vitrine_services"]
+): VitrineService | null {
+  if (!servico) return null;
+
+  if (Array.isArray(servico)) {
+    return servico[0] ?? null;
+  }
+
+  return servico;
+}
+
+function formatarData(data: string) {
+  return new Date(data).toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
+function formatarDataPreferida(data: string | null) {
+  if (!data) return "Não informada";
+
+  const partes = data.split("-");
+
+  if (partes.length !== 3) return data;
+
+  return `${partes[2]}/${partes[1]}/${partes[0]}`;
+}
+
+function formatarValor(valor: number | null) {
+  if (valor === null || valor === undefined) {
+    return "Sob consulta";
+  }
+
+  return valor.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+}
+
+function linkWhatsApp(telefone: string) {
+  const numero = telefone.replace(/\D/g, "");
+  return `https://wa.me/${numero}`;
+}
+
+function classeStatus(status: string) {
+  switch (status) {
+    case "nova":
+      return "border-blue-200 bg-blue-50 text-blue-800";
+
+    case "em_analise":
+      return "border-amber-200 bg-amber-50 text-amber-800";
+
+    case "cliente_cadastrado":
+      return "border-indigo-200 bg-indigo-50 text-indigo-800";
+
+    case "orcamento_criado":
+      return "border-purple-200 bg-purple-50 text-purple-800";
+
+    case "concluida":
+      return "border-green-200 bg-green-50 text-green-800";
+
+    case "cancelada":
+      return "border-red-200 bg-red-50 text-red-800";
+
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-700";
+  }
+}
 
 export default function SolicitacoesPage() {
   const router = useRouter();
 
-  const [contatos, setContatos] = useState<Contato[]>([]);
+  const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
   const [carregando, setCarregando] = useState(true);
-  const [salvandoId, setSalvandoId] = useState<string | null>(null);
-  const [mensagemStatus, setMensagemStatus] = useState("");
   const [erro, setErro] = useState("");
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
-  const [historicos, setHistoricos] = useState<Record<string, Historico[]>>({});
-  const [historicoAberto, setHistoricoAberto] = useState<string | null>(null);
-  const [anotacoes, setAnotacoes] = useState<Record<string, string>>({});
-  const [carregandoHistorico, setCarregandoHistorico] = useState<string | null>(null);
-  const [salvandoAnotacao, setSalvandoAnotacao] = useState<string | null>(null);
-  const [mensagensHistorico, setMensagensHistorico] = useState<Record<string, string>>({});
+  const [salvandoId, setSalvandoId] = useState<string | null>(null);
+  const [mensagemStatus, setMensagemStatus] = useState("");
 
   useEffect(() => {
     async function carregarSolicitacoes() {
       try {
+        setCarregando(true);
+        setErro("");
+
         const { data, error: sessionError } =
           await supabase.auth.getSession();
 
@@ -57,7 +146,7 @@ export default function SolicitacoesPage() {
           return;
         }
 
-        const response = await fetch("/api/contatos", {
+        const response = await fetch("/api/sistema/solicitacoes", {
           method: "GET",
           headers: {
             Authorization: `Bearer ${data.session.access_token}`,
@@ -65,25 +154,26 @@ export default function SolicitacoesPage() {
           cache: "no-store",
         });
 
-        const resultado = await response.json();
+        const resultado: ApiResponse = await response.json();
 
-      if (response.status === 403) {
-        router.replace("/sistema");
-        return;
-      }
+        if (response.status === 403) {
+          router.replace("/sistema");
+          return;
+        }
 
-      if (response.status === 401) {
-        router.replace("/sistema/login");
-        return;
-      }
+        if (response.status === 401) {
+          router.replace("/sistema/login");
+          return;
+        }
 
-if (!response.ok) {
-  throw new Error(
-    resultado.message || "Não foi possível carregar as solicitações."
-  );
-}
+        if (!response.ok) {
+          throw new Error(
+            resultado.message ||
+              "Não foi possível carregar as solicitações."
+          );
+        }
 
-        setContatos(resultado.contatos ?? []);
+        setSolicitacoes(resultado.solicitacoes ?? []);
       } catch (error) {
         setErro(
           error instanceof Error
@@ -98,27 +188,7 @@ if (!response.ok) {
     carregarSolicitacoes();
   }, [router]);
 
-  function formatarData(data: string) {
-    return new Date(data).toLocaleString("pt-BR", {
-      dateStyle: "short",
-      timeStyle: "short",
-    });
-  }
-
-  function formatarDataPreferida(data: string | null) {
-    if (!data) return "Não informada";
-
-    const partes = data.split("-");
-    if (partes.length !== 3) return data;
-
-    return `${partes[2]}/${partes[1]}/${partes[0]}`;
-  }
-
-  function linkWhatsApp(telefone: string) {
-    const numero = telefone.replace(/\D/g, "");
-    return `https://wa.me/${numero}`;
-  }
-  async function atualizarStatus(id: string, status: string) {
+async function atualizarStatus(id: string, status: string) {
   setSalvandoId(id);
   setMensagemStatus("");
 
@@ -130,32 +200,54 @@ if (!response.ok) {
       return;
     }
 
-    const response = await fetch("/api/contatos", {
+    const response = await fetch("/api/sistema/solicitacoes", {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${data.session.access_token}`,
       },
-      body: JSON.stringify({ id, status }),
+      body: JSON.stringify({
+        id,
+        status,
+      }),
     });
 
     const resultado = await response.json();
 
+    if (response.status === 401) {
+      router.replace("/sistema/login");
+      return;
+    }
+
+    if (response.status === 403) {
+      router.replace("/sistema");
+      return;
+    }
+
     if (!response.ok) {
       throw new Error(
-        resultado.message || "Não foi possível atualizar o status."
+        resultado.message ||
+          "Não foi possível atualizar o status."
       );
     }
 
-    setContatos((atuais) =>
-      atuais.map((contato) =>
-        contato.id === id
-          ? { ...contato, status: resultado.contato.status }
-          : contato
+    setSolicitacoes((atuais) =>
+      atuais.map((solicitacao) =>
+        solicitacao.id === id
+          ? {
+              ...solicitacao,
+              status: resultado.solicitacao.status,
+              updated_at: resultado.solicitacao.updated_at,
+            }
+          : solicitacao
       )
     );
 
     setMensagemStatus("Status atualizado com sucesso.");
+
+    window.setTimeout(() => {
+      setMensagemStatus("");
+    }, 3000);
   } catch (error) {
     setMensagemStatus(
       error instanceof Error
@@ -166,13 +258,9 @@ if (!response.ok) {
     setSalvandoId(null);
   }
 }
-
-async function carregarHistorico(contatoId: string) {
-  setCarregandoHistorico(contatoId);
-  setMensagensHistorico((atuais) => ({
-    ...atuais,
-    [contatoId]: "",
-  }));
+async function cadastrarCliente(id: string) {
+  setSalvandoId(id);
+  setMensagemStatus("");
 
   try {
     const { data, error } = await supabase.auth.getSession();
@@ -183,150 +271,120 @@ async function carregarHistorico(contatoId: string) {
     }
 
     const response = await fetch(
-      `/api/contatos/historico?contatoId=${encodeURIComponent(contatoId)}`,
+      `/api/sistema/solicitacoes/${id}/cliente`,
       {
-        method: "GET",
+        method: "POST",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${data.session.access_token}`,
         },
-        cache: "no-store",
+        body: JSON.stringify({
+          id,
+        }),
       }
     );
 
     const resultado = await response.json();
 
-    if (!response.ok) {
-      throw new Error(
-        resultado.message || "Não foi possível carregar o histórico."
-      );
-    }
-
-    setHistoricos((atuais) => ({
-      ...atuais,
-      [contatoId]: resultado.historico ?? [],
-    }));
-  } catch (error) {
-    setMensagensHistorico((atuais) => ({
-      ...atuais,
-      [contatoId]:
-        error instanceof Error
-          ? error.message
-          : "Erro ao carregar o histórico.",
-    }));
-  } finally {
-    setCarregandoHistorico(null);
-  }
-}
-
-async function salvarAnotacao(contatoId: string) {
-  const observacao = (anotacoes[contatoId] ?? "").trim();
-
-  if (!observacao) {
-    setMensagensHistorico((atuais) => ({
-      ...atuais,
-      [contatoId]: "Digite uma anotação antes de salvar.",
-    }));
-    return;
-  }
-
-  setSalvandoAnotacao(contatoId);
-  setMensagensHistorico((atuais) => ({
-    ...atuais,
-    [contatoId]: "",
-  }));
-
-  try {
-    const { data, error } = await supabase.auth.getSession();
-
-    if (error || !data.session) {
+    if (response.status === 401) {
       router.replace("/sistema/login");
       return;
     }
 
-    const response = await fetch("/api/contatos/historico", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${data.session.access_token}`,
-      },
-      body: JSON.stringify({
-        contatoId,
-        observacao,
-      }),
-    });
-
-    const resultado = await response.json();
+    if (response.status === 403) {
+      router.replace("/sistema");
+      return;
+    }
 
     if (!response.ok) {
       throw new Error(
-        resultado.message || "Não foi possível salvar a anotação."
+        resultado.message ||
+          "Não foi possível cadastrar o cliente."
       );
     }
 
-    setAnotacoes((atuais) => ({
-      ...atuais,
-      [contatoId]: "",
-    }));
+    setSolicitacoes((atuais) =>
+      atuais.map((solicitacao) =>
+        solicitacao.id === id
+          ? {
+              ...solicitacao,
+              customer_id:
+                resultado.customer?.id ??
+                solicitacao.customer_id,
+              status:
+                resultado.solicitacao?.status ??
+                "cliente_cadastrado",
+              updated_at:
+                resultado.solicitacao?.updated_at ??
+                solicitacao.updated_at,
+            }
+          : solicitacao
+      )
+    );
 
-    await carregarHistorico(contatoId);
+    setMensagemStatus(
+      resultado.message ||
+        "Cliente cadastrado e vinculado à solicitação com sucesso."
+    );
 
-    setMensagensHistorico((atuais) => ({
-      ...atuais,
-      [contatoId]: "Anotação salva com sucesso.",
-    }));
+    window.setTimeout(() => {
+      setMensagemStatus("");
+    }, 3000);
   } catch (error) {
-    setMensagensHistorico((atuais) => ({
-      ...atuais,
-      [contatoId]:
-        error instanceof Error
-          ? error.message
-          : "Erro ao salvar a anotação.",
-    }));
+    setMensagemStatus(
+      error instanceof Error
+        ? error.message
+        : "Erro ao cadastrar o cliente."
+    );
   } finally {
-    setSalvandoAnotacao(null);
+    setSalvandoId(null);
   }
 }
-const contatosFiltrados = contatos.filter((contato) => {
-  const termo = busca.trim().toLowerCase();
+  const solicitacoesFiltradas = useMemo(() => {
+    return solicitacoes.filter((solicitacao) => {
+      const termo = busca.trim().toLowerCase();
+      const servico = obterServico(solicitacao.vitrine_services);
 
-  const correspondeBusca =
-    !termo ||
-    contato.nome.toLowerCase().includes(termo) ||
-    contato.telefone.toLowerCase().includes(termo) ||
-    contato.servico.toLowerCase().includes(termo);
+      const correspondeBusca =
+        !termo ||
+        solicitacao.nome.toLowerCase().includes(termo) ||
+        solicitacao.telefone.toLowerCase().includes(termo) ||
+        solicitacao.email.toLowerCase().includes(termo) ||
+        (servico?.name ?? "").toLowerCase().includes(termo);
 
-  const correspondeStatus =
-    filtroStatus === "todos" || contato.status === filtroStatus;
+      const correspondeStatus =
+        filtroStatus === "todos" ||
+        solicitacao.status === filtroStatus;
 
-  return correspondeBusca && correspondeStatus;
-});
+      return correspondeBusca && correspondeStatus;
+    });
+  }, [solicitacoes, busca, filtroStatus]);
 
-const totalNovas = contatos.filter(
-  (contato) => contato.status === "novo"
-).length;
+  const totalNovas = solicitacoes.filter(
+    (solicitacao) => solicitacao.status === "nova"
+  ).length;
 
-const totalEmContato = contatos.filter(
-  (contato) => contato.status === "em_contato"
-).length;
+  const totalEmAnalise = solicitacoes.filter(
+    (solicitacao) => solicitacao.status === "em_analise"
+  ).length;
 
-const totalOrcamentos = contatos.filter(
-  (contato) => contato.status === "orcamento_enviado"
-).length;
+  const totalClientesCadastrados = solicitacoes.filter(
+    (solicitacao) => solicitacao.status === "cliente_cadastrado"
+  ).length;
 
-const totalAgendadas = contatos.filter(
-  (contato) => contato.status === "agendado"
-).length;
+  const totalOrcamentos = solicitacoes.filter(
+    (solicitacao) => solicitacao.status === "orcamento_criado"
+  ).length;
 
-const totalConcluidas = contatos.filter(
-  (contato) => contato.status === "concluido"
-).length;
+  const totalConcluidas = solicitacoes.filter(
+    (solicitacao) => solicitacao.status === "concluida"
+  ).length;
 
-const totalCanceladas = contatos.filter(
-  (contato) => contato.status === "cancelado"
-).length;
+  const totalCanceladas = solicitacoes.filter(
+    (solicitacao) => solicitacao.status === "cancelada"
+  ).length;
 
-const totalSolicitacoes = contatos.length;
-return (
+  return (
     <main className="min-h-screen bg-gray-50 px-4 py-8 text-gray-900">
       <div className="mx-auto max-w-5xl">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
@@ -334,22 +392,24 @@ return (
             <h1 className="text-3xl font-bold">
               Solicitações recebidas
             </h1>
+
+            <p className="mt-2 text-gray-600">
+              Consulte os pedidos enviados pela Vitrine pública do
+              ServiçoFácil.
+            </p>
             {mensagemStatus && (
   <p
-    role="status"
     className={`mt-3 text-sm ${
       mensagemStatus.includes("Erro") ||
       mensagemStatus.includes("Não foi")
         ? "text-red-600"
         : "text-green-600"
     }`}
+    role="status"
   >
     {mensagemStatus}
   </p>
 )}
-            <p className="mt-2 text-gray-600">
-              Consulte os pedidos enviados pelo formulário do site.
-            </p>
           </div>
 
           <Link
@@ -368,382 +428,369 @@ return (
 
         {!carregando && erro && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700">
-            <p className="font-semibold">Não foi possível carregar os dados.</p>
+            <p className="font-semibold">
+              Não foi possível carregar os dados.
+            </p>
+
             <p className="mt-1 text-sm">{erro}</p>
           </div>
         )}
 
-        {!carregando && !erro && contatos.length === 0 && (
+        {!carregando && !erro && solicitacoes.length === 0 && (
           <div className="rounded-xl border bg-white p-8 text-center">
             <h2 className="text-lg font-semibold">
               Nenhuma solicitação encontrada
             </h2>
+
             <p className="mt-2 text-sm text-gray-600">
-              Quando alguém enviar o formulário de contato, a solicitação
-              aparecerá nesta página.
+              Quando alguém solicitar um orçamento pela Vitrine
+              pública, a solicitação aparecerá nesta página.
             </p>
           </div>
         )}
 
-        {!carregando && !erro && contatos.length > 0 && (
+        {!carregando && !erro && solicitacoes.length > 0 && (
           <>
             <div className="mb-4 text-sm text-gray-600">
               Total de solicitações:{" "}
-              <strong className="text-gray-900">{contatos.length}</strong>
+              <strong className="text-gray-900">
+                {solicitacoes.length}
+              </strong>
             </div>
 
-<div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-  <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-    <p className="text-sm text-slate-500">Total</p>
-    <p className="mt-1 text-2xl font-bold text-slate-800">
-      {totalSolicitacoes}
-    </p>
-  </div>
+            <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <p className="text-sm text-slate-500">Total</p>
+                <p className="mt-1 text-2xl font-bold text-slate-800">
+                  {solicitacoes.length}
+                </p>
+              </div>
 
-  <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-    <p className="text-sm text-blue-700">Novas</p>
-    <p className="mt-1 text-2xl font-bold text-blue-800">{totalNovas}</p>
-  </div>
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                <p className="text-sm text-blue-700">Novas</p>
+                <p className="mt-1 text-2xl font-bold text-blue-800">
+                  {totalNovas}
+                </p>
+              </div>
 
-  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-    <p className="text-sm text-amber-700">Em contato</p>
-    <p className="mt-1 text-2xl font-bold text-amber-800">
-      {totalEmContato}
-    </p>
-  </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm text-amber-700">Em análise</p>
+                <p className="mt-1 text-2xl font-bold text-amber-800">
+                  {totalEmAnalise}
+                </p>
+              </div>
 
-  <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
-    <p className="text-sm text-purple-700">Orçamento enviado</p>
-    <p className="mt-1 text-2xl font-bold text-purple-800">
-      {totalOrcamentos}
-    </p>
-  </div>
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                <p className="text-sm text-indigo-700">
+                  Clientes cadastrados
+                </p>
+                <p className="mt-1 text-2xl font-bold text-indigo-800">
+                  {totalClientesCadastrados}
+                </p>
+              </div>
 
-  <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-    <p className="text-sm text-indigo-700">Agendadas</p>
-    <p className="mt-1 text-2xl font-bold text-indigo-800">
-      {totalAgendadas}
-    </p>
-  </div>
+              <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+                <p className="text-sm text-purple-700">
+                  Orçamentos criados
+                </p>
+                <p className="mt-1 text-2xl font-bold text-purple-800">
+                  {totalOrcamentos}
+                </p>
+              </div>
 
-  <div className="rounded-xl border border-green-200 bg-green-50 p-4">
-    <p className="text-sm text-green-700">Concluídas</p>
-    <p className="mt-1 text-2xl font-bold text-green-800">
-      {totalConcluidas}
-    </p>
-  </div>
+              <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+                <p className="text-sm text-green-700">Concluídas</p>
+                <p className="mt-1 text-2xl font-bold text-green-800">
+                  {totalConcluidas}
+                </p>
+              </div>
 
-  <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-    <p className="text-sm text-red-700">Canceladas</p>
-    <p className="mt-1 text-2xl font-bold text-red-800">
-      {totalCanceladas}
-    </p>
-  </div>
-</div>
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                <p className="text-sm text-red-700">Canceladas</p>
+                <p className="mt-1 text-2xl font-bold text-red-800">
+                  {totalCanceladas}
+                </p>
+              </div>
+            </div>
+
+            <div className="mb-6 grid gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="busca-solicitacoes"
+                  className="mb-1 block text-sm font-medium text-slate-700"
+                >
+                  Buscar solicitação
+                </label>
+
+                <input
+                  id="busca-solicitacoes"
+                  type="text"
+                  value={busca}
+                  onChange={(event) => setBusca(event.target.value)}
+                  placeholder="Nome, telefone, e-mail ou serviço..."
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="filtro-status"
+                  className="mb-1 block text-sm font-medium text-slate-700"
+                >
+                  Filtrar por status
+                </label>
+
+                <select
+                  id="filtro-status"
+                  value={filtroStatus}
+                  onChange={(event) =>
+                    setFiltroStatus(event.target.value)
+                  }
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200"
+                >
+                  <option value="todos">Todos os status</option>
+                  <option value="nova">Nova</option>
+                  <option value="em_analise">Em análise</option>
+                  <option value="cliente_cadastrado">
+                    Cliente cadastrado
+                  </option>
+                  <option value="orcamento_criado">
+                    Orçamento criado
+                  </option>
+                  <option value="concluida">Concluída</option>
+                  <option value="cancelada">Cancelada</option>
+                </select>
+              </div>
+            </div>
+
+            {solicitacoesFiltradas.length === 0 && (
+              <p className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
+                Nenhuma solicitação encontrada com os filtros
+                informados.
+              </p>
+            )}
 
             <div className="space-y-5">
-              <div className="mb-6 grid gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:grid-cols-2">
-  <div>
-    <label
-      htmlFor="busca-solicitacoes"
-      className="mb-1 block text-sm font-medium text-slate-700"
-    >
-      Buscar solicitação
-    </label>
+              {solicitacoesFiltradas.map((solicitacao) => {
+                const servico = obterServico(
+                  solicitacao.vitrine_services
+                );
 
-    <input
-      id="busca-solicitacoes"
-      type="text"
-      value={busca}
-      onChange={(event) => setBusca(event.target.value)}
-      placeholder="Nome, telefone ou serviço..."
-      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200"
-    />
-  </div>
-
-  <div>
-    <label
-      htmlFor="filtro-status"
-      className="mb-1 block text-sm font-medium text-slate-700"
-    >
-      Filtrar por status
-    </label>
-
-    <select
-      id="filtro-status"
-      value={filtroStatus}
-      onChange={(event) => setFiltroStatus(event.target.value)}
-      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200"
-    >
-      <option value="todos">Todos os status</option>
-      <option value="novo">Novo</option>
-      <option value="em_contato">Em contato</option>
-      <option value="orcamento_enviado">Orçamento enviado</option>
-      <option value="agendado">Agendado</option>
-      <option value="concluido">Concluído</option>
-      <option value="cancelado">Cancelado</option>
-    </select>
-  </div>
-</div>
-              {contatosFiltrados.length === 0 && (
-                <p className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
-                    Nenhuma solicitação encontrada com os filtros informados.
-                </p>
-              )}
-              {contatosFiltrados.map((contato) => (
-                <article
-                  key={contato.id}
-                  className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h2 className="text-xl font-semibold">
-                        {contato.nome}
-                      </h2>
-                      <p className="mt-1 text-sm text-gray-500">
-                        Recebida em {formatarData(contato.criado_em)}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                    <label
-                    htmlFor={`status-${contato.id}`}
-                    className="text-xs font-medium text-slate-500"
+                return (
+                  <article
+                    key={solicitacao.id}
+                    className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
                   >
-    Status do atendimento
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h2 className="text-xl font-semibold">
+                          {solicitacao.nome}
+                        </h2>
+
+                        <p className="mt-1 text-sm text-gray-500">
+                          Recebida em{" "}
+                          {formatarData(solicitacao.created_at)}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1">
+  <label
+    htmlFor={`status-${solicitacao.id}`}
+    className="text-xs font-medium text-slate-500"
+  >
+    Status
   </label>
 
   <select
-    id={`status-${contato.id}`}
-    value={contato.status || "novo"}
-    disabled={salvandoId === contato.id}
+    id={`status-${solicitacao.id}`}
+    value={solicitacao.status}
+    disabled={salvandoId === solicitacao.id}
     onChange={(event) =>
-      atualizarStatus(contato.id, event.target.value)
+      atualizarStatus(
+        solicitacao.id,
+        event.target.value
+      )
     }
-    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200"
+    className={`rounded-lg border px-3 py-2 text-sm font-semibold focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200 ${classeStatus(
+      solicitacao.status
+    )}`}
   >
-    <option value="novo">Novo</option>
-    <option value="em_contato">Em contato</option>
-    <option value="orcamento_enviado">Orçamento enviado</option>
-    <option value="agendado">Agendado</option>
-    <option value="concluido">Concluído</option>
-    <option value="cancelado">Cancelado</option>
+    <option value="nova">Nova</option>
+    <option value="em_analise">Em análise</option>
+    <option value="cliente_cadastrado">
+      Cliente cadastrado
+    </option>
+    <option value="orcamento_criado">
+      Orçamento criado
+    </option>
+    <option value="concluida">Concluída</option>
+    <option value="cancelada">Cancelada</option>
   </select>
 
-  {salvandoId === contato.id && (
-  <p className="text-xs text-slate-500">Salvando...</p>
-)}
+  {salvandoId === solicitacao.id && (
+    <span className="text-xs text-slate-500">
+      Salvando...
+    </span>
+  )}
 
-                </div>
-                </div>
-
-
-
-                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <p className="text-xs font-semibold uppercase text-gray-500">
-                        Serviço solicitado
-                      </p>
-                      <p className="mt-1">{contato.servico}</p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-semibold uppercase text-gray-500">
-                        Telefone
-                      </p>
-                      <p className="mt-1">{contato.telefone}</p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-semibold uppercase text-gray-500">
-                        E-mail
-                      </p>
-                      <p className="mt-1">{contato.email || "Não informado"}</p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-semibold uppercase text-gray-500">
-                        Data preferida
-                      </p>
-                      <p className="mt-1">
-                        {formatarDataPreferida(contato.data_preferida)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-semibold uppercase text-gray-500">
-                        Horário preferido
-                      </p>
-                      <p className="mt-1">
-                        {contato.horario_preferido || "Não informado"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-5">
-                    <p className="text-xs font-semibold uppercase text-gray-500">
-                      Descrição da solicitação
-                    </p>
-                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6">
-                      {contato.descricao}
-                    </p>
-                  </div>
-
-                  {contato.sugestao_futura && (
-                    <div className="mt-4">
-                      <p className="text-xs font-semibold uppercase text-gray-500">
-                        Sugestão ou observação
-                      </p>
-                      <p className="mt-2 whitespace-pre-wrap text-sm leading-6">
-                        {contato.sugestao_futura}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="mt-5 flex flex-wrap gap-3 border-t pt-4">
-                    <a
-                      href={linkWhatsApp(contato.telefone)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-                    >
-                      Contatar pelo WhatsApp
-                    </a>
-
-                    {contato.email && (
-                      <a
-                        href={`mailto:${contato.email}`}
-                        className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50"
-                      >
-                        Enviar e-mail
-                      </a>
-                    )}
-                  </div>
-                  <div className="mt-5 border-t border-slate-200 pt-4">
+  {!solicitacao.customer_id && (
   <button
     type="button"
-    onClick={() => {
-      if (historicoAberto === contato.id) {
-        setHistoricoAberto(null);
-      } else {
-        setHistoricoAberto(contato.id);
-        carregarHistorico(contato.id);
-      }
-    }}
-    className="rounded-lg border border-purple-200 px-4 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50"
+    onClick={() => cadastrarCliente(solicitacao.id)}
+    disabled={salvandoId === solicitacao.id}
+    className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
   >
-    {historicoAberto === contato.id
-      ? "Fechar histórico"
-      : "Ver histórico e anotações"}
+    Cadastrar cliente
   </button>
+)}
 
-  {historicoAberto === contato.id && (
-    <div className="mt-4 rounded-lg bg-slate-50 p-4">
-      <h3 className="text-base font-semibold text-slate-800">
-        Histórico interno da solicitação
-      </h3>
-      <p className="mt-1 text-xs text-slate-500">
-        Visível somente no painel administrativo.
-      </p>
-
-      <div className="mt-4">
-        <label
-          htmlFor={`anotacao-${contato.id}`}
-          className="block text-sm font-medium text-slate-700"
-        >
-          Nova anotação interna
-        </label>
-
-        <textarea
-          id={`anotacao-${contato.id}`}
-          rows={3}
-          maxLength={2000}
-          value={anotacoes[contato.id] ?? ""}
-          onChange={(event) =>
-            setAnotacoes((atuais) => ({
-              ...atuais,
-              [contato.id]: event.target.value,
-            }))
-          }
-          placeholder="Ex.: Cliente solicitou retorno na sexta-feira."
-          className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200"
-        />
-
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => salvarAnotacao(contato.id)}
-            disabled={salvandoAnotacao === contato.id}
-            className="rounded-lg bg-purple-700 px-4 py-2 text-sm font-medium text-white hover:bg-purple-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {salvandoAnotacao === contato.id
-              ? "Salvando anotação..."
-              : "Salvar anotação"}
-          </button>
-
-          <span className="text-xs text-slate-500">
-            {(anotacoes[contato.id] ?? "").length}/2000 caracteres
-          </span>
-        </div>
-      </div>
-
-      {mensagensHistorico[contato.id] && (
-        <p className="mt-3 text-sm text-slate-600" role="status">
-          {mensagensHistorico[contato.id]}
-        </p>
-      )}
-
-      <div className="mt-5">
-        <h4 className="text-sm font-semibold text-slate-800">
-          Registros anteriores
-        </h4>
-
-        {carregandoHistorico === contato.id ? (
-          <p className="mt-3 text-sm text-slate-500">
-            Carregando histórico...
-          </p>
-        ) : (historicos[contato.id] ?? []).length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">
-            Nenhum registro no histórico ainda.
-          </p>
-        ) : (
-          <ol className="mt-3 space-y-3">
-            {(historicos[contato.id] ?? []).map((item) => (
-              <li
-                key={item.id}
-                className="border-l-2 border-purple-300 pl-4"
-              >
-                <p className="text-xs text-slate-500">
-                  {formatarData(item.criado_em)}
-                </p>
-
-                {item.tipo === "status_alterado" ? (
-                  <p className="mt-1 text-sm text-slate-700">
-                    Status alterado:{" "}
-                    <strong>{item.status_anterior || "Inicial"}</strong>
-                    {" → "}
-                    <strong>{item.status_novo}</strong>
-                  </p>
-                ) : (
-                  <>
-                    <p className="mt-1 text-xs font-semibold uppercase text-purple-700">
-                      Anotação interna
-                    </p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                      {item.observacao}
-                    </p>
-                  </>
-                )}
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
-    </div>
-  )}
 </div>
-                </article>
-              ))}
+                    </div>
+
+                    <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-gray-500">
+                          Serviço solicitado
+                        </p>
+
+                        <p className="mt-1 font-medium">
+                          {servico?.name ?? "Serviço não identificado"}
+                        </p>
+
+                        {servico?.price !== null &&
+                          servico?.price !== undefined && (
+                            <p className="mt-1 text-sm text-purple-700">
+                              Valor de referência:{" "}
+                              {formatarValor(servico.price)}
+                            </p>
+                          )}
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-gray-500">
+                          Telefone
+                        </p>
+
+                        <p className="mt-1">
+                          {solicitacao.telefone}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-gray-500">
+                          E-mail
+                        </p>
+
+                        <p className="mt-1">
+                          {solicitacao.email || "Não informado"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-gray-500">
+                          Data preferida
+                        </p>
+
+                        <p className="mt-1">
+                          {formatarDataPreferida(
+                            solicitacao.data_preferida
+                          )}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-gray-500">
+                          Horário preferido
+                        </p>
+
+                        <p className="mt-1">
+                          {solicitacao.horario_preferido ||
+                            "Não informado"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-gray-500">
+                          Endereço
+                        </p>
+
+                        <p className="mt-1">
+                          {solicitacao.endereco ||
+                            "Não informado"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {servico?.description && (
+                      <div className="mt-5">
+                        <p className="text-xs font-semibold uppercase text-gray-500">
+                          Sobre o serviço
+                        </p>
+
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-700">
+                          {servico.description}
+                        </p>
+                      </div>
+                    )}
+
+                    {solicitacao.descricao && (
+                      <div className="mt-5">
+                        <p className="text-xs font-semibold uppercase text-gray-500">
+                          Descrição da solicitação
+                        </p>
+
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6">
+                          {solicitacao.descricao}
+                        </p>
+                      </div>
+                    )}
+
+                    {solicitacao.observacoes && (
+                      <div className="mt-5">
+                        <p className="text-xs font-semibold uppercase text-gray-500">
+                          Observações
+                        </p>
+
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6">
+                          {solicitacao.observacoes}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="mt-5 flex flex-wrap gap-3 border-t pt-4">
+                      <a
+                        href={linkWhatsApp(solicitacao.telefone)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+                      >
+                        Contatar pelo WhatsApp
+                      </a>
+
+                      {solicitacao.email && (
+                        <a
+                          href={`mailto:${solicitacao.email}`}
+                          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50"
+                        >
+                          Enviar e-mail
+                        </a>
+                      )}
+
+                      {solicitacao.customer_id && (
+                        <span className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700">
+                          Cliente vinculado
+                        </span>
+                      )}
+
+                      {solicitacao.orcamento_id && (
+                        <span className="rounded-lg border border-purple-200 bg-purple-50 px-4 py-2 text-sm font-medium text-purple-700">
+                          Orçamento vinculado
+                        </span>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           </>
         )}

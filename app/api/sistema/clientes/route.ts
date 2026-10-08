@@ -179,8 +179,8 @@ export async function GET(request: NextRequest) {
     const { data: customers, error } = await supabaseAdmin
       .from("customers")
       .select(
-        "id, organization_id, name, phone, email, address, notes, created_at, updated_at"
-      )
+            "id, organization_id, name, phone, email, address, notes, status, created_at, updated_at"
+            )
       .eq("organization_id", organization.id)
       .order("name", { ascending: true });
 
@@ -270,6 +270,7 @@ export async function POST(request: NextRequest) {
         email: email || null,
         address: address || null,
         notes: notes || null,
+        status: "ativo",
       })
       .select(
         "id, organization_id, name, phone, email, address, notes, created_at, updated_at"
@@ -332,6 +333,7 @@ export async function PATCH(request: NextRequest) {
     const email = String(body.email ?? "").trim().toLowerCase();
     const address = String(body.address ?? "").trim();
     const notes = String(body.notes ?? "").trim();
+    const status = String(body.status ?? "ativo").trim();
 
     if (!id || !/^[0-9a-fA-F-]{36}$/.test(id)) {
       return errorResponse(
@@ -339,6 +341,12 @@ export async function PATCH(request: NextRequest) {
         400
       );
     }
+    if (status !== "ativo" && status !== "inativo") {
+  return errorResponse(
+    "Status do cliente inválido.",
+    400
+  );
+}
 
     if (!name) {
       return errorResponse(
@@ -355,12 +363,13 @@ export async function PATCH(request: NextRequest) {
         email: email || null,
         address: address || null,
         notes: notes || null,
+        status,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
       .eq("organization_id", organization.id)
       .select(
-        "id, organization_id, name, phone, email, address, notes, created_at, updated_at"
+        "id, organization_id, name, phone, email, address, notes, status, created_at, updated_at"
       )
       .maybeSingle();
 

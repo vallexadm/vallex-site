@@ -17,6 +17,7 @@ type Customer = {
   email: string | null;
   address: string | null;
   notes: string | null;
+  status: "ativo" | "inativo";
   created_at: string;
   updated_at: string;
 };
@@ -44,6 +45,13 @@ export default function ClientesPage() {
   const [message, setMessage] = useState("");
 
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+  "todos" | "ativo" | "inativo"
+>("todos");
+
+const [changingStatusId, setChangingStatusId] = useState<string | null>(
+  null
+);
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -122,9 +130,10 @@ export default function ClientesPage() {
     }
   }, [getAccessToken]);
 
-  useEffect(() => {
-    loadCustomers();
-  }, [loadCustomers]);
+ useEffect(() => {
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  loadCustomers();
+}, [loadCustomers]);
 
   function clearForm() {
     setEditingId(null);
@@ -236,6 +245,81 @@ export default function ClientesPage() {
     }
   }
 
+  async function handleToggleStatus(customer: Customer) {
+  if (role !== "owner") {
+    return;
+  }
+
+  const novoStatus =
+    customer.status === "ativo" ? "inativo" : "ativo";
+
+  const acao =
+    novoStatus === "inativo"
+      ? "desativar"
+      : "reativar";
+
+  const confirmed = window.confirm(
+    `Deseja realmente ${acao} o cliente "${customer.name}"?`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  setChangingStatusId(customer.id);
+  setError("");
+  setMessage("");
+
+  try {
+    const accessToken = await getAccessToken();
+
+    if (!accessToken) {
+      return;
+    }
+
+    const response = await fetch("/api/sistema/clientes", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        id: customer.id,
+        name: customer.name,
+        phone: customer.phone ?? "",
+        email: customer.email ?? "",
+        address: customer.address ?? "",
+        notes: customer.notes ?? "",
+        status: novoStatus,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.ok) {
+      setError(
+        result.message ??
+          "Não foi possível alterar o status do cliente."
+      );
+      return;
+    }
+
+    setMessage(
+      novoStatus === "inativo"
+        ? "Cliente desativado com sucesso."
+        : "Cliente reativado com sucesso."
+    );
+
+    await loadCustomers();
+  } catch {
+    setError(
+      "Erro de comunicação ao alterar o status do cliente."
+    );
+  } finally {
+    setChangingStatusId(null);
+  }
+}
+  
   async function handleDelete(id: string) {
     if (role !== "owner") {
       return;
@@ -310,26 +394,34 @@ export default function ClientesPage() {
   }
 
   const filteredCustomers = customers.filter(
-    (customer) => {
-      const term = search
-        .trim()
-        .toLowerCase();
+  (customer) => {
+    const term = search
+      .trim()
+      .toLowerCase();
 
-      if (!term) {
-        return true;
-      }
+    const matchesStatus =
+      statusFilter === "todos" ||
+      customer.status === statusFilter;
 
-      return [
-        customer.name,
-        customer.phone ?? "",
-        customer.email ?? "",
-        customer.address ?? "",
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(term);
+    if (!matchesStatus) {
+      return false;
     }
-  );
+
+    if (!term) {
+      return true;
+    }
+
+    return [
+      customer.name,
+      customer.phone ?? "",
+      customer.email ?? "",
+      customer.address ?? "",
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(term);
+  }
+);
 
   if (loading) {
     return (
@@ -563,27 +655,56 @@ export default function ClientesPage() {
               </p>
             </div>
 
-            <div className="w-full md:max-w-sm">
-              <label
-                htmlFor="customer-search"
-                className="mb-2 block text-sm font-medium text-slate-700"
-              >
-                Buscar cliente
-              </label>
+            <div className="grid w-full gap-4 md:max-w-2xl md:grid-cols-2">
+  <div>
+    <label
+      htmlFor="customer-search"
+      className="mb-2 block text-sm font-medium text-slate-700"
+    >
+      Buscar cliente
+    </label>
 
-              <input
-                id="customer-search"
-                type="search"
-                value={search}
-                onChange={(event) =>
-                  setSearch(event.target.value)
-                }
-                placeholder="Nome, telefone ou e-mail"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
-              />
-            </div>
-          </div>
+    <input
+      id="customer-search"
+      type="search"
+      value={search}
+      onChange={(event) =>
+        setSearch(event.target.value)
+      }
+      placeholder="Nome, telefone ou e-mail"
+      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+    />
+  </div>
 
+  <div>
+    <label
+      htmlFor="customer-status-filter"
+      className="mb-2 block text-sm font-medium text-slate-700"
+    >
+      Filtrar por status
+    </label>
+
+    <select
+      id="customer-status-filter"
+      value={statusFilter}
+      onChange={(event) =>
+        setStatusFilter(
+          event.target.value as
+            | "todos"
+            | "ativo"
+            | "inativo"
+        )
+      }
+      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+    >
+      <option value="todos">Todos</option>
+      <option value="ativo">Ativos</option>
+      <option value="inativo">Inativos</option>
+    </select>
+  </div>
+</div>  {/* fecha o grid dos filtros */}
+
+  </div>  {/* fecha o cabeçalho Clientes cadastrados */}
           {filteredCustomers.length === 0 ? (
             <div className="mt-6 rounded-lg bg-slate-50 p-8 text-center">
               <p className="text-sm text-slate-600">
@@ -608,7 +729,9 @@ export default function ClientesPage() {
                     <th className="px-3 py-3 font-medium">
                       E-mail
                     </th>
-
+                    <th className="px-3 py-3 font-medium">
+                      Status
+                    </th>
                     <th className="px-3 py-3 font-medium">
                       Cadastro
                     </th>
@@ -647,11 +770,22 @@ export default function ClientesPage() {
                         <td className="break-all px-3 py-4 text-slate-700">
                           {customer.email ?? "—"}
                         </td>
-
+                        <td className="px-3 py-4">
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                              customer.status === "ativo"
+                                ? "border-green-200 bg-green-50 text-green-700"
+                                : "border-slate-200 bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {customer.status === "ativo"
+                              ? "Ativo"
+                              : "Inativo"}
+                          </span>
+                        </td>
                         <td className="px-3 py-4 text-slate-700">
                           {formatDate(
-                            customer.created_at
-                          )}
+                            customer.created_at)}
                         </td>
 
                         {role === "owner" && (
@@ -666,7 +800,22 @@ export default function ClientesPage() {
                               >
                                 Editar
                               </button>
-
+<button
+  type="button"
+  onClick={() => handleToggleStatus(customer)}
+  disabled={changingStatusId === customer.id}
+  className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
+    customer.status === "ativo"
+      ? "border-amber-200 text-amber-700 hover:bg-amber-50"
+      : "border-green-200 text-green-700 hover:bg-green-50"
+  } disabled:cursor-not-allowed disabled:opacity-50`}
+>
+  {changingStatusId === customer.id
+    ? "Salvando..."
+    : customer.status === "ativo"
+      ? "Desativar"
+      : "Reativar"}
+</button>
                               <button
                                 type="button"
                                 onClick={() =>
