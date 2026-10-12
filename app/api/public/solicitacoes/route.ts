@@ -35,6 +35,16 @@ function uuidValido(value: string) {
 }
 
 export async function POST(request: Request) {
+  const previewRequested =
+    new URL(request.url).searchParams.get("previsualizar") === "1";
+
+  if (previewRequested && process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { ok: false, message: "Prévia disponível somente em desenvolvimento." },
+      { status: 404 }
+    );
+  }
+
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
 
@@ -176,12 +186,58 @@ export async function POST(request: Request) {
     }
   );
 
+  let ownedOrganizationId: string | null = null;
+
+  if (previewRequested) {
+    const publicSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const publicAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const authorization = request.headers.get("authorization");
+    const token = authorization?.startsWith("Bearer ")
+      ? authorization.slice("Bearer ".length).trim()
+      : "";
+
+    if (!publicSupabaseUrl || !publicAnonKey || !token) {
+      return NextResponse.json(
+        { ok: false, message: "Entre na área do prestador para testar a solicitação." },
+        { status: 401 }
+      );
+    }
+
+    const supabaseAuth = createClient(publicSupabaseUrl, publicAnonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data: userResult, error: authError } =
+      await supabaseAuth.auth.getUser(token);
+
+    if (authError || !userResult.user) {
+      return NextResponse.json(
+        { ok: false, message: "Sua sessão expirou. Entre novamente." },
+        { status: 401 }
+      );
+    }
+
+    const { data: organization, error: organizationError } =
+      await supabaseAdmin
+        .from("organizations")
+        .select("id")
+        .eq("owner_id", userResult.user.id)
+        .maybeSingle();
+
+    if (organizationError || !organization) {
+      return NextResponse.json(
+        { ok: false, message: "Não foi possível validar sua organização para o teste." },
+        { status: organizationError ? 500 : 403 }
+      );
+    }
+
+    ownedOrganizationId = organization.id;
+  }
+
   const { data: profile, error: profileError } =
     await supabaseAdmin
       .from("organization_public_profiles")
       .select("organization_id, slug, display_name, is_published")
       .eq("slug", slug)
-      .eq("is_published", true)
       .maybeSingle();
 
   if (profileError) {
@@ -194,7 +250,12 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!profile) {
+  if (
+    !profile ||
+    (previewRequested
+      ? profile.organization_id !== ownedOrganizationId
+      : !profile.is_published)
+  ) {
     return NextResponse.json(
       {
         ok: false,
@@ -212,7 +273,6 @@ export async function POST(request: Request) {
       )
       .eq("id", vitrineServiceId)
       .eq("organization_id", profile.organization_id)
-      .eq("is_published", true)
       .maybeSingle();
 
   if (serviceError) {
@@ -225,7 +285,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!service) {
+  if (!service || (!previewRequested && !service.is_published)) {
     return NextResponse.json(
       {
         ok: false,
@@ -235,7 +295,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: solicitacao, error: insertError } =
+  const { error: insertError } =
     await supabaseAdmin
       .from("solicitacoes_orcamento")
       .insert({
@@ -251,6 +311,12 @@ export async function POST(request: Request) {
         data_preferida: dataPreferida || null,
         horario_preferido: horarioPreferido || null,
         observacoes: observacoes || null,
+        ...(previewRequested && {
+          observacoes: ["[TESTE LOCAL]", observacoes]
+            .filter(Boolean)
+            .join(" ")
+            .slice(0, 3000),
+        }),
         status: "nova",
       })
       .select(
@@ -272,8 +338,9 @@ export async function POST(request: Request) {
   return NextResponse.json(
     {
       ok: true,
-      message: "Solicitação enviada com sucesso.",
-      solicitacao,
+      message: previewRequested
+        ? "Solicitação de teste registrada com sucesso."
+        : "Solicitação enviada com sucesso.",
     },
     { status: 201 }
   );

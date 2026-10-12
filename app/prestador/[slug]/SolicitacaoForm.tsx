@@ -1,12 +1,14 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
 
 type SolicitationFormProps = {
   slug: string;
   serviceId: string;
   serviceName: string;
   onClose?: () => void;
+  previewOnlyLocal?: boolean;
 };
 
 export default function SolicitacaoForm({
@@ -14,6 +16,7 @@ export default function SolicitacaoForm({
   serviceId,
   serviceName,
   onClose,
+  previewOnlyLocal = false,
 }: SolicitationFormProps) {
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -27,7 +30,6 @@ export default function SolicitacaoForm({
   const [enviando, setEnviando] = useState(false);
   const [sucesso, setSucesso] = useState(false);
   const [erro, setErro] = useState("");
-  const [formAberto, setFormAberto] = useState(false);
 
   async function enviarSolicitacao(event: FormEvent) {
     event.preventDefault();
@@ -37,11 +39,26 @@ export default function SolicitacaoForm({
     setEnviando(true);
 
     try {
-      const response = await fetch("/api/public/solicitacoes", {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (previewOnlyLocal) {
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+
+        if (!token) {
+          throw new Error("Entre na área do prestador para testar o formulário.");
+        }
+
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch(
+        `/api/public/solicitacoes${previewOnlyLocal ? "?previsualizar=1" : ""}`,
+        {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           slug,
           vitrine_service_id: serviceId,
@@ -54,7 +71,8 @@ export default function SolicitacaoForm({
           horario_preferido: horarioPreferido,
           observacoes,
         }),
-      });
+        }
+      );
 
       const resultado = await response.json();
 
@@ -88,18 +106,17 @@ export default function SolicitacaoForm({
 
   return (
   <>
-    {!formAberto ? (
-      <div className="mt-5">
-        <button
-          type="button"
-          onClick={() => setFormAberto(true)}
-          className="w-full rounded-lg bg-purple-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-800"
-        >
-          Solicitar orçamento
-        </button>
-      </div>
-    ) : (
-      <div className="mt-5 rounded-xl border border-purple-200 bg-purple-50 p-5">
+    <details className="mt-5 rounded-xl border border-purple-200 bg-purple-50">
+      <summary className="cursor-pointer list-none rounded-xl bg-purple-700 px-5 py-3 text-center text-sm font-semibold text-white transition hover:bg-purple-800 [&::-webkit-details-marker]:hidden">
+        Solicitar orçamento
+      </summary>
+      <div className="p-5">
+            {previewOnlyLocal && (
+              <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-5 text-amber-900">
+                Teste local: o envio será salvo como solicitação do prestador,
+                identificado como teste, sem publicar a Vitrine.
+              </p>
+            )}
             <div>
               <h5 className="mt-1 text-lg font-semibold text-slate-900">
                 {serviceName}
@@ -317,7 +334,7 @@ export default function SolicitacaoForm({
           </div>
         </form>
       </div>
-)}
+    </details>
       {sucesso && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4"
@@ -345,11 +362,15 @@ export default function SolicitacaoForm({
                 <strong className="text-slate-900">
                   {serviceName}
                 </strong>{" "}
-                foi recebida com sucesso.
+                {previewOnlyLocal
+                  ? "foi registrada como solicitação de teste."
+                  : "foi recebida com sucesso."}
               </p>
 
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                O prestador entrará em contato em breve.
+                {previewOnlyLocal
+                  ? "Confira se ela aparece no painel de solicitações da Sitech."
+                  : "O prestador entrará em contato em breve."}
               </p>
             </div>
 
@@ -357,7 +378,6 @@ export default function SolicitacaoForm({
               type="button"
               onClick={() => {
               setSucesso(false);
-              setFormAberto(false);
             }}
               className="mt-6 w-full rounded-lg bg-purple-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-800"
             >

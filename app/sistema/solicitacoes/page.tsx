@@ -340,6 +340,90 @@ async function cadastrarCliente(id: string) {
     setSalvandoId(null);
   }
 }
+async function criarOrcamento(id: string) {
+  setSalvandoId(id);
+  setMensagemStatus("");
+
+  try {
+    const { data, error } = await supabase.auth.getSession();
+
+    if (error || !data.session) {
+      router.replace("/sistema/login");
+      return;
+    }
+
+    const response = await fetch(
+      `/api/sistema/solicitacoes/${id}/orcamento`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${data.session.access_token}`,
+        },
+      }
+    );
+
+    const resultado = await response.json();
+
+    if (response.status === 401) {
+      router.replace("/sistema/login");
+      return;
+    }
+
+    if (response.status === 403) {
+      router.replace("/sistema");
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        resultado.message || "Não foi possível criar o orçamento."
+      );
+    }
+
+    setSolicitacoes((atuais) =>
+      atuais.map((solicitacao) =>
+        solicitacao.id === id
+          ? {
+              ...solicitacao,
+              orcamento_id:
+                resultado.orcamento?.id ??
+                resultado.orcamento_id ??
+                solicitacao.orcamento_id,
+              status:
+                resultado.solicitacao?.status ??
+                (resultado.created === false
+                  ? solicitacao.status
+                  : "orcamento_criado"),
+              updated_at:
+                resultado.solicitacao?.updated_at ??
+                solicitacao.updated_at,
+            }
+          : solicitacao
+      )
+    );
+
+    setMensagemStatus(
+      resultado.message || "Orçamento criado com sucesso."
+    );
+
+    const quoteId =
+      resultado.orcamento?.id ?? resultado.orcamento_id;
+
+    if (quoteId) {
+      router.push(
+        `/sistema/orcamentos?editar=${encodeURIComponent(quoteId)}`
+      );
+    }
+  } catch (error) {
+    setMensagemStatus(
+      error instanceof Error
+        ? error.message
+        : "Erro ao criar o orçamento."
+    );
+  } finally {
+    setSalvandoId(null);
+  }
+}
   const solicitacoesFiltradas = useMemo(() => {
     return solicitacoes.filter((solicitacao) => {
       const termo = busca.trim().toLowerCase();
@@ -641,6 +725,42 @@ async function cadastrarCliente(id: string) {
     className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
   >
     Cadastrar cliente
+  </button>
+)}
+
+{solicitacao.customer_id && !solicitacao.orcamento_id && (
+  <button
+    type="button"
+    onClick={() => criarOrcamento(solicitacao.id)}
+    disabled={salvandoId === solicitacao.id}
+    className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-60"
+  >
+    {salvandoId === solicitacao.id
+      ? "Criando orçamento..."
+      : "Criar orçamento"}
+  </button>
+)}
+
+{solicitacao.customer_id && !solicitacao.orcamento_id && (
+  <button
+    type="button"
+    onClick={() => criarOrcamento(solicitacao.id)}
+    disabled={salvandoId === solicitacao.id}
+    className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-60"
+  >
+    {salvandoId === solicitacao.id
+      ? "Criando orçamento..."
+      : "Criar orçamento"}
+  </button>
+)}
+
+{solicitacao.orcamento_id && (
+  <button
+    type="button"
+    onClick={() => router.push(`/sistema/orcamentos?editar=${encodeURIComponent(solicitacao.orcamento_id!)}`)}
+    className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-100"
+  >
+    Editar e responder orçamento
   </button>
 )}
 

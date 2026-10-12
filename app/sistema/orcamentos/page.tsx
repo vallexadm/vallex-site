@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 
@@ -30,6 +30,8 @@ type Orcamento = {
       }
     | null;
 };
+
+type AnexoOrcamento = { path: string; name: string; signed_url: string };
 
 const statusLabels: Record<string, string> = {
   rascunho: "Rascunho",
@@ -72,6 +74,8 @@ export default function OrcamentosPage() {
   const [valor, setValor] = useState("");
   const [validadeAte, setValidadeAte] = useState("");
   const [observacoes, setObservacoes] = useState("");
+  const [anexos, setAnexos] = useState<AnexoOrcamento[]>([]);
+  const [arquivosSelecionados, setArquivosSelecionados] = useState<File[]>([]);
 
   const [status, setStatus] = useState("rascunho");
 
@@ -81,6 +85,7 @@ export default function OrcamentosPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const editParamHandled = useRef(false);
 
   const filteredOrcamentos = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -174,6 +179,16 @@ export default function OrcamentosPage() {
 
       setCustomers(customersResult.customers ?? []);
       setOrcamentos(orcamentosResult.orcamentos ?? []);
+      const requestedId = new URLSearchParams(window.location.search).get("editar");
+      if (requestedId && !editParamHandled.current) {
+        const requestedQuote = (orcamentosResult.orcamentos ?? []).find(
+          (quote: Orcamento) => quote.id === requestedId
+        );
+        if (requestedQuote) {
+          editParamHandled.current = true;
+          void handleEdit(requestedQuote);
+        }
+      }
     } catch (error) {
       console.error("Erro ao carregar orçamentos:", error);
       setError("Não foi possível carregar os dados.");
@@ -233,30 +248,56 @@ export default function OrcamentosPage() {
       return;
     }
 
-    setMessage(
-      isEditing
-        ? "Orçamento atualizado com sucesso."
-        : "Orçamento cadastrado com sucesso."
-    );
+    const savedQuoteId = editingId ?? data.orcamento?.id;
+    if (!savedQuoteId) {
+      throw new Error("O orçamento foi salvo, mas não recebemos o identificador para anexar arquivos.");
+    }
 
-    setEditingId(null);
-    setCustomerId("");
-    setTitulo("");
-    setDescricao("");
-    setValor("");
-    setValidadeAte("");
-    setObservacoes("");
-    setStatus("rascunho");
+    for (const file of [...arquivosSelecionados]) {
+      const form = new FormData();
+      form.set("finalidade", "orcamento");
+      form.set("orcamento_id", savedQuoteId);
+      form.set("arquivo", file);
+      const uploadResponse = await fetch("/api/sistema/arquivos", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: form,
+      });
+      const uploadResult = await uploadResponse.json();
+      if (!uploadResponse.ok) {
+        throw new Error(uploadResult.message || `Não foi possível anexar ${file.name}.`);
+      }
+      setArquivosSelecionados((current) => current.filter((item) => item !== file));
+      if (uploadResult.arquivo) setAnexos((current) => [...current, uploadResult.arquivo]);
+    }
+
+    setEditingId(savedQuoteId);
+    await carregarAnexos(savedQuoteId, accessToken);
+    setMessage(isEditing ? "Orçamento atualizado com sucesso." : "Rascunho criado. Complete os dados, anexe os arquivos e envie ao cliente pelo WhatsApp.");
 
     await loadData();
   } catch (error) {
     console.error("Erro ao salvar orçamento:", error);
-    setError("Erro de comunicação ao salvar o orçamento.");
+    setError(error instanceof Error ? error.message : "Erro de comunicação ao salvar o orçamento.");
   } finally {
     setSending(false);
   }
 }
-        function handleEdit(orcamento: Orcamento) {
+  async function carregarAnexos(id: string, accessToken?: string) {
+    const token = accessToken || await getAccessToken();
+    if (!token) return;
+    const response = await fetch(`/api/sistema/arquivos?orcamento_id=${encodeURIComponent(id)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || "Não foi possível carregar os anexos.");
+    setAnexos(result.arquivos ?? []);
+  }
+
+  async function handleEdit(orcamento: Orcamento) {
+        setError("");
+        setMessage("");
         setEditingId(orcamento.id);
 
         setCustomerId(orcamento.customer_id);
@@ -266,15 +307,80 @@ export default function OrcamentosPage() {
         setValidadeAte(orcamento.validade_ate ?? "");
         setObservacoes(orcamento.observacoes ?? "");
         setStatus(orcamento.status);
-
-        setError("");
-        setMessage("");
+        setArquivosSelecionados([]);
+        try {
+          await carregarAnexos(orcamento.id);
+        } catch (error) {
+          setError(error instanceof Error ? error.message : "Não foi possível carregar os anexos.");
+        }
 
         window.scrollTo({
         top: 0,
         behavior: "smooth",
     });
     }
+
+  async function removerAnexo(anexo: AnexoOrcamento) {
+    if (!editingId) return;
+    try {
+      const accessToken = await getAccessToken();
+      const response = await fetch("/api/sistema/arquivos", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ orcamento_id: editingId, path: anexo.path }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Não foi possível remover o anexo.");
+      setAnexos((current) => current.filter((item) => item.path !== anexo.path));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Não foi possível remover o anexo.");
+    }
+  }
+
+  async function enviarOrcamento(orcamento: Orcamento) {
+    const tab = window.open("about:blank", "_blank");
+    setError("");
+    setMessage("");
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw new Error("Sessão não encontrada. Faça login novamente.");
+      const filesResponse = await fetch(`/api/sistema/arquivos?orcamento_id=${encodeURIComponent(orcamento.id)}`, {
+        headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store",
+      });
+      const filesResult = await filesResponse.json();
+      if (!filesResponse.ok) throw new Error(filesResult.message || "Não foi possível preparar os anexos.");
+
+      const arquivos = filesResult.arquivos ?? [];
+      let anexosTexto = "";
+      if (arquivos.length > 0) {
+        const linksResponse = await fetch("/api/sistema/arquivos", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ acao: "links_compartilhamento", orcamento_id: orcamento.id }),
+        });
+        const linksResult = await linksResponse.json();
+        if (!linksResponse.ok) throw new Error(linksResult.message || "Não foi possível criar os links curtos dos anexos.");
+        anexosTexto = (linksResult.links ?? [])
+          .map((file: { name: string; url: string }, index: number) => `\nAnexo ${index + 1}: ${file.url}`)
+          .join("");
+      }
+      const validadeTexto = orcamento.validade_ate ? `\nVálido até: ${formatDate(orcamento.validade_ate)}` : "";
+      const resumo = orcamento.descricao?.trim().slice(0, 350);
+      const texto = `Olá, ${orcamento.customers?.name ?? "tudo bem"}! Segue o orçamento: ${orcamento.titulo}\nValor: ${formatCurrency(orcamento.valor)}${validadeTexto}${resumo ? `\n\nDetalhes: ${resumo}${orcamento.descricao && orcamento.descricao.length > 350 ? "…" : ""}` : ""}${anexosTexto}\n\nEm caso de dúvidas, estou à disposição.`;
+      const phone = (orcamento.customers?.phone ?? "").replace(/\D/g, "");
+      const phoneWithCountry = phone.length === 10 || phone.length === 11 ? `55${phone}` : phone;
+      const whatsappUrl = `https://wa.me/${phoneWithCountry}?text=${encodeURIComponent(texto)}`;
+      if (tab) tab.location.href = whatsappUrl;
+      else window.location.href = whatsappUrl;
+      setMessage("Revise a mensagem e toque em enviar no WhatsApp. Depois, atualize o status do orçamento no sistema.");
+    } catch (error) {
+      tab?.close();
+      setError(error instanceof Error ? error.message : "Não foi possível preparar o envio.");
+    }
+  }
         async function handleDelete(id: string) {
   const confirmed = window.confirm(
     "Tem certeza que deseja excluir este orçamento?"
@@ -385,7 +491,7 @@ export default function OrcamentosPage() {
           </h2>
 
           <p className="mt-2 text-sm text-slate-600">
-            Informe os dados básicos da proposta.
+            Prepare a proposta, anexe documentos e envie uma mensagem pronta ao cliente pelo WhatsApp.
           </p>
 
           <form
@@ -524,6 +630,61 @@ export default function OrcamentosPage() {
               />
             </div>
 
+            <div className="rounded-xl border border-purple-100 bg-purple-50/60 p-4 sm:p-5">
+              <label htmlFor="quote-files" className="block text-sm font-semibold text-slate-800">
+                Anexos do orçamento
+              </label>
+              <p className="mt-1 text-xs leading-5 text-slate-600">
+                PDF, JPG, PNG ou WebP. Até 10 MB por arquivo; os links enviados ao cliente ficam disponíveis por 7 dias.
+              </p>
+              <input
+                id="quote-files"
+                type="file"
+                multiple
+                accept="application/pdf,image/jpeg,image/png,image/webp"
+                disabled={sending}
+                onChange={(event) => {
+                  const chosen = Array.from(event.target.files ?? []);
+                  event.target.value = "";
+                  if (chosen.length + anexos.length > 5) {
+                    setError("Este orçamento pode ter até 5 anexos.");
+                    return;
+                  }
+                  const invalid = chosen.find((file) => file.size > 10 * 1024 * 1024 || !["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(file.type));
+                  if (invalid) {
+                    setError(`${invalid.name} não é um formato aceito ou ultrapassa 10 MB.`);
+                    return;
+                  }
+                  setError("");
+                  setArquivosSelecionados((current) => [...current, ...chosen]);
+                }}
+                className="mt-3 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-purple-100 file:px-3 file:py-2 file:font-semibold file:text-purple-800"
+              />
+              {arquivosSelecionados.length > 0 && (
+                <ul className="mt-3 space-y-2 text-sm text-slate-700">
+                  {arquivosSelecionados.map((file, index) => (
+                    <li key={`${file.name}-${file.lastModified}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-3 py-2">
+                      <span className="min-w-0 break-all">{file.name}</span>
+                      <button type="button" onClick={() => setArquivosSelecionados((current) => current.filter((_, i) => i !== index))} className="text-xs font-semibold text-red-700">Remover</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {anexos.length > 0 && (
+                <div className="mt-4 border-t border-purple-100 pt-3">
+                  <p className="text-xs font-semibold uppercase text-slate-500">Arquivos já salvos</p>
+                  <ul className="mt-2 space-y-2">
+                    {anexos.map((file) => (
+                      <li key={file.path} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-sm">
+                        <a href={file.signed_url} target="_blank" rel="noreferrer" className="min-w-0 break-all text-purple-700 underline">{file.name}</a>
+                        <button type="button" onClick={() => void removerAnexo(file)} className="text-xs font-semibold text-red-700">Excluir</button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
             <button
               type="submit"
               disabled={sending}
@@ -532,8 +693,8 @@ export default function OrcamentosPage() {
               {sending
                 ? "Salvando..."
                 : editingId
-                  ? "Salvar alterações"
-                  : "Cadastrar orçamento" }
+                  ? "Salvar orçamento"
+                  : "Criar rascunho e salvar orçamento" }
             </button>
           </form>
         </div>
@@ -655,11 +816,19 @@ export default function OrcamentosPage() {
           <div className="flex justify-end gap-2">
             <button
                 type="button"
-                onClick={() => handleEdit(orcamento)}
+                onClick={() => void handleEdit(orcamento)}
                     className="rounded-lg border border-purple-200 px-3 py-2 text-xs font-medium text-purple-700 transition hover:bg-purple-50"
                 >
                 Editar
               </button>
+
+            <button
+              type="button"
+              onClick={() => void enviarOrcamento(orcamento)}
+              className="rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-green-700"
+            >
+              Compartilhar pelo WhatsApp
+            </button>
 
             <button
               type="button"

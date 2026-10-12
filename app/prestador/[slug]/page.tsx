@@ -97,6 +97,15 @@ export default async function PrestadorPage({
 
   const { profile, services } =
     await carregarVitrine(slug);
+  const whatsappNumber = (profile.whatsapp ?? "").replace(/\D/g, "");
+  const whatsappNumberWithCountryCode =
+    whatsappNumber.startsWith("55") || whatsappNumber.length > 11
+      ? whatsappNumber
+      : `55${whatsappNumber}`;
+  const whatsappMessage = encodeURIComponent(
+    `Olá! Encontrei seu perfil no site da VALLEX - ServiçoFácil.
+Gostaria de saber mais sobre seus valores e condições de atendimento local, podemos conversar por aqui?`
+  );
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
@@ -107,7 +116,7 @@ export default async function PrestadorPage({
               <img
                 src={profile.logo_url}
                 alt={`Logo de ${profile.display_name}`}
-                className="h-12 w-12 rounded-xl border border-slate-200 object-cover"
+                className="h-12 w-12 shrink-0 rounded-xl border border-slate-200 object-contain sm:h-14 sm:w-14"
               />
             ): 
             
@@ -130,9 +139,17 @@ export default async function PrestadorPage({
             </div>
           </div>
 
-          <span className="hidden rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700 sm:inline-flex">
-            Prestador verificado
-          </span>
+          <div className="flex flex-col items-end gap-2">
+            <Link
+              href="/#providers-heading"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-xs font-semibold text-slate-700 transition hover:bg-slate-50 sm:text-sm"
+            >
+              ← Voltar aos prestadores
+            </Link>
+            <span className="hidden rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700 sm:inline-flex">
+              Prestador verificado
+            </span>
+          </div>
         </div>
       </header>
 
@@ -207,10 +224,7 @@ export default async function PrestadorPage({
           <div className="mt-8 flex flex-wrap gap-3 border-t border-slate-200 pt-8">
             {profile.whatsapp && (
               <a
-                href={`https://wa.me/${profile.whatsapp.replace(
-                  /\D/g,
-                  ""
-                )}`}
+                href={`https://wa.me/${whatsappNumberWithCountryCode}?text=${whatsappMessage}`}
                 target="_blank"
                 rel="noreferrer"
                 className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700"

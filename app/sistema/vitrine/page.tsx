@@ -70,6 +70,7 @@ export default function VitrinePage() {
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [publicando, setPublicando] = useState(false);
+  const [enviandoLogo, setEnviandoLogo] = useState(false);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
 
@@ -501,6 +502,43 @@ async function excluirServico(service: VitrineService) {
     }
   }
 
+  async function enviarLogo(event: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = event.target.files?.[0];
+    event.target.value = "";
+    if (!arquivo) return;
+
+    limparMensagens();
+    if (!profile) {
+      setErro("Salve a configuração da Vitrine antes de enviar a logo.");
+      return;
+    }
+
+    setEnviandoLogo(true);
+    try {
+      const token = await obterToken();
+      if (!token) return;
+
+      const form = new FormData();
+      form.set("finalidade", "logo");
+      form.set("arquivo", arquivo);
+      const response = await fetch("/api/sistema/arquivos", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const resultado = await response.json();
+      if (!response.ok) throw new Error(resultado.message || "Não foi possível enviar a logo.");
+
+      setLogoUrl(resultado.logo_url);
+      setProfile((atual) => atual ? { ...atual, logo_url: resultado.logo_url } : atual);
+      setSucesso("Logo enviada e aplicada à Vitrine.");
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Não foi possível enviar a logo.");
+    } finally {
+      setEnviandoLogo(false);
+    }
+  }
+
   async function alterarPublicacao(
     action: "publish" | "revoke"
   ) {
@@ -608,6 +646,17 @@ async function excluirServico(service: VitrineService) {
             Voltar ao painel
           </Link>
         </div>
+
+        {process.env.NODE_ENV !== "production" && (
+          <div className="mb-6">
+            <Link
+              href="/servicos?previsualizar=1"
+              className="inline-flex rounded-lg bg-purple-700 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-800"
+            >
+              Pré-visualizar no catálogo local
+            </Link>
+          </div>
+        )}
 
         {erro && (
           <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
@@ -864,28 +913,37 @@ async function excluirServico(service: VitrineService) {
               </h2>
 
               <p className="mt-1 text-sm text-gray-500">
-                A URL do logotipo poderá ser substituída
-                posteriormente pela integração com armazenamento.
+                Envie uma imagem da logo. Ela será ajustada para aparecer bem na Vitrine, inclusive em celulares.
               </p>
             </div>
 
             <label
-              htmlFor="logo_url"
+              htmlFor="logo_file"
               className="mb-2 block text-sm font-medium text-gray-700"
             >
-              URL do logotipo
+              Arquivo da logo
             </label>
 
             <input
-              id="logo_url"
-              value={logoUrl}
-              onChange={(event) =>
-                setLogoUrl(event.target.value)
-              }
-              maxLength={2048}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
-              placeholder="https://..."
+              id="logo_file"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={enviarLogo}
+              disabled={enviandoLogo}
+              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none file:mr-4 file:rounded-md file:border-0 file:bg-purple-50 file:px-4 file:py-2 file:font-semibold file:text-purple-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 disabled:opacity-60"
             />
+            <p className="mt-2 text-xs text-gray-500">
+              JPG, PNG ou WebP; até 2 MB. {enviandoLogo ? "Enviando…" : ""}
+            </p>
+            {logoUrl && (
+              <div className="mt-4 flex items-center gap-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
+                  {/* O container mantém o enquadramento em telas pequenas. */}
+                  <img src={logoUrl} alt={`Logo de ${displayName || "prestador"}`} className="h-full w-full object-contain" />
+                </div>
+                <span className="text-sm text-gray-600">Prévia da logo na Vitrine</span>
+              </div>
+            )}
           </section>
 
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">

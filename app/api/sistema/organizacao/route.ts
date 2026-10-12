@@ -11,6 +11,17 @@ if (!supabaseUrl || !supabaseSecretKey || !supabaseAnonKey) {
 
 const supabaseAdmin = createClient(supabaseUrl, supabaseSecretKey);
 
+function slugifyOrganizationName(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80)
+    .replace(/-+$/g, "");
+}
+
 export async function GET(request: Request) {
   try {
     // 1. Obtém o token enviado pelo usuário autenticado.
@@ -197,6 +208,268 @@ const authClient = createClient(authUrl, authAnonKey);
         ok: false,
         message: "Ocorreu um erro ao consultar o contexto organizacional.",
       },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const authUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const authorization = request.headers.get("authorization");
+    const token = authorization?.startsWith("Bearer ")
+      ? authorization.slice("Bearer ".length).trim()
+      : "";
+
+    if (!token) {
+      return NextResponse.json(
+        { ok: false, message: "Entre na sua conta para continuar." },
+        { status: 401 }
+      );
+    }
+
+    if (!authUrl || !supabaseAnonKey) {
+      return NextResponse.json(
+        { ok: false, message: "Configuração do servidor incompleta." },
+        { status: 500 }
+      );
+    }
+
+    const authClient = createClient(authUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    });
+    const {
+      data: { user },
+      error: authError,
+    } = await authClient.auth.getUser(token);
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { ok: false, message: "Sua sessão expirou. Entre novamente." },
+        { status: 401 }
+      );
+    }
+
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { ok: false, message: "Os dados enviados são inválidos." },
+        { status: 400 }
+      );
+    }
+
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        { ok: false, message: "Os dados enviados são inválidos." },
+        { status: 400 }
+      );
+    }
+
+    const payload = body as Record<string, unknown>;
+    const name = typeof payload.name === "string" ? payload.name.trim() : "";
+    const businessType =
+      typeof payload.business_type === "string"
+        ? payload.business_type.trim()
+        : "";
+
+    if (name.length < 2 || name.length > 160) {
+      return NextResponse.json(
+        { ok: false, message: "O nome deve ter entre 2 e 160 caracteres." },
+        { status: 400 }
+      );
+    }
+
+    if (businessType.length < 2 || businessType.length > 100) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "Informe sua atividade principal (até 100 caracteres).",
+        },
+        { status: 400 }
+      );
+    }
+
+    const { data: existingOrganization, error: existingError } =
+      await supabaseAdmin
+        .from("organizations")
+        .select("id, name, business_type")
+        .eq("owner_id", user.id)
+        .maybeSingle();
+
+    if (existingError) {
+      console.error("Erro ao verificar organização existente:", existingError);
+      return NextResponse.json(
+        { ok: false, message: "Não foi possível verificar sua organização." },
+        { status: 500 }
+      );
+    }
+
+    if (existingOrganization) {
+      return NextResponse.json({
+        ok: true,
+        organization: existingOrganization,
+        alreadyConfigured: true,
+      });
+    }
+
+    const { data: freePlan, error: planError } = await supabaseAdmin
+      .from("plans")
+      .select("id, code, name")
+      .eq("code", "free")
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (planError) {
+      console.error("Erro ao consultar o plano Free:", planError);
+      return NextResponse.json(
+        { ok: false, message: "Não foi possível consultar os planos." },
+        { status: 500 }
+      );
+    }
+
+    if (!freePlan) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message:
+            "O plano gratuito ainda não está disponível. Tente novamente mais tarde.",
+        },
+        { status: 503 }
+      );
+    }
+
+    const baseSlug = slugifyOrganizationName(name);
+
+    if (baseSlug.length < 3) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "Use um nome com pelo menos 3 letras ou números.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const { data: slugMatch, error: slugError } = await supabaseAdmin
+      .from("organization_public_profiles")
+      .select("id")
+      .eq("slug", baseSlug)
+      .maybeSingle();
+
+    if (slugError) {
+      console.error("Erro ao verificar endereço da Vitrine:", slugError);
+      return NextResponse.json(
+        { ok: false, message: "Não foi possível reservar o endereço público." },
+        { status: 500 }
+      );
+    }
+
+    const slug = slugMatch
+      ? `${baseSlug.slice(0, 70)}-${user.id.replace(/-/g, "").slice(0, 8)}`
+      : baseSlug;
+
+    const { data: organization, error: organizationError } =
+      await supabaseAdmin
+        .from("organizations")
+        .insert({
+          name,
+          business_type: businessType,
+          owner_id: user.id,
+        })
+        .select("id, name, business_type")
+        .single();
+
+    if (organizationError || !organization) {
+      if (organizationError?.code === "23505") {
+        const { data: createdByAnotherRequest } = await supabaseAdmin
+          .from("organizations")
+          .select("id, name, business_type")
+          .eq("owner_id", user.id)
+          .maybeSingle();
+
+        if (createdByAnotherRequest) {
+          return NextResponse.json({
+            ok: true,
+            organization: createdByAnotherRequest,
+            alreadyConfigured: true,
+          });
+        }
+      }
+
+      console.error("Erro ao criar organização:", organizationError);
+      return NextResponse.json(
+        { ok: false, message: "Não foi possível criar sua organização." },
+        { status: 500 }
+      );
+    }
+
+    const { error: profileError } = await supabaseAdmin
+      .from("organization_public_profiles")
+      .insert({
+        organization_id: organization.id,
+        slug,
+        display_name: name,
+        is_published: false,
+      });
+
+    if (profileError) {
+      console.error("Erro ao criar perfil inicial da Vitrine:", profileError);
+      const { error: cleanupError } = await supabaseAdmin
+        .from("organizations")
+        .delete()
+        .eq("id", organization.id);
+
+      if (cleanupError) {
+        console.error("Erro ao desfazer organização incompleta:", cleanupError);
+      }
+
+      return NextResponse.json(
+        { ok: false, message: "Não foi possível iniciar sua Vitrine." },
+        { status: 500 }
+      );
+    }
+
+    const { error: subscriptionError } = await supabaseAdmin
+      .from("organization_subscriptions")
+      .insert({
+        organization_id: organization.id,
+        plan_id: freePlan.id,
+        billing_provider: "manual",
+        status: "active",
+      });
+
+    if (subscriptionError) {
+      console.error("Erro ao ativar o plano inicial:", subscriptionError);
+      const { error: cleanupError } = await supabaseAdmin
+        .from("organizations")
+        .delete()
+        .eq("id", organization.id);
+
+      if (cleanupError) {
+        console.error("Erro ao desfazer organização incompleta:", cleanupError);
+      }
+
+      return NextResponse.json(
+        { ok: false, message: "Não foi possível ativar o plano inicial." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(
+      { ok: true, organization, plan: freePlan },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("Erro ao configurar organização:", error);
+    return NextResponse.json(
+      { ok: false, message: "Ocorreu um erro ao configurar sua conta." },
       { status: 500 }
     );
   }

@@ -27,5 +27,6 @@ export const siteConfig = {
   { label: "Soluções", href: "/solucoes" },
   { label: "Experiências", href: "/experiencias" },
   { label: "Contato", href: "/contato" },
+  { label: "Área do prestador", href: "/sistema/login" },
   ],
 };

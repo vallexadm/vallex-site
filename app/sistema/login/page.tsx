@@ -8,6 +8,8 @@ export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [organizationName, setOrganizationName] = useState("");
+  const [businessType, setBusinessType] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -20,29 +22,39 @@ export default function LoginPage() {
     try {
       if (mode === "signup") {
         const { data, error } = await supabase.auth.signUp({
-          email,
+          email: email.trim().toLowerCase(),
+          password,
+          options: {
+            data: {
+              organization_name: organizationName.trim(),
+              business_type: businessType.trim(),
+            },
+          },
+        });
+
+        if (error) throw error;
+
+        if (data.session) {
+          router.replace("/sistema");
+          return;
+        }
+
+        setMode("login");
+        setMessage(
+          "Conta criada. Confirme seu e-mail e depois entre para concluir o cadastro do seu negócio."
+        );
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: email.trim().toLowerCase(),
           password,
         });
 
         if (error) throw error;
 
-        setMessage(
-          data.session
-            ? "Conta criada com sucesso. O acesso ao painel será liberado na próxima etapa."
-            : "Cadastro iniciado. Verifique seu e-mail para confirmar a conta, se solicitado pelo Supabase."
-        );
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-  email,
-  password,
-});
-
-if (error) throw error;
-
-router.push("/sistema");
-    }
-
-  }catch (error) {
+        router.replace("/sistema");
+        return;
+      }
+    } catch (error) {
       setMessage(
         error instanceof Error
           ? error.message
@@ -101,6 +113,51 @@ router.push("/sistema");
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {mode === "signup" && (
+            <>
+              <div>
+                <label
+                  htmlFor="organizationName"
+                  className="mb-1 block text-sm font-medium text-slate-700"
+                >
+                  Nome do prestador ou da empresa
+                </label>
+                <input
+                  id="organizationName"
+                  type="text"
+                  autoComplete="organization"
+                  required
+                  minLength={2}
+                  maxLength={160}
+                  value={organizationName}
+                  onChange={(event) => setOrganizationName(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100"
+                  placeholder="Ex.: Silva Serviços"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="businessType"
+                  className="mb-1 block text-sm font-medium text-slate-700"
+                >
+                  Atividade principal
+                </label>
+                <input
+                  id="businessType"
+                  type="text"
+                  required
+                  minLength={2}
+                  maxLength={100}
+                  value={businessType}
+                  onChange={(event) => setBusinessType(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100"
+                  placeholder="Ex.: serviços elétricos, informática"
+                />
+              </div>
+            </>
+          )}
+
           <div>
             <label
               htmlFor="email"

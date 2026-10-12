@@ -4,7 +4,7 @@ import { siteConfig } from "@/config/site";
 
 export default function Hero() {
   return (
-    <section className="hero">
+    <section className="hero hero-home">
       <div className="container hero-content">
 
         <span className="eyebrow">
