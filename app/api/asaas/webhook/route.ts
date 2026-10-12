@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
@@ -20,14 +20,12 @@ type AsaasEvent = {
   };
 };
 
-function validToken(received: string | null, expected: string) {
-  if (!received) return false;
-  const receivedBuffer = Buffer.from(received);
-  const expectedBuffer = Buffer.from(expected);
-  return (
-    receivedBuffer.length === expectedBuffer.length &&
-    timingSafeEqual(receivedBuffer, expectedBuffer)
-  );
+function validToken(received: string | null, expectedHash: string) {
+  if (!received || !/^[a-f0-9]{64}$/i.test(expectedHash)) return false;
+
+  const receivedHash = createHash("sha256").update(received, "utf8").digest();
+  const expectedHashBytes = Buffer.from(expectedHash, "hex");
+  return timingSafeEqual(receivedHash, expectedHashBytes);
 }
 
 async function activatePaidPlan(
@@ -78,16 +76,16 @@ async function activatePaidPlan(
 }
 
 export async function POST(request: Request) {
-  const expectedToken = process.env.ASAAS_WEBHOOK_TOKEN?.trim();
+  const expectedTokenHash = process.env.ASAAS_WEBHOOK_TOKEN_SHA256?.trim();
   const receivedToken = request.headers.get("asaas-access-token");
 
-  if (!expectedToken) {
+  if (!expectedTokenHash || !/^[a-f0-9]{64}$/i.test(expectedTokenHash)) {
     return NextResponse.json(
-      { ok: false, message: "Webhook ASAAS não configurado." },
+      { ok: false, message: "Hash do token do webhook ASAAS não configurado corretamente." },
       { status: 503 }
     );
   }
-  if (!validToken(receivedToken, expectedToken)) {
+  if (!validToken(receivedToken, expectedTokenHash)) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
@@ -142,7 +140,7 @@ export async function POST(request: Request) {
       .eq("event_id", event.id);
     if (error) {
       console.error("[ASAAS WEBHOOK] event retry update failed", error);
-      return NextResponse.json({ ok: false }, { status: 503 });
+    return NextResponse.json({ ok: false }, { status: 503 });
     }
   } else {
     const { error } = await admin.from("asaas_webhook_events").insert({
@@ -152,10 +150,10 @@ export async function POST(request: Request) {
     });
     if (error) {
       if (error.code === "23505") {
-        return NextResponse.json({ ok: true, duplicate: true });
+      return NextResponse.json({ ok: true, duplicate: true });
       }
       console.error("[ASAAS WEBHOOK] event insert failed", error);
-      return NextResponse.json({ ok: false }, { status: 503 });
+    return NextResponse.json({ ok: false }, { status: 503 });
     }
   }
 
