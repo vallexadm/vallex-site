@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 import SolicitacaoForm from "./SolicitacaoForm";
 
 type PublicProfile = {
@@ -24,13 +25,6 @@ type PublicService = {
   is_published: boolean;
 };
 
-type ApiResponse = {
-  ok: boolean;
-  message?: string;
-  profile?: PublicProfile;
-  services?: PublicService[];
-};
-
 type PublicVitrine = {
   profile: PublicProfile;
   services: PublicService[];
@@ -39,30 +33,50 @@ type PublicVitrine = {
 async function carregarVitrine(
   slug: string
 ): Promise<PublicVitrine> {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    "http://localhost:3000";
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const secretKey = process.env.SUPABASE_SECRET_KEY;
 
-  const response = await fetch(
-    `${baseUrl}/api/public/prestador/${encodeURIComponent(slug)}`,
-    {
-      cache: "no-store",
-    }
-  );
-
-  if (!response.ok) {
-    notFound();
+  if (!supabaseUrl || !secretKey) {
+    throw new Error("Configuração do servidor indisponível para carregar a Vitrine.");
   }
 
-  const resultado: ApiResponse = await response.json();
+  const admin = createClient(supabaseUrl, secretKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const normalizedSlug = slug.trim().toLowerCase();
 
-  if (!resultado.ok || !resultado.profile) {
-    notFound();
+  const { data: profile, error: profileError } = await admin
+    .from("organization_public_profiles")
+    .select(
+      "id,slug,display_name,description,phone,whatsapp,email,address,logo_url,is_published,organization_id"
+    )
+    .eq("slug", normalizedSlug)
+    .eq("is_published", true)
+    .maybeSingle();
+
+  if (profileError) {
+    console.error("Erro ao carregar a Vitrine:", profileError);
+    throw new Error("Não foi possível carregar a Vitrine.");
+  }
+
+  if (!profile) notFound();
+
+  const { data: services, error: servicesError } = await admin
+    .from("vitrine_services")
+    .select("id,name,description,price,display_order,is_published")
+    .eq("organization_id", profile.organization_id)
+    .eq("is_published", true)
+    .order("display_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (servicesError) {
+    console.error("Erro ao carregar serviços da Vitrine:", servicesError);
+    throw new Error("Não foi possível carregar os serviços da Vitrine.");
   }
 
   return {
-    profile: resultado.profile,
-    services: resultado.services ?? [],
+    profile,
+    services: services ?? [],
   };
 }
 
