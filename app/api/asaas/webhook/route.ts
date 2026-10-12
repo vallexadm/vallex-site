@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
@@ -31,7 +31,7 @@ function validToken(received: string | null, expected: string) {
 }
 
 async function activatePaidPlan(
-  admin: ReturnType<typeof createClient>,
+  admin: SupabaseClient<any>,
   session: {
     organization_id: string;
     plan_id: string;
