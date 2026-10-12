@@ -1,6 +1,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getPlanEntitlements } from "@/lib/server/plan-entitlements";
 
 export const runtime = "nodejs";
 
@@ -108,6 +109,19 @@ export async function POST(
     }
 
     organizacaoId = organizacao.id;
+
+    const planResult = await getPlanEntitlements(admin, organizacao.id);
+
+    if (!planResult.entitlements) {
+      return erro(planResult.error, 503);
+    }
+
+    if (!planResult.entitlements.canManageRequests) {
+      return erro(
+        "A criação de orçamentos a partir de solicitações está disponível nos planos pagos.",
+        402
+      );
+    }
 
     // 3. Validar solicitação.
     const { id } = await context.params;

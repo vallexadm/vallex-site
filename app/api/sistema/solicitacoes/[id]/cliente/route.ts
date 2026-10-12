@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getPlanEntitlements } from "@/lib/server/plan-entitlements";
 
 export const runtime = "nodejs";
 
@@ -122,6 +123,22 @@ export async function POST(
       return errorResponse(
         "Organização não encontrada.",
         403
+      );
+    }
+
+    const planResult = await getPlanEntitlements(
+      supabaseAdmin,
+      organization.id
+    );
+
+    if (!planResult.entitlements) {
+      return errorResponse(planResult.error, 503);
+    }
+
+    if (!planResult.entitlements.canManageRequests) {
+      return errorResponse(
+        "O cadastro de clientes a partir de solicitações está disponível nos planos pagos.",
+        402
       );
     }
 
