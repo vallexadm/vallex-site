@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isAsaasPeriodExpired } from "@/lib/server/asaas-billing-dates";
 export const runtime = "nodejs";
 const fail = (message: string, status: number) => NextResponse.json({ ok: false, message }, { status });
 export async function GET(request: Request) {
@@ -30,9 +31,15 @@ export async function GET(request: Request) {
     if (error) return fail("Não foi possível consultar seu plano atual.", 500);
     currentPlan = data;
   }
+  const currentStatus =
+    subscription?.status === "active" &&
+    subscription.current_period_end &&
+    isAsaasPeriodExpired(subscription.current_period_end)
+      ? "expired"
+      : subscription?.status ?? "active";
   return NextResponse.json({ ok: true,
     plans: (plans ?? []).map((plan) => ({ id: plan.id, code: plan.code, name: plan.name, monthlyPrice: Number(plan.monthly_price), maxUsers: plan.max_users })),
-    current: currentPlan ? { code: currentPlan.code, name: currentPlan.name, status: subscription?.status ?? "active", currentPeriodEnd: subscription?.current_period_end ?? null } : null,
+    current: currentPlan ? { code: currentPlan.code, name: currentPlan.name, status: currentStatus, currentPeriodEnd: subscription?.current_period_end ?? null } : null,
   });
 }
 

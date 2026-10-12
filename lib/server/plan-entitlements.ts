@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isAsaasPeriodExpired } from "@/lib/server/asaas-billing-dates";
 
 export type PlanEntitlements = {
   code: "free" | "basic" | "professional" | "enterprise";
@@ -43,9 +44,7 @@ export async function getPlanEntitlements(
   }
 
   if (subscription.current_period_end) {
-    const periodEnd = Date.parse(subscription.current_period_end);
-
-    if (!Number.isFinite(periodEnd) || periodEnd <= Date.now()) {
+    if (isAsaasPeriodExpired(subscription.current_period_end)) {
       return { entitlements: FREE_ENTITLEMENTS };
     }
   }

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
+import {
+  isAsaasPeriodExpired,
+  nextMonthlyAsaasDueDate,
+} from "@/lib/server/asaas-billing-dates";
 
 export const runtime = "nodejs";
 
@@ -116,7 +120,7 @@ export async function POST(request: Request) {
 
     const { data: currentSubscription, error: subscriptionError } = await admin
       .from("organization_subscriptions")
-      .select("id, plan_id, status")
+      .select("id, plan_id, status, current_period_end")
       .eq("organization_id", organization.id)
       .maybeSingle();
 
@@ -125,7 +129,12 @@ export async function POST(request: Request) {
       return responseError("Não foi possível consultar seu plano atual.", 500);
     }
 
-    if (currentSubscription?.status === "active") {
+    const currentSubscriptionIsActive =
+      currentSubscription?.status === "active" &&
+      (!currentSubscription.current_period_end ||
+        !isAsaasPeriodExpired(currentSubscription.current_period_end));
+
+    if (currentSubscriptionIsActive) {
       const { data: currentPlan } = await admin
         .from("plans")
         .select("code")
@@ -194,9 +203,9 @@ export async function POST(request: Request) {
       return responseError("Configure uma URL HTTPS pública para o retorno do checkout.", 503);
     }
     const callbackPath = siteUrl.startsWith("https://") ? "/sistema/planos?pagamento=" : "/?pagamento=";
-    const nextDueDate = new Date(Date.now() + 24 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 10);
+    // Checkout collects the initial payment; this is the first recurring charge.
+    // Schedule it one month later to avoid charging again the day after purchase.
+    const nextDueDate = nextMonthlyAsaasDueDate();
 
     const asaasResponse = await fetch(
       apiUrl.replace(/\/+$/, "") + "/checkouts",

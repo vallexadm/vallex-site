@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
-import { createHash, timingSafeEqual } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  asaasPeriodEndFromDueDate,
+  isAsaasPeriodExpired,
+  nextMonthlyDueDateAfter,
+} from "@/lib/server/asaas-billing-dates";
+import { matchesAsaasWebhookToken } from "@/lib/server/asaas-webhook-auth";
 
 export const runtime = "nodejs";
 
@@ -11,55 +16,196 @@ type AsaasEvent = {
     id?: string;
     status?: string;
     customer?: string | null;
+    externalReference?: string | null;
+    items?: Array<{ name?: string }>;
+    subscription?: {
+      nextDueDate?: string | null;
+    } | null;
   };
   subscription?: {
     id?: string;
     customer?: string | null;
     externalReference?: string | null;
     status?: string;
+    nextDueDate?: string | null;
+  };
+  payment?: {
+    id?: string;
+    subscription?: string | null;
+    customer?: string | null;
+    externalReference?: string | null;
+    dueDate?: string | null;
   };
 };
 
-function validToken(received: string | null, expectedHash: string) {
-  if (!received || !/^[a-f0-9]{64}$/i.test(expectedHash)) return false;
+type CheckoutSession = {
+  id: string;
+  organization_id: string;
+  plan_id: string;
+  status: string;
+  asaas_customer_id: string | null;
+  asaas_subscription_id: string | null;
+  asaas_checkout_id: string | null;
+};
 
-  const receivedHash = createHash("sha256").update(received, "utf8").digest();
-  const expectedHashBytes = Buffer.from(expectedHash, "hex");
-  return timingSafeEqual(receivedHash, expectedHashBytes);
+function periodEndFrom(nextDueDate?: string | null) {
+  return asaasPeriodEndFromDueDate(nextDueDate);
+}
+
+async function findCheckoutSession(
+  admin: SupabaseClient,
+  checkout: NonNullable<AsaasEvent["checkout"]>
+) {
+  if (checkout.id) {
+    const { data, error } = await admin
+      .from("asaas_checkout_sessions")
+      .select(
+        "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
+      )
+      .eq("asaas_checkout_id", checkout.id)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) return data as CheckoutSession;
+  }
+
+  if (checkout.externalReference) {
+    const { data, error } = await admin
+      .from("asaas_checkout_sessions")
+      .select(
+        "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
+      )
+      .eq("external_reference", checkout.externalReference)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) return data as CheckoutSession;
+  }
+
+  return null;
+}
+
+async function findSubscriptionSession(
+  admin: SupabaseClient,
+  subscription: NonNullable<AsaasEvent["subscription"]>
+) {
+  if (subscription.externalReference) {
+    const { data, error } = await admin
+      .from("asaas_checkout_sessions")
+      .select(
+        "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
+      )
+      .eq("external_reference", subscription.externalReference)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) return data as CheckoutSession;
+  } else if (subscription.customer) {
+    const { data, error } = await admin
+      .from("asaas_checkout_sessions")
+      .select(
+        "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
+      )
+      .eq("asaas_customer_id", subscription.customer)
+      .in("status", ["pending", "paid"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) return data as CheckoutSession;
+  }
+
+  return null;
+}
+
+async function findPaymentSession(
+  admin: SupabaseClient,
+  payment: NonNullable<AsaasEvent["payment"]>
+) {
+  if (payment.subscription) {
+    const { data, error } = await admin
+      .from("asaas_checkout_sessions")
+      .select(
+        "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
+      )
+      .eq("asaas_subscription_id", payment.subscription)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) return data as CheckoutSession;
+  }
+
+  if (payment.externalReference) {
+    const { data, error } = await admin
+      .from("asaas_checkout_sessions")
+      .select(
+        "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
+      )
+      .eq("external_reference", payment.externalReference)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) return data as CheckoutSession;
+  }
+
+  return null;
+}
+
+function isVallexPlanCheckout(checkout: NonNullable<AsaasEvent["checkout"]>) {
+  return checkout.items?.some((item) =>
+    item.name?.includes("ServiçoFácil")
+  ) ?? false;
 }
 
 async function activatePaidPlan(
   admin: SupabaseClient,
-  session: {
-    organization_id: string;
-    plan_id: string;
-    asaas_customer_id: string | null;
-    asaas_subscription_id: string | null;
-  }
+  session: CheckoutSession,
+  nextDueDate?: string | null
 ) {
   const now = new Date();
-  const periodEnd = new Date(now);
-  periodEnd.setMonth(periodEnd.getMonth() + 1);
+  const { data: existing, error: readError } = await admin
+    .from("organization_subscriptions")
+    .select(
+      "id, plan_id, status, billing_provider, started_at, current_period_start, current_period_end, external_customer_id, external_subscription_id"
+    )
+    .eq("organization_id", session.organization_id)
+    .maybeSingle();
+
+  if (readError) throw readError;
+
+  const existingPeriodEnd = existing?.current_period_end
+    ? Date.parse(existing.current_period_end)
+    : Number.NaN;
+  const keepCurrentPeriod =
+    existing?.plan_id === session.plan_id &&
+    existing.status === "active" &&
+    existing.billing_provider === "asaas" &&
+    typeof existing.current_period_end === "string" &&
+    Number.isFinite(existingPeriodEnd) &&
+    !isAsaasPeriodExpired(existing.current_period_end, now);
 
   const values = {
     plan_id: session.plan_id,
     status: "active",
     billing_provider: "asaas",
-    started_at: now.toISOString(),
-    current_period_start: now.toISOString(),
-    current_period_end: periodEnd.toISOString(),
+    started_at: keepCurrentPeriod
+      ? existing.started_at ?? now.toISOString()
+      : now.toISOString(),
+    current_period_start: keepCurrentPeriod
+      ? existing.current_period_start ?? now.toISOString()
+      : now.toISOString(),
+    current_period_end: keepCurrentPeriod
+      ? existing.current_period_end
+      : periodEndFrom(nextDueDate),
     canceled_at: null,
-    external_customer_id: session.asaas_customer_id,
-    external_subscription_id: session.asaas_subscription_id,
+    external_customer_id:
+      session.asaas_customer_id ??
+      (keepCurrentPeriod ? existing.external_customer_id : null),
+    external_subscription_id:
+      session.asaas_subscription_id ??
+      (keepCurrentPeriod ? existing.external_subscription_id : null),
   };
-
-  const { data: existing, error: readError } = await admin
-    .from("organization_subscriptions")
-    .select("id")
-    .eq("organization_id", session.organization_id)
-    .maybeSingle();
-
-  if (readError) throw readError;
 
   if (existing) {
     const { error } = await admin
@@ -75,6 +221,152 @@ async function activatePaidPlan(
   }
 }
 
+async function linkAsaasSubscription(
+  admin: SupabaseClient,
+  session: CheckoutSession,
+  subscription: NonNullable<AsaasEvent["subscription"]>
+) {
+  if (
+    session.asaas_subscription_id &&
+    session.asaas_subscription_id !== subscription.id
+  ) {
+    throw new Error("ASAAS_SUBSCRIPTION_ID_DOES_NOT_MATCH_EXTERNAL_REFERENCE");
+  }
+
+  const customerId = subscription.customer ?? session.asaas_customer_id;
+  const { error } = await admin
+    .from("asaas_checkout_sessions")
+    .update({
+      asaas_subscription_id: subscription.id,
+      asaas_customer_id: customerId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", session.id);
+
+  if (error) throw error;
+
+  const linkedSession: CheckoutSession = {
+    ...session,
+    asaas_subscription_id: subscription.id ?? session.asaas_subscription_id,
+    asaas_customer_id: customerId,
+  };
+
+  // The subscription may be created before the checkout-paid event arrives.
+  // Save its identifiers now; only the paid checkout is allowed to activate access.
+  if (session.status === "paid") {
+    const { data: current, error: readError } = await admin
+      .from("organization_subscriptions")
+      .select("id, plan_id")
+      .eq("organization_id", session.organization_id)
+      .maybeSingle();
+
+    if (readError) throw readError;
+
+    if (!current) {
+      await activatePaidPlan(admin, linkedSession, subscription.nextDueDate);
+    } else if (current.plan_id === session.plan_id) {
+      const { error: linkError } = await admin
+        .from("organization_subscriptions")
+        .update({
+          external_customer_id: customerId,
+          external_subscription_id: subscription.id,
+        })
+        .eq("id", current.id);
+
+      if (linkError) throw linkError;
+    }
+  }
+}
+
+async function extendPaidSubscriptionPeriod(
+  admin: SupabaseClient,
+  payment: NonNullable<AsaasEvent["payment"]>
+) {
+  if (!payment.subscription || !payment.dueDate) return;
+
+  const session = await findPaymentSession(admin, payment);
+  if (!session || session.status !== "paid") return;
+  if (
+    session.asaas_subscription_id &&
+    session.asaas_subscription_id !== payment.subscription
+  ) {
+    throw new Error("PAYMENT_SUBSCRIPTION_ID_DOES_NOT_MATCH_CHECKOUT");
+  }
+
+  const nextDueDate = nextMonthlyDueDateAfter(payment.dueDate);
+  if (!nextDueDate) {
+    console.warn("[ASAAS WEBHOOK] payment has an invalid due date", {
+      paymentIdPresent: Boolean(payment.id),
+    });
+    return;
+  }
+
+  const customerId = payment.customer ?? session.asaas_customer_id;
+  if (!session.asaas_subscription_id) {
+    const { error } = await admin
+      .from("asaas_checkout_sessions")
+      .update({
+        asaas_subscription_id: payment.subscription,
+        asaas_customer_id: customerId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", session.id);
+
+    if (error) throw error;
+  }
+
+  const { data: current, error: readError } = await admin
+    .from("organization_subscriptions")
+    .select("id, plan_id, status, current_period_end, external_subscription_id")
+    .eq("organization_id", session.organization_id)
+    .maybeSingle();
+
+  if (readError) throw readError;
+  if (!current) {
+    await activatePaidPlan(
+      admin,
+      {
+        ...session,
+        asaas_subscription_id: payment.subscription,
+        asaas_customer_id: customerId,
+      },
+      nextDueDate
+    );
+    return;
+  }
+
+  if (
+    current.plan_id !== session.plan_id ||
+    current.status !== "active" ||
+    (current.external_subscription_id &&
+      current.external_subscription_id !== payment.subscription)
+  ) {
+    return;
+  }
+
+  const nextPeriodEnd = asaasPeriodEndFromDueDate(nextDueDate);
+  const currentPeriodEnd = current.current_period_end
+    ? Date.parse(current.current_period_end)
+    : Number.NaN;
+  if (
+    Number.isFinite(currentPeriodEnd) &&
+    Date.parse(nextPeriodEnd) <= currentPeriodEnd
+  ) {
+    return;
+  }
+
+  const { error: updateError } = await admin
+    .from("organization_subscriptions")
+    .update({
+      current_period_end: nextPeriodEnd,
+      external_customer_id: customerId,
+      external_subscription_id: payment.subscription,
+    })
+    .eq("id", current.id);
+
+  if (updateError) throw updateError;
+}
+
 export async function POST(request: Request) {
   const expectedTokenHash = process.env.ASAAS_WEBHOOK_TOKEN_SHA256?.trim();
   const receivedToken = request.headers.get("asaas-access-token");
@@ -85,7 +377,7 @@ export async function POST(request: Request) {
       { status: 503 }
     );
   }
-  const tokenMatches = validToken(receivedToken, expectedTokenHash);
+  const tokenMatches = matchesAsaasWebhookToken(receivedToken, expectedTokenHash);
   if (!tokenMatches) {
     const failureCode = receivedToken
       ? "ASAAS_WEBHOOK_TOKEN_MISMATCH"
@@ -176,18 +468,25 @@ export async function POST(request: Request) {
   }
 
   try {
-    if (event.event.startsWith("CHECKOUT_") && event.checkout?.id) {
-      const { data: session, error } = await admin
-        .from("asaas_checkout_sessions")
-        .select(
-          "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id"
-        )
-        .eq("asaas_checkout_id", event.checkout.id)
-        .maybeSingle();
-
-      if (error) throw error;
+    if (event.event.startsWith("CHECKOUT_") && event.checkout) {
+      const session = await findCheckoutSession(admin, event.checkout);
+      if (
+        !session &&
+        event.event === "CHECKOUT_PAID" &&
+        isVallexPlanCheckout(event.checkout)
+      ) {
+        throw new Error("VALLEX_PAID_CHECKOUT_SESSION_NOT_FOUND");
+      }
 
       if (session) {
+        if (
+          event.checkout.id &&
+          session.asaas_checkout_id &&
+          session.asaas_checkout_id !== event.checkout.id
+        ) {
+          throw new Error("CHECKOUT_ID_DOES_NOT_MATCH_EXTERNAL_REFERENCE");
+        }
+
         const customerId =
           event.checkout.customer ?? session.asaas_customer_id ?? null;
 
@@ -195,6 +494,7 @@ export async function POST(request: Request) {
           const { error: updateError } = await admin
             .from("asaas_checkout_sessions")
             .update({
+              asaas_checkout_id: event.checkout.id ?? session.asaas_checkout_id,
               asaas_customer_id: customerId,
               updated_at: new Date().toISOString(),
             })
@@ -205,6 +505,7 @@ export async function POST(request: Request) {
             .from("asaas_checkout_sessions")
             .update({
               status: "paid",
+              asaas_checkout_id: event.checkout.id ?? session.asaas_checkout_id,
               asaas_customer_id: customerId,
               updated_at: new Date().toISOString(),
             })
@@ -212,11 +513,11 @@ export async function POST(request: Request) {
           if (updateError) throw updateError;
 
           await activatePaidPlan(admin, {
-            organization_id: session.organization_id,
-            plan_id: session.plan_id,
+            ...session,
+            status: "paid",
+            asaas_checkout_id: event.checkout.id ?? session.asaas_checkout_id,
             asaas_customer_id: customerId,
-            asaas_subscription_id: session.asaas_subscription_id,
-          });
+          }, event.checkout.subscription?.nextDueDate);
         } else if (
           event.event === "CHECKOUT_CANCELED" ||
           event.event === "CHECKOUT_EXPIRED"
@@ -236,45 +537,18 @@ export async function POST(request: Request) {
     }
 
     if (event.event === "SUBSCRIPTION_CREATED" && event.subscription?.id) {
-      let query = admin
-        .from("asaas_checkout_sessions")
-        .select("id")
-        .eq("status", "paid");
-
-      if (event.subscription.externalReference) {
-        query = query.eq(
-          "external_reference",
-          event.subscription.externalReference
-        );
-      } else if (event.subscription.customer) {
-        query = query
-          .eq("asaas_customer_id", event.subscription.customer)
-          .order("created_at", { ascending: false })
-          .limit(1);
-      }
-
-      const { data: session, error } = await query.maybeSingle();
-      if (error) throw error;
-
+      const session = await findSubscriptionSession(admin, event.subscription);
       if (session) {
-        const { error: updateError } = await admin
-          .from("asaas_checkout_sessions")
-          .update({
-            asaas_subscription_id: event.subscription.id,
-            asaas_customer_id: event.subscription.customer ?? null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", session.id);
-        if (updateError) throw updateError;
-
-        const { data: linkedSession, error: linkedError } = await admin
-          .from("asaas_checkout_sessions")
-          .select("organization_id, plan_id, asaas_customer_id, asaas_subscription_id")
-          .eq("id", session.id)
-          .single();
-        if (linkedError) throw linkedError;
-        await activatePaidPlan(admin, linkedSession);
+        await linkAsaasSubscription(admin, session, event.subscription);
       }
+    }
+
+    if (
+      (event.event === "PAYMENT_CONFIRMED" ||
+        event.event === "PAYMENT_RECEIVED") &&
+      event.payment
+    ) {
+      await extendPaidSubscriptionPeriod(admin, event.payment);
     }
 
     const { error: markProcessedError } = await admin
