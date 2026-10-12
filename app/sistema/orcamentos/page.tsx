@@ -132,12 +132,12 @@ export default function OrcamentosPage() {
     return session?.access_token ?? "";
   }
 
-  async function loadData() {
-    setLoading(true);
-    setError("");
-
+  async function loadData(showLoading = false) {
     try {
       const accessToken = await getAccessToken();
+
+      if (showLoading) setLoading(true);
+      setError("");
 
       if (!accessToken) {
         setError("Sessão não encontrada. Faça login novamente.");
@@ -198,7 +198,13 @@ export default function OrcamentosPage() {
   }
 
   useEffect(() => {
-    void loadData();
+    const timeoutId = window.setTimeout(() => {
+      void loadData();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+    // This page loads once on mount; later refreshes are triggered by form actions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -275,7 +281,7 @@ export default function OrcamentosPage() {
     await carregarAnexos(savedQuoteId, accessToken);
     setMessage(isEditing ? "Orçamento atualizado com sucesso." : "Rascunho criado. Complete os dados, anexe os arquivos e envie ao cliente pelo WhatsApp.");
 
-    await loadData();
+    await loadData(true);
   } catch (error) {
     console.error("Erro ao salvar orçamento:", error);
     setError(error instanceof Error ? error.message : "Erro de comunicação ao salvar o orçamento.");
@@ -429,7 +435,7 @@ export default function OrcamentosPage() {
       setStatus("rascunho");
     }
 
-    await loadData();
+    await loadData(true);
   } catch (error) {
     console.error("Erro ao excluir orçamento:", error);
     setError("Erro de comunicação ao excluir o orçamento.");

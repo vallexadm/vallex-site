@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
@@ -222,7 +223,7 @@ export default function LoginPage() {
         )}
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          VALLEX | SERVIÇOFÁCIL <a href="/" className="font-medium text-violet-700 hover:text-violet-900">· Página inicial da VALLEX</a>
+          VALLEX | SERVIÇOFÁCIL <Link href="/" className="font-medium text-violet-700 hover:text-violet-900">· Página inicial da VALLEX</Link>
         </p>
       </section>
     </main>

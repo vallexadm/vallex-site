@@ -93,7 +93,7 @@ a {
   padding: 13px 20px;
   border-radius: 8px;
   font-weight: 600;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 .button-primary {
@@ -263,6 +263,20 @@ a {
 .plan-card .button {
   width: 100%;
   margin-top: auto;
+}
+
+.plan-card .button-outline {
+  color: var(--color-primary);
+}
+
+.plan-card .button-outline:hover {
+  background: var(--color-primary);
+  color: white;
+}
+
+.plan-card .button-outline:focus-visible {
+  outline: 3px solid #7000b833;
+  outline-offset: 3px;
 }
 
 .plans-note {

@@ -1,20 +1,27 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 type Plan = { id: string; code: string; name: string; monthlyPrice: number; maxUsers: number };
 type PlanData = { plans: Plan[]; current: { code: string; name: string; status: string; currentPeriodEnd: string | null } | null };
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 export default function PlanosPage() {
+  return <Suspense fallback={<main className="min-h-screen bg-slate-100 p-6 text-slate-600">Carregando planos...</main>}><PlanosContent /></Suspense>;
+}
+
+function PlanosContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [data, setData] = useState<PlanData | null>(null);
-  const [loading, setLoading] = useState(true), [message, setMessage] = useState(""), [error, setError] = useState(""), [submitting, setSubmitting] = useState("");
+  const [loading, setLoading] = useState(true), [error, setError] = useState(""), [submitting, setSubmitting] = useState("");
+  const paymentMessages: Record<string, string> = {
+    retorno: "Você voltou do checkout. A assinatura só será ativada quando o Asaas confirmar o pagamento.",
+    cancelado: "Checkout cancelado. Você pode iniciar uma nova contratação quando quiser.",
+    expirado: "O checkout expirou. Você pode gerar um novo link de pagamento.",
+  };
+  const message = paymentMessages[searchParams.get("pagamento") ?? ""] ?? "";
   useEffect(() => {
-    const outcome = new URLSearchParams(window.location.search).get("pagamento");
-    if (outcome === "retorno") setMessage("Você voltou do checkout. A assinatura só será ativada quando o Asaas confirmar o pagamento.");
-    if (outcome === "cancelado") setMessage("Checkout cancelado. Você pode iniciar uma nova contratação quando quiser.");
-    if (outcome === "expirado") setMessage("O checkout expirou. Você pode gerar um novo link de pagamento.");
     async function load() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;

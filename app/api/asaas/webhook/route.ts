@@ -29,7 +29,7 @@ function validToken(received: string | null, expectedHash: string) {
 }
 
 async function activatePaidPlan(
-  admin: SupabaseClient<any>,
+  admin: SupabaseClient,
   session: {
     organization_id: string;
     plan_id: string;
@@ -87,11 +87,24 @@ export async function POST(request: Request) {
   }
   const tokenMatches = validToken(receivedToken, expectedTokenHash);
   if (!tokenMatches) {
+    const failureCode = receivedToken
+      ? "ASAAS_WEBHOOK_TOKEN_MISMATCH"
+      : "ASAAS_WEBHOOK_TOKEN_HEADER_MISSING";
     console.warn("[ASAAS WEBHOOK] authentication rejected", {
       tokenHeaderPresent: Boolean(receivedToken),
       tokenHashMatches: tokenMatches,
+      failureCode,
     });
-    return NextResponse.json({ ok: false }, { status: 401 });
+    return NextResponse.json(
+      {
+        ok: false,
+        code: failureCode,
+        message: receivedToken
+          ? "O token recebido pelo webhook não corresponde ao hash configurado."
+          : "O cabeçalho de autenticação do Asaas não foi recebido.",
+      },
+      { status: 401 }
+    );
   }
 
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -145,7 +158,7 @@ export async function POST(request: Request) {
       .eq("event_id", event.id);
     if (error) {
       console.error("[ASAAS WEBHOOK] event retry update failed", error);
-    return NextResponse.json({ ok: false }, { status: 503 });
+      return NextResponse.json({ ok: false }, { status: 503 });
     }
   } else {
     const { error } = await admin.from("asaas_webhook_events").insert({
@@ -155,10 +168,10 @@ export async function POST(request: Request) {
     });
     if (error) {
       if (error.code === "23505") {
-      return NextResponse.json({ ok: true, duplicate: true });
+        return NextResponse.json({ ok: true, duplicate: true });
       }
       console.error("[ASAAS WEBHOOK] event insert failed", error);
-    return NextResponse.json({ ok: false }, { status: 503 });
+      return NextResponse.json({ ok: false }, { status: 503 });
     }
   }
 

@@ -55,11 +55,10 @@ export default function EquipePage() {
   }, [router]);
 
   const loadTeam = useCallback(async () => {
-    setLoading(true);
-    setError("");
-
     try {
       const accessToken = await getAccessToken();
+
+      setError("");
 
       if (!accessToken) return;
 
@@ -96,7 +95,11 @@ export default function EquipePage() {
   }, [getAccessToken]);
 
   useEffect(() => {
-    loadTeam();
+    const timeoutId = window.setTimeout(() => {
+      void loadTeam();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [loadTeam]);
 
   async function handleInvite(event: FormEvent<HTMLFormElement>) {
@@ -140,6 +143,7 @@ export default function EquipePage() {
       setInvitationToken(result.invitationToken ?? "");
       setEmail("");
 
+      setLoading(true);
       await loadTeam();
     } catch {
       setError("Erro de comunicação ao criar o convite.");
