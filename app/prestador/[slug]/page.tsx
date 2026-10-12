@@ -299,7 +299,7 @@ Gostaria de saber mais sobre seus valores e condições de atendimento local, po
               {services.map((service) => (
                 <article
                   key={service.id}
-                  className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-6 transition hover:border-purple-300 hover:shadow-sm"
+                  className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-6 transition duration-200 hover:-translate-y-1 hover:border-purple-500 hover:shadow-md focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-100"
                 >
                   <div className="flex-1">
                     <h4 className="text-xl font-semibold text-slate-900">

@@ -193,10 +193,12 @@ a {
   border-radius: 14px;
   padding: 28px;
   background: white;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.service-card:hover {
+.service-card:hover,
+.service-card:focus-within {
+  border-color: #A020F0;
   transform: translateY(-4px);
   box-shadow: 0 12px 30px #30005012;
 }
@@ -214,6 +216,57 @@ a {
 }
 
 .service-card p {
+  color: var(--color-muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.plans-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.plan-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.plan-card:hover,
+.plan-card:focus-within {
+  border-color: #A020F0;
+  box-shadow: 0 0 0 2px #A020F01A, 0 12px 30px #30005012;
+  transform: translateY(-4px);
+}
+
+.plan-card h3 {
+  margin: 18px 0 8px;
+  font-size: 28px;
+}
+
+.plan-card h3 small {
+  color: var(--color-muted);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.plan-card ul {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 24px;
+  padding-left: 20px;
+  color: var(--color-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.plan-card .button {
+  width: 100%;
+  margin-top: auto;
+}
+
+.plans-note {
+  margin-top: 24px;
   color: var(--color-muted);
   font-size: 14px;
   line-height: 1.7;
@@ -347,6 +400,14 @@ a {
   padding: 24px;
   background: white;
   box-shadow: 0 4px 14px #3000500a;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.provider-card:hover,
+.provider-card:focus-within {
+  border-color: #A020F0;
+  box-shadow: 0 12px 30px #30005012;
+  transform: translateY(-3px);
 }
 
 .provider-card-heading {

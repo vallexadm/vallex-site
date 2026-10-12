@@ -378,6 +378,17 @@ export default function SistemaPage() {
 
   {role === "owner" && (
     <Link
+href="/sistema/planos"
+      className="rounded-xl border border-purple-200 bg-white p-6 shadow-sm transition hover:border-purple-400 hover:shadow-md"
+    >
+      <h3 className="text-lg font-semibold text-slate-900">Planos e assinatura</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-600">Consulte seu plano e conheça as opções de assinatura mensal.</p>
+      <span className="mt-4 inline-block text-xs font-medium text-purple-700">Ver planos →</span>
+    </Link>
+  )}
+
+  {role === "owner" && (
+    <Link
       href="/sistema/equipe"
       className="rounded-xl border border-purple-200 bg-white p-6 shadow-sm transition hover:border-purple-400 hover:shadow-md"
     >
@@ -399,3 +410,4 @@ export default function SistemaPage() {
     </main>
   );
 }
+

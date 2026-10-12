@@ -222,9 +222,10 @@ export default function LoginPage() {
         )}
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          VALLEX | SERVIÇOFÁCIL
+          VALLEX | SERVIÇOFÁCIL <a href="/" className="font-medium text-violet-700 hover:text-violet-900">· Página inicial da VALLEX</a>
         </p>
       </section>
     </main>
   );
 }
+

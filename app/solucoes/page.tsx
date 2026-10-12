@@ -58,6 +58,10 @@ export default function Solucoes() {
               <Link href="/servicos" className="button button-outline">
                 Conhecer serviços
               </Link>
+
+              <Link href="#planos" className="button button-outline">
+                Ver planos ServiçoFácil
+              </Link>
             </div>
           </div>
         </section>
@@ -89,6 +93,71 @@ export default function Solucoes() {
                 </article>
               ))}
             </div>
+          </div>
+        </section>
+
+        <section className="section" id="planos">
+          <div className="container">
+            <div className="section-heading">
+              <span className="eyebrow">Planos ServiçoFácil</span>
+              <h2>Organize seus atendimentos no ritmo da sua empresa</h2>
+              <p>
+                Comece gratuitamente e evolua quando precisar de mais pessoas
+                na equipe ou de ferramentas para acompanhar o fluxo de
+                atendimento. Todos os planos incluem acesso ao painel; os
+                recursos de análise aumentam conforme o plano.
+              </p>
+            </div>
+
+            <div className="service-grid plans-grid">
+              <article className="service-card plan-card">
+                <span className="service-number">FREE</span>
+                <h3>R$ 0,00 <small>/ mês</small></h3>
+                <p>Para conhecer a plataforma e começar a organizar a rotina.</p>
+                <ul>
+                  <li>1 usuário na equipe</li>
+                  <li>Painel do fluxo em modo de visualização</li>
+                  <li>Acesso inicial aos recursos da plataforma</li>
+                </ul>
+                <Link href="/sistema/login" className="button button-outline">
+                  Criar conta grátis
+                </Link>
+              </article>
+
+              <article className="service-card plan-card">
+                <span className="service-number">BASIC</span>
+                <h3>R$ 49,70 <small>/ mês</small></h3>
+                <p>Para pequenos negócios que precisam acompanhar melhor os atendimentos.</p>
+                <ul>
+                  <li>Até 3 usuários na equipe</li>
+                  <li>Painel do fluxo com filtros</li>
+                  <li>Recursos do plano Free</li>
+                </ul>
+                <Link href="/sistema/login" className="button button-primary">
+                  Acessar para contratar
+                </Link>
+              </article>
+
+              <article className="service-card plan-card">
+                <span className="service-number">PROFESSIONAL</span>
+                <h3>R$ 79,00 <small>/ mês</small></h3>
+                <p>Para equipes em crescimento que precisam analisar e compartilhar resultados.</p>
+                <ul>
+                  <li>Até 10 usuários na equipe</li>
+                  <li>Painel com filtros e exportação para planilha</li>
+                  <li>Recursos dos planos anteriores</li>
+                </ul>
+                <Link href="/sistema/login" className="button button-primary">
+                  Acessar para contratar
+                </Link>
+              </article>
+            </div>
+
+            <p className="plans-note">
+              A contratação dos planos Basic e Professional é feita dentro da
+              plataforma, após entrar ou criar uma conta. O plano Enterprise
+              não está disponível para contratação neste momento.
+            </p>
           </div>
         </section>
 

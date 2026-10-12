@@ -126,10 +126,12 @@
   border-radius: 14px;
   background: #ffffff;
   box-shadow: 0 8px 30px rgba(35, 0, 55, 0.06);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.card:hover {
+.card:hover,
+.card:focus-within {
+  border-color: #A020F0;
   transform: translateY(-4px);
   box-shadow: 0 14px 36px rgba(35, 0, 55, 0.12);
 }
