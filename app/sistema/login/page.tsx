@@ -69,6 +69,13 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-950 px-4 py-10">
       <section className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
+        <Link
+          href="/"
+          className="mb-6 inline-flex min-h-10 items-center rounded-lg border border-violet-200 px-3 py-2 text-sm font-semibold text-violet-700 shadow-sm transition hover:border-violet-400 hover:bg-violet-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600"
+        >
+          ← Página inicial da VALLEX
+        </Link>
+
         <div className="mb-8 text-center">
           <p className="text-sm font-semibold tracking-[0.25em] text-violet-700">
             VALLEX
@@ -88,11 +95,12 @@ export default function LoginPage() {
               setMode("login");
               setMessage("");
             }}
+            aria-pressed={mode === "login"}
             className={`rounded-md px-3 py-2 text-sm font-medium ${
               mode === "login"
-                ? "bg-white text-violet-700 shadow"
-                : "text-slate-600"
-            }`}
+                ? "bg-white text-violet-700 shadow ring-1 ring-violet-200"
+                : "text-slate-600 hover:bg-white/80 hover:text-violet-700 hover:shadow-sm"
+            } transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600`}
           >
             Entrar
           </button>
@@ -103,11 +111,12 @@ export default function LoginPage() {
               setMode("signup");
               setMessage("");
             }}
+            aria-pressed={mode === "signup"}
             className={`rounded-md px-3 py-2 text-sm font-medium ${
               mode === "signup"
-                ? "bg-white text-violet-700 shadow"
-                : "text-slate-600"
-            }`}
+                ? "bg-white text-violet-700 shadow ring-1 ring-violet-200"
+                : "text-slate-600 hover:bg-white/80 hover:text-violet-700 hover:shadow-sm"
+            } transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600`}
           >
             Criar conta
           </button>
@@ -222,9 +231,6 @@ export default function LoginPage() {
           </p>
         )}
 
-        <p className="mt-6 text-center text-xs text-slate-500">
-          VALLEX | SERVIÇOFÁCIL <Link href="/" className="font-medium text-violet-700 hover:text-violet-900">· Página inicial da VALLEX</Link>
-        </p>
       </section>
     </main>
   );

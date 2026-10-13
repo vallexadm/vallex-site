@@ -1,6 +1,7 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ContactForm from "@/components/ContactForm";
+import Link from "next/link";
 
 export const metadata = {
   title: "Contato | VALLEX SERVIÇOFÁCIL",
@@ -67,14 +68,19 @@ export default function Contato() {
                 </a>
               </article>
 
-              <article className="service-card">
+              <Link
+                href="#formulario-orcamento"
+                className="service-card service-card-link"
+                aria-label="Ir para o formulário de solicitação de orçamento"
+              >
                 <span className="service-number">03</span>
                 <h3>Solicitação de orçamento</h3>
                 <p>
                   Registre sua necessidade pelo formulário. A equipe VALLEX
                   analisará as informações e retornará para você.
                 </p>
-              </article>
+                <span className="service-card-action">Preencher formulário →</span>
+              </Link>
             </div>
           </div>
         </section>
