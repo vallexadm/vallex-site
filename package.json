@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:webhook-auth": "node --test tests/asaas-webhook-auth.test.mjs"
+    "test:webhook-auth": "node --test tests/asaas-webhook-auth.test.mjs",
+    "test:webhook-route": "node --test tests/asaas-webhook-route.test.mjs",
+    "test:webhook": "node --test tests/asaas-webhook-auth.test.mjs tests/asaas-webhook-route.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
