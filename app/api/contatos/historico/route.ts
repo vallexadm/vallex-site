@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
+function createSupabaseAdmin() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
 
-if (!supabaseUrl || !supabaseSecretKey) {
-  throw new Error("As variáveis do Supabase não foram configuradas.");
+  if (!supabaseUrl || !supabaseSecretKey) {
+    throw new Error("As variáveis do Supabase não foram configuradas.");
+  }
+
+  return createClient(supabaseUrl, supabaseSecretKey);
 }
-
-const supabase = createClient(supabaseUrl, supabaseSecretKey);
 
 async function validarAdministrador(request: Request) {
   const authorization = request.headers.get("authorization");
@@ -86,6 +88,7 @@ export async function GET(request: Request) {
       );
     }
 
+    const supabase = createSupabaseAdmin();
     const { data: historico, error } = await supabase
       .from("contato_historico")
       .select(
@@ -153,6 +156,7 @@ export async function POST(request: Request) {
       );
     }
 
+    const supabase = createSupabaseAdmin();
     const { data: anotacao, error } = await supabase
       .from("contato_historico")
       .insert({
