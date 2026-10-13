@@ -71,9 +71,29 @@ export default function LoginPage() {
       <section className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
         <Link
           href="/"
-          className="mb-6 inline-flex min-h-10 items-center rounded-lg border border-violet-200 px-3 py-2 text-sm font-semibold text-violet-700 shadow-sm transition hover:border-violet-400 hover:bg-violet-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600"
+          aria-label="Voltar à página inicial da VALLEX"
+          title="Página inicial da VALLEX"
+          className="mb-6 inline-flex size-11 items-center justify-center rounded-lg border border-violet-200 text-violet-700 shadow-sm transition hover:border-violet-400 hover:bg-violet-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600"
         >
-          ← Página inicial da VALLEX
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            className="size-5"
+          >
+            <path
+              d="m3.5 10.5 8.5-7 8.5 7v9a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1v-9Z"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M9 20.5v-7h6v7"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinejoin="round"
+            />
+          </svg>
         </Link>
 
         <div className="mb-8 text-center">
