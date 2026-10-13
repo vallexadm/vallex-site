@@ -24,10 +24,15 @@ type AsaasEvent = {
   };
   subscription?: {
     id?: string;
+    checkoutSession?: string | null;
     customer?: string | null;
     externalReference?: string | null;
     status?: string;
     nextDueDate?: string | null;
+    value?: number;
+    cycle?: string;
+    billingType?: string;
+    description?: string | null;
   };
   payment?: {
     id?: string;
@@ -47,6 +52,10 @@ type CheckoutSession = {
   asaas_subscription_id: string | null;
   asaas_checkout_id: string | null;
 };
+
+function asaasPlanDescription(planName: string) {
+  return `Plano ${planName.trim()} - ServiçoFácil (assinatura mensal)`;
+}
 
 function periodEndFrom(nextDueDate?: string | null) {
   return asaasPeriodEndFromDueDate(nextDueDate);
@@ -89,6 +98,32 @@ async function findSubscriptionSession(
   admin: SupabaseClient,
   subscription: NonNullable<AsaasEvent["subscription"]>
 ) {
+  if (subscription.checkoutSession) {
+    const { data, error } = await admin
+      .from("asaas_checkout_sessions")
+      .select(
+        "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
+      )
+      .eq("asaas_checkout_id", subscription.checkoutSession)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) return data as CheckoutSession;
+  }
+
+  if (subscription.id) {
+    const { data, error } = await admin
+      .from("asaas_checkout_sessions")
+      .select(
+        "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
+      )
+      .eq("asaas_subscription_id", subscription.id)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) return data as CheckoutSession;
+  }
+
   if (subscription.externalReference) {
     const { data, error } = await admin
       .from("asaas_checkout_sessions")
@@ -100,7 +135,9 @@ async function findSubscriptionSession(
 
     if (error) throw error;
     if (data) return data as CheckoutSession;
-  } else if (subscription.customer) {
+  }
+
+  if (subscription.customer) {
     const { data, error } = await admin
       .from("asaas_checkout_sessions")
       .select(
@@ -108,12 +145,14 @@ async function findSubscriptionSession(
       )
       .eq("asaas_customer_id", subscription.customer)
       .in("status", ["pending", "paid"])
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .is("asaas_subscription_id", null)
+      .limit(2);
 
     if (error) throw error;
-    if (data) return data as CheckoutSession;
+    if (data?.length === 1) return data[0] as CheckoutSession;
+    if (data && data.length > 1) {
+      throw new Error("ASAAS_SUBSCRIPTION_CUSTOMER_MATCH_IS_AMBIGUOUS");
+    }
   }
 
   return null;
@@ -278,6 +317,53 @@ async function linkAsaasSubscription(
   }
 }
 
+async function updateAsaasSubscriptionDescription(
+  admin: SupabaseClient,
+  session: CheckoutSession,
+  subscriptionId: string
+) {
+  const apiUrl = process.env.ASAAS_API_URL?.trim().replace(/\/+$/, "");
+  const apiKey = process.env.ASAAS_API_KEY?.trim();
+
+  if (!apiUrl || !apiKey) {
+    console.warn("[ASAAS WEBHOOK] subscription description sync skipped: API configuration missing");
+    return;
+  }
+
+  const { data: plan, error: planError } = await admin
+    .from("plans")
+    .select("name")
+    .eq("id", session.plan_id)
+    .maybeSingle();
+
+  if (planError) throw planError;
+  if (!plan?.name) throw new Error("ASAAS_SUBSCRIPTION_PLAN_NOT_FOUND");
+
+  const response = await fetch(
+    `${apiUrl}/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    {
+      method: "PUT",
+      headers: {
+        access_token: apiKey,
+        "Content-Type": "application/json",
+        "User-Agent": "VALLEX-ServicoFacil/1.0.0",
+      },
+      body: JSON.stringify({
+        description: asaasPlanDescription(plan.name),
+        updatePendingPayments: true,
+      }),
+      cache: "no-store",
+    }
+  );
+
+  if (!response.ok) {
+    console.error("[ASAAS WEBHOOK] subscription description update failed", {
+      status: response.status,
+    });
+    throw new Error("ASAAS_SUBSCRIPTION_DESCRIPTION_UPDATE_FAILED");
+  }
+}
+
 async function extendPaidSubscriptionPeriod(
   admin: SupabaseClient,
   payment: NonNullable<AsaasEvent["payment"]>
@@ -436,7 +522,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false }, { status: 503 });
   }
   if (previousEvent?.processed_at) {
-    return NextResponse.json({ ok: true, duplicate: true });
+    let retryUnlinkedSubscription = false;
+    if (event.event === "SUBSCRIPTION_CREATED" && event.subscription?.id) {
+      const { data: linkedSession, error: linkedSessionError } = await admin
+        .from("asaas_checkout_sessions")
+        .select("id")
+        .eq("asaas_subscription_id", event.subscription.id)
+        .maybeSingle();
+
+      if (linkedSessionError) {
+        console.error("[ASAAS WEBHOOK] linked subscription lookup failed", linkedSessionError);
+        return NextResponse.json({ ok: false }, { status: 503 });
+      }
+      retryUnlinkedSubscription =
+        !linkedSession || !event.subscription.description?.trim();
+    }
+
+    if (!retryUnlinkedSubscription) {
+      return NextResponse.json({ ok: true, duplicate: true });
+    }
   }
 
   if (previousEvent) {
@@ -445,6 +549,7 @@ export async function POST(request: Request) {
       .update({
         event_name: event.event,
         payload: eventPayload,
+        processed_at: null,
         process_error: null,
       })
       .eq("event_id", event.id);
@@ -540,6 +645,48 @@ export async function POST(request: Request) {
       const session = await findSubscriptionSession(admin, event.subscription);
       if (session) {
         await linkAsaasSubscription(admin, session, event.subscription);
+        await updateAsaasSubscriptionDescription(
+          admin,
+          session,
+          event.subscription.id
+        );
+      } else if (event.subscription.description?.includes("ServiçoFácil")) {
+        throw new Error("VALLEX_SUBSCRIPTION_SESSION_NOT_FOUND");
+      } else {
+        console.warn("[ASAAS WEBHOOK] subscription event has no matching checkout", {
+          customerPresent: Boolean(event.subscription.customer),
+          externalReferencePresent: Boolean(event.subscription.externalReference),
+          descriptionPresent: Boolean(event.subscription.description),
+        });
+      }
+    }
+
+    if (
+      (event.event === "SUBSCRIPTION_UPDATED" ||
+        event.event === "SUBSCRIPTION_INACTIVATED") &&
+      event.subscription?.id
+    ) {
+      const session = await findSubscriptionSession(admin, event.subscription);
+      if (session) {
+        await linkAsaasSubscription(admin, session, event.subscription);
+
+        const subscriptionIsInactive =
+          event.event === "SUBSCRIPTION_INACTIVATED" ||
+          event.subscription.status === "INACTIVE";
+        if (subscriptionIsInactive || event.subscription.status === "ACTIVE") {
+          const canceledAt = subscriptionIsInactive
+            ? new Date().toISOString()
+            : null;
+          const { error: stateError } = await admin
+            .from("organization_subscriptions")
+            .update({ canceled_at: canceledAt, updated_at: new Date().toISOString() })
+            .eq("organization_id", session.organization_id)
+            .eq("plan_id", session.plan_id)
+            .eq("status", "active")
+            .eq("external_subscription_id", event.subscription.id);
+
+          if (stateError) throw stateError;
+        }
       }
     }
 

@@ -28,6 +28,9 @@ registerHooks({
 });
 
 const { POST } = await import("../app/api/asaas/webhook/route.ts");
+const { asaasPeriodEndFromDueDate } = await import(
+  "../lib/server/asaas-billing-dates.ts"
+);
 
 function makeRequest(payload, token = localTestToken) {
   const headers = new Headers({ "content-type": "application/json" });
@@ -151,7 +154,11 @@ function makeSupabaseRestMock() {
     }
 
     if (method === "POST") {
-      targetRows.push(body);
+      targetRows.push(
+        table === "organization_subscriptions"
+          ? { id: "organization-subscription-test-001", ...body }
+          : body
+      );
       return new Response(null, { status: 201 });
     }
 
@@ -292,6 +299,15 @@ test("a valid paid checkout activates the plan once and safely handles redeliver
   }, supabase.fetchMock);
 });
 
+test("moves a due date on the activation day into the next month", () => {
+  const paidAt = new Date("2026-10-13T14:19:01.820Z");
+
+  assert.equal(
+    asaasPeriodEndFromDueDate("2026-10-13", paidAt),
+    "2026-11-13T03:00:00.000Z"
+  );
+});
+
 test("a subscription-created event keeps a pending checkout inactive", async () => {
   const supabase = makeSupabaseRestMock();
   const subscriptionCreatedEvent = {
@@ -315,6 +331,53 @@ test("a subscription-created event keeps a pending checkout inactive", async () 
       "subscription-test-001"
     );
     assert.equal(supabase.state.organizationSubscriptions.length, 0);
+  }, supabase.fetchMock);
+});
+
+test("subscription update events synchronize cancellation and reactivation", async () => {
+  const supabase = makeSupabaseRestMock();
+
+  await withTestEnvironment(async () => {
+    const paidResponse = await POST(makeRequest(paidCheckoutEvent));
+    assert.equal(paidResponse.status, 200);
+
+    const createdResponse = await POST(makeRequest({
+      id: "event-test-subscription-created-002",
+      event: "SUBSCRIPTION_CREATED",
+      subscription: {
+        id: "subscription-test-001",
+        status: "ACTIVE",
+        externalReference: "external-reference-test-001",
+      },
+    }));
+    assert.equal(createdResponse.status, 200);
+    assert.equal(
+      supabase.state.organizationSubscriptions[0].external_subscription_id,
+      "subscription-test-001"
+    );
+
+    const inactiveResponse = await POST(makeRequest({
+      id: "event-test-subscription-updated-inactive-001",
+      event: "SUBSCRIPTION_INACTIVATED",
+      subscription: {
+        id: "subscription-test-001",
+        externalReference: "external-reference-test-001",
+      },
+    }));
+    assert.equal(inactiveResponse.status, 200);
+    assert.ok(supabase.state.organizationSubscriptions[0].canceled_at);
+
+    const activeResponse = await POST(makeRequest({
+      id: "event-test-subscription-updated-active-001",
+      event: "SUBSCRIPTION_UPDATED",
+      subscription: {
+        id: "subscription-test-001",
+        status: "ACTIVE",
+        externalReference: "external-reference-test-001",
+      },
+    }));
+    assert.equal(activeResponse.status, 200);
+    assert.equal(supabase.state.organizationSubscriptions[0].canceled_at, null);
   }, supabase.fetchMock);
 });
 

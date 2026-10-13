@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   if (!organization) return fail("Configure sua área antes de consultar os planos.", 409);
   const [{ data: plans, error: plansError }, { data: subscription, error: subscriptionError }] = await Promise.all([
     admin.from("plans").select("id, code, name, monthly_price, max_users, sort_order").eq("is_active", true).eq("is_public", true).order("sort_order"),
-    admin.from("organization_subscriptions").select("plan_id, status, current_period_end").eq("organization_id", organization.id).maybeSingle(),
+    admin.from("organization_subscriptions").select("plan_id, status, billing_provider, current_period_end, canceled_at, external_subscription_id").eq("organization_id", organization.id).maybeSingle(),
   ]);
   if (plansError || subscriptionError) {
     console.error("[ASAAS PLANS] database query failed", { plansError, subscriptionError });
@@ -37,9 +37,38 @@ export async function GET(request: Request) {
     isAsaasPeriodExpired(subscription.current_period_end)
       ? "expired"
       : subscription?.status ?? "active";
+  const currentPeriodIsValid =
+    currentStatus === "active" &&
+    (!subscription?.current_period_end ||
+      !isAsaasPeriodExpired(subscription.current_period_end));
+  const isPaidAsaasPlan =
+    currentPlan?.code !== "free" && subscription?.billing_provider === "asaas";
   return NextResponse.json({ ok: true,
     plans: (plans ?? []).map((plan) => ({ id: plan.id, code: plan.code, name: plan.name, monthlyPrice: Number(plan.monthly_price), maxUsers: plan.max_users })),
-    current: currentPlan ? { code: currentPlan.code, name: currentPlan.name, status: currentStatus, currentPeriodEnd: subscription?.current_period_end ?? null } : null,
+    current: currentPlan ? {
+      code: currentPlan.code,
+      name: currentPlan.name,
+      status: currentStatus,
+      currentPeriodEnd: subscription?.current_period_end ?? null,
+      cancellationPending: Boolean(subscription?.canceled_at) && currentPeriodIsValid,
+      canCancel: Boolean(
+        isPaidAsaasPlan &&
+        currentPeriodIsValid &&
+        subscription?.external_subscription_id &&
+        !subscription.canceled_at
+      ),
+      canReactivateRenewal: Boolean(
+        isPaidAsaasPlan &&
+        currentPeriodIsValid &&
+        subscription?.external_subscription_id &&
+        subscription.canceled_at
+      ),
+      subscriptionSyncPending: Boolean(
+        isPaidAsaasPlan &&
+        currentPeriodIsValid &&
+        !subscription?.external_subscription_id
+      ),
+    } : null,
   });
 }
 

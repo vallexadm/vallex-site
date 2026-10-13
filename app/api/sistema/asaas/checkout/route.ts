@@ -20,7 +20,7 @@ function responseError(message: string, status: number) {
 
 export async function POST(request: Request) {
   try {
-    const apiUrl = process.env.ASAAS_API_URL?.trim();
+    const apiUrl = process.env.ASAAS_API_URL?.trim().replace(/\/+$/, "");
     const apiKey = process.env.ASAAS_API_KEY?.trim();
     const environment = process.env.ASAAS_ENV?.trim();
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
@@ -29,9 +29,15 @@ export async function POST(request: Request) {
     const authUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const authAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (environment !== "sandbox" || !apiUrl?.startsWith("https://api-sandbox.asaas.com/v3")) {
+    const expectedApiUrl =
+      environment === "sandbox"
+        ? "https://api-sandbox.asaas.com/v3"
+        : environment === "production"
+          ? "https://api.asaas.com/v3"
+          : null;
+    if (!expectedApiUrl || apiUrl !== expectedApiUrl) {
       return responseError(
-        "A contratação está liberada somente no Sandbox durante a homologação.",
+        "Configure ASAAS_ENV e ASAAS_API_URL para o mesmo ambiente do Asaas.",
         503
       );
     }
@@ -155,6 +161,7 @@ export async function POST(request: Request) {
       .from("asaas_checkout_sessions")
       .select("id, checkout_url")
       .eq("organization_id", organization.id)
+      .eq("plan_id", plan.id)
       .eq("status", "pending")
       .not("checkout_url", "is", null)
       .order("created_at", { ascending: false })
@@ -229,7 +236,7 @@ export async function POST(request: Request) {
           items: [
             {
               name: "Plano " + plan.name + " - ServiçoFácil",
-              description: "Assinatura mensal da plataforma ServiçoFácil.",
+              description: `Assinatura mensal do plano ${plan.name} - ServiçoFácil.`,
               quantity: 1,
               value: Number(plan.monthly_price),
             },

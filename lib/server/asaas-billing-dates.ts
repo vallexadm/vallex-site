@@ -67,7 +67,9 @@ export function asaasPeriodEndFromDueDate(
     : nextMonthlyAsaasDueDate(now);
   const todayParts = datePartsInBusinessTimeZone(now);
   const today = formatDate(todayParts.year, todayParts.month, todayParts.day);
-  const effectiveDate = dueDate < today ? nextMonthlyAsaasDueDate(now) : dueDate;
+  // A due date at midnight today can already be earlier than the paid event
+  // timestamp. Keep the period end strictly after the activation timestamp.
+  const effectiveDate = dueDate <= today ? nextMonthlyAsaasDueDate(now) : dueDate;
 
   // Asaas dates are Brazil calendar dates. 03:00 UTC is midnight in São Paulo.
   return `${effectiveDate}T03:00:00.000Z`;
