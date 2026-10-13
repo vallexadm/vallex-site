@@ -41,6 +41,7 @@ function PlanosContent() {
         const response = await fetch("/api/sistema/asaas/plans", { headers: { Authorization: "Bearer " + token }, cache: "no-store" });
         const result = await response.json();
         if (response.status === 401) { router.replace(loginHref); return; }
+        if (response.status === 409) { router.replace("/sistema"); return; }
         if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível carregar os planos.");
         setData(result);
       } catch (e) { setError(e instanceof Error ? e.message : "Erro ao carregar os planos."); }
