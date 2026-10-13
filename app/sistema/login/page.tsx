@@ -52,7 +52,15 @@ export default function LoginPage() {
 
         if (error) throw error;
 
-        router.replace("/sistema");
+        const requestedDestination = new URLSearchParams(
+          window.location.search
+        ).get("next");
+        const destination =
+          requestedDestination === "/sistema/planos"
+            ? requestedDestination
+            : "/sistema";
+
+        window.location.replace(destination);
         return;
       }
     } catch (error) {

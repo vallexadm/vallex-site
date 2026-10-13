@@ -16,6 +16,7 @@ type CurrentPlan = {
 };
 type PlanData = { plans: Plan[]; current: CurrentPlan | null };
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const loginHref = "/sistema/login?next=%2Fsistema%2Fplanos";
 export default function PlanosPage() {
   return <Suspense fallback={<main className="min-h-screen bg-slate-100 p-6 text-slate-600">Carregando planos...</main>}><PlanosContent /></Suspense>;
 }
@@ -35,11 +36,11 @@ function PlanosContent() {
     async function load() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
-      if (!token) { router.replace("/sistema/login"); return; }
+      if (!token) { router.replace(loginHref); return; }
       try {
         const response = await fetch("/api/sistema/asaas/plans", { headers: { Authorization: "Bearer " + token }, cache: "no-store" });
         const result = await response.json();
-        if (response.status === 401) { router.replace("/sistema/login"); return; }
+        if (response.status === 401) { router.replace(loginHref); return; }
         if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível carregar os planos.");
         setData(result);
       } catch (e) { setError(e instanceof Error ? e.message : "Erro ao carregar os planos."); }
