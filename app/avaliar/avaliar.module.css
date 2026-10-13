@@ -26,7 +26,7 @@
 
 .heading h1 {
   color: #241333;
-  font-size: clamp(32px, 5vw, 46px);
+  font-size: clamp(30px, 4.5vw, 40px);
   line-height: 1.15;
   margin-bottom: 16px;
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getPlanEntitlements } from "@/lib/server/plan-entitlements";
 
 export const runtime = "nodejs";
 
@@ -61,6 +62,76 @@ function extrairToken(request: Request) {
 function uuidValido(valor: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     valor
+  );
+}
+
+function respostaPlanoNecessario(message: string) {
+  return NextResponse.json(
+    {
+      ok: false,
+      code: "PLAN_UPGRADE_REQUIRED",
+      message,
+    },
+    { status: 402 }
+  );
+}
+
+function csvCell(value: unknown) {
+  const text = value === null || value === undefined ? "" : String(value);
+  const safeText = /^[\u0000-\u0020]*[=+\-@]/.test(text)
+    ? `'${text}`
+    : text;
+
+  return `"${safeText.replace(/"/g, '""')}"`;
+}
+
+function gerarCsv(solicitacoes: Array<Record<string, unknown>>) {
+  const cabecalho = [
+    "ID",
+    "Nome",
+    "Telefone",
+    "E-mail",
+    "Serviço",
+    "Descrição",
+    "Endereço",
+    "Data preferida",
+    "Horário preferido",
+    "Observações",
+    "Status",
+    "Recebida em",
+  ];
+
+  const linhas = solicitacoes.map((solicitacao) => {
+    const servicoBruto = solicitacao.vitrine_services;
+    const servico = Array.isArray(servicoBruto)
+      ? servicoBruto[0]
+      : servicoBruto;
+    const nomeServico =
+      servico && typeof servico === "object" && "name" in servico
+        ? servico.name
+        : "";
+
+    return [
+      solicitacao.id,
+      solicitacao.nome,
+      solicitacao.telefone,
+      solicitacao.email,
+      nomeServico,
+      solicitacao.descricao,
+      solicitacao.endereco,
+      solicitacao.data_preferida,
+      solicitacao.horario_preferido,
+      solicitacao.observacoes,
+      solicitacao.status,
+      solicitacao.created_at,
+    ];
+  });
+
+  return (
+    "\uFEFF" +
+    [cabecalho, ...linhas]
+      .map((linha) => linha.map(csvCell).join(","))
+      .join("\r\n")
   );
 }
 
@@ -156,6 +227,27 @@ export async function GET(request: Request) {
       supabaseAdmin,
     } = autenticacao;
 
+    const planResult = await getPlanEntitlements(
+      supabaseAdmin,
+      organization.id
+    );
+
+    if (!planResult.entitlements) {
+      return NextResponse.json(
+        { ok: false, message: planResult.error },
+        { status: 503 }
+      );
+    }
+
+    const { entitlements } = planResult;
+    const formato = new URL(request.url).searchParams.get("format");
+
+    if (formato === "csv" && !entitlements.canExportCsv) {
+      return respostaPlanoNecessario(
+        "A exportação de solicitações está disponível no plano Professional."
+      );
+    }
+
     const { data: solicitacoes, error: solicitacoesError } =
       await supabaseAdmin
         .from("solicitacoes_orcamento")
@@ -201,6 +293,17 @@ export async function GET(request: Request) {
       );
     }
 
+    if (formato === "csv") {
+      return new Response(gerarCsv(solicitacoes ?? []), {
+        status: 200,
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": 'attachment; filename="solicitacoes.csv"',
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
     return NextResponse.json(
       {
         ok: true,
@@ -208,6 +311,7 @@ export async function GET(request: Request) {
           id: organization.id,
           name: organization.name,
         },
+        plan: entitlements,
         solicitacoes: solicitacoes ?? [],
       },
       { status: 200 }
@@ -285,6 +389,24 @@ export async function PATCH(request: Request) {
           message: "Status da solicitação inválido.",
         },
         { status: 400 }
+      );
+    }
+
+    const planResult = await getPlanEntitlements(
+      supabaseAdmin,
+      organization.id
+    );
+
+    if (!planResult.entitlements) {
+      return NextResponse.json(
+        { ok: false, message: planResult.error },
+        { status: 503 }
+      );
+    }
+
+    if (!planResult.entitlements.canManageRequests) {
+      return respostaPlanoNecessario(
+        "A atualização das solicitações está disponível nos planos pagos."
       );
     }
 

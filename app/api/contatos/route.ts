@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
+function createSupabaseAdmin() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
 
-if (!supabaseUrl || !supabaseSecretKey) {
-  throw new Error("As variáveis do Supabase não foram configuradas.");
+  if (!supabaseUrl || !supabaseSecretKey) {
+    throw new Error("As variáveis do Supabase não foram configuradas.");
+  }
+
+  return createClient(supabaseUrl, supabaseSecretKey);
 }
-
-const supabase = createClient(supabaseUrl, supabaseSecretKey);
 
 export async function POST(request: Request) {
   try {
@@ -51,6 +53,7 @@ export async function POST(request: Request) {
       );
     }
 
+    const supabase = createSupabaseAdmin();
     const { error } = await supabase.from("contatos").insert({
       nome,
       telefone,
@@ -141,6 +144,7 @@ export async function GET(request: Request) {
     }
 
     // Consulta executada no servidor usando a chave secreta.
+    const supabase = createSupabaseAdmin();
     const { data: contatos, error: contatosError } = await supabase
       .from("contatos")
       .select(
@@ -248,6 +252,7 @@ export async function PATCH(request: Request) {
     }
 
     // 6. Atualiza o registro no servidor
+    const supabase = createSupabaseAdmin();
     const { data: contato, error: updateError } = await supabase
       .from("contatos")
       .update({ status })

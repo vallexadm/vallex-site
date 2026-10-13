@@ -35,6 +35,13 @@ type Solicitacao = {
 type ApiResponse = {
   ok: boolean;
   message?: string;
+  plan?: {
+    code: string;
+    name: string;
+    canManageRequests: boolean;
+    canFilterRequests: boolean;
+    canExportCsv: boolean;
+  };
   organization?: {
     id: string;
     name: string;
@@ -131,6 +138,12 @@ export default function SolicitacoesPage() {
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
   const [mensagemStatus, setMensagemStatus] = useState("");
+  const [plano, setPlano] = useState<ApiResponse["plan"] | null>(null);
+  const [exportandoCsv, setExportandoCsv] = useState(false);
+
+  const podeGerenciarSolicitacoes = plano?.canManageRequests === true;
+  const podeFiltrarSolicitacoes = plano?.canFilterRequests === true;
+  const podeExportarCsv = plano?.canExportCsv === true;
 
   useEffect(() => {
     async function carregarSolicitacoes() {
@@ -173,6 +186,7 @@ export default function SolicitacoesPage() {
           );
         }
 
+        setPlano(resultado.plan ?? null);
         setSolicitacoes(resultado.solicitacoes ?? []);
       } catch (error) {
         setErro(
@@ -187,6 +201,57 @@ export default function SolicitacoesPage() {
 
     carregarSolicitacoes();
   }, [router]);
+
+  async function exportarCsv() {
+    setExportandoCsv(true);
+    setMensagemStatus("");
+
+    try {
+      const { data, error: sessionError } =
+        await supabase.auth.getSession();
+
+      if (sessionError || !data.session) {
+        router.replace("/sistema/login");
+        return;
+      }
+
+      const response = await fetch(
+        "/api/sistema/solicitacoes?format=csv",
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${data.session.access_token}`,
+          },
+          cache: "no-store",
+        }
+      );
+
+      if (!response.ok) {
+        const resultado: ApiResponse = await response.json();
+        throw new Error(
+          resultado.message || "Não foi possível exportar as solicitações."
+        );
+      }
+
+      const arquivo = await response.blob();
+      const url = window.URL.createObjectURL(arquivo);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "solicitacoes.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setMensagemStatus(
+        error instanceof Error
+          ? error.message
+          : "Erro ao exportar as solicitações."
+      );
+    } finally {
+      setExportandoCsv(false);
+    }
+  }
 
 async function atualizarStatus(id: string, status: string) {
   setSalvandoId(id);
@@ -481,6 +546,24 @@ async function criarOrcamento(id: string) {
               Consulte os pedidos enviados pela Vitrine pública do
               ServiçoFácil.
             </p>
+            {plano && (
+              <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm">
+                <span>
+                  Plano atual: <strong>{plano.name}</strong>
+                </span>
+                {plano.code === "free" && (
+                  <span className="text-slate-600">
+                    No Free, as solicitações ficam disponíveis para consulta.
+                  </span>
+                )}
+                <Link
+                  href="/sistema/planos"
+                  className="font-semibold text-purple-700 hover:underline"
+                >
+                  Consultar planos
+                </Link>
+              </div>
+            )}
             {mensagemStatus && (
   <p
     className={`mt-3 text-sm ${
@@ -597,54 +680,73 @@ async function criarOrcamento(id: string) {
               </div>
             </div>
 
-            <div className="mb-6 grid gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="busca-solicitacoes"
-                  className="mb-1 block text-sm font-medium text-slate-700"
-                >
-                  Buscar solicitação
-                </label>
+            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end">
+              {podeFiltrarSolicitacoes ? (
+                <div className="grid flex-1 gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="busca-solicitacoes"
+                      className="mb-1 block text-sm font-medium text-slate-700"
+                    >
+                      Buscar solicitação
+                    </label>
 
-                <input
-                  id="busca-solicitacoes"
-                  type="text"
-                  value={busca}
-                  onChange={(event) => setBusca(event.target.value)}
-                  placeholder="Nome, telefone, e-mail ou serviço..."
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200"
-                />
-              </div>
+                    <input
+                      id="busca-solicitacoes"
+                      type="text"
+                      value={busca}
+                      onChange={(event) => setBusca(event.target.value)}
+                      placeholder="Nome, telefone, e-mail ou serviço..."
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200"
+                    />
+                  </div>
 
-              <div>
-                <label
-                  htmlFor="filtro-status"
-                  className="mb-1 block text-sm font-medium text-slate-700"
-                >
-                  Filtrar por status
-                </label>
+                  <div>
+                    <label
+                      htmlFor="filtro-status"
+                      className="mb-1 block text-sm font-medium text-slate-700"
+                    >
+                      Filtrar por status
+                    </label>
 
-                <select
-                  id="filtro-status"
-                  value={filtroStatus}
-                  onChange={(event) =>
-                    setFiltroStatus(event.target.value)
-                  }
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200"
+                    <select
+                      id="filtro-status"
+                      value={filtroStatus}
+                      onChange={(event) =>
+                        setFiltroStatus(event.target.value)
+                      }
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200"
+                    >
+                      <option value="todos">Todos os status</option>
+                      <option value="nova">Nova</option>
+                      <option value="em_analise">Em análise</option>
+                      <option value="cliente_cadastrado">
+                        Cliente cadastrado
+                      </option>
+                      <option value="orcamento_criado">
+                        Orçamento criado
+                      </option>
+                      <option value="concluida">Concluída</option>
+                      <option value="cancelada">Cancelada</option>
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <p className="flex-1 rounded-xl border border-gray-200 bg-white p-4 text-sm text-slate-600">
+                  Filtros de busca e status estão disponíveis nos planos pagos.
+                </p>
+              )}
+
+              {podeExportarCsv && (
+                <button
+                  type="button"
+                  onClick={exportarCsv}
+                  disabled={exportandoCsv}
+                  className="rounded-lg bg-purple-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-purple-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <option value="todos">Todos os status</option>
-                  <option value="nova">Nova</option>
-                  <option value="em_analise">Em análise</option>
-                  <option value="cliente_cadastrado">
-                    Cliente cadastrado
-                  </option>
-                  <option value="orcamento_criado">
-                    Orçamento criado
-                  </option>
-                  <option value="concluida">Concluída</option>
-                  <option value="cancelada">Cancelada</option>
-                </select>
-              </div>
+                  {exportandoCsv ? "Preparando arquivo..." : "Exportar CSV"}
+                </button>
+              )}
             </div>
 
             {solicitacoesFiltradas.length === 0 && (
@@ -685,31 +787,34 @@ async function criarOrcamento(id: string) {
     Status
   </label>
 
-  <select
-    id={`status-${solicitacao.id}`}
-    value={solicitacao.status}
-    disabled={salvandoId === solicitacao.id}
-    onChange={(event) =>
-      atualizarStatus(
-        solicitacao.id,
-        event.target.value
-      )
-    }
-    className={`rounded-lg border px-3 py-2 text-sm font-semibold focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200 ${classeStatus(
-      solicitacao.status
-    )}`}
-  >
-    <option value="nova">Nova</option>
-    <option value="em_analise">Em análise</option>
-    <option value="cliente_cadastrado">
-      Cliente cadastrado
-    </option>
-    <option value="orcamento_criado">
-      Orçamento criado
-    </option>
-    <option value="concluida">Concluída</option>
-    <option value="cancelada">Cancelada</option>
-  </select>
+  {podeGerenciarSolicitacoes ? (
+    <select
+      id={`status-${solicitacao.id}`}
+      value={solicitacao.status}
+      disabled={salvandoId === solicitacao.id}
+      onChange={(event) =>
+        atualizarStatus(solicitacao.id, event.target.value)
+      }
+      className={`rounded-lg border px-3 py-2 text-sm font-semibold focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200 ${classeStatus(
+        solicitacao.status
+      )}`}
+    >
+      <option value="nova">Nova</option>
+      <option value="em_analise">Em análise</option>
+      <option value="cliente_cadastrado">Cliente cadastrado</option>
+      <option value="orcamento_criado">Orçamento criado</option>
+      <option value="concluida">Concluída</option>
+      <option value="cancelada">Cancelada</option>
+    </select>
+  ) : (
+    <span
+      className={`rounded-lg border px-3 py-2 text-sm font-semibold ${classeStatus(
+        solicitacao.status
+      )}`}
+    >
+      {STATUS_LABELS[solicitacao.status] ?? solicitacao.status}
+    </span>
+  )}
 
   {salvandoId === solicitacao.id && (
     <span className="text-xs text-slate-500">
@@ -717,7 +822,7 @@ async function criarOrcamento(id: string) {
     </span>
   )}
 
-  {!solicitacao.customer_id && (
+  {podeGerenciarSolicitacoes && !solicitacao.customer_id && (
   <button
     type="button"
     onClick={() => cadastrarCliente(solicitacao.id)}
@@ -728,7 +833,7 @@ async function criarOrcamento(id: string) {
   </button>
 )}
 
-{solicitacao.customer_id && !solicitacao.orcamento_id && (
+{podeGerenciarSolicitacoes && solicitacao.customer_id && !solicitacao.orcamento_id && (
   <button
     type="button"
     onClick={() => criarOrcamento(solicitacao.id)}
@@ -741,20 +846,7 @@ async function criarOrcamento(id: string) {
   </button>
 )}
 
-{solicitacao.customer_id && !solicitacao.orcamento_id && (
-  <button
-    type="button"
-    onClick={() => criarOrcamento(solicitacao.id)}
-    disabled={salvandoId === solicitacao.id}
-    className="rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-60"
-  >
-    {salvandoId === solicitacao.id
-      ? "Criando orçamento..."
-      : "Criar orçamento"}
-  </button>
-)}
-
-{solicitacao.orcamento_id && (
+{podeGerenciarSolicitacoes && solicitacao.orcamento_id && (
   <button
     type="button"
     onClick={() => router.push(`/sistema/orcamentos?editar=${encodeURIComponent(solicitacao.orcamento_id!)}`)}

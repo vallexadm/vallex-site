@@ -78,12 +78,44 @@ a {
 }
 
 .nav-list a {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 11px;
+  border-radius: 999px;
   color: #F3E8FF;
   font-size: 14px;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 .nav-list a:hover {
+  background: #351052;
   color: #C084FC;
+}
+
+.nav-list a.is-active {
+  background: #4C1D75;
+  color: #FFFFFF;
+  box-shadow: inset 0 0 0 1px #A855F7;
+}
+
+.nav-list a.is-active::after {
+  position: absolute;
+  right: 11px;
+  bottom: -5px;
+  left: 11px;
+  height: 3px;
+  border-radius: 999px;
+  background: #C084FC;
+  content: "";
+}
+
+.header-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
 }
 
 .button {
@@ -93,7 +125,7 @@ a {
   padding: 13px 20px;
   border-radius: 8px;
   font-weight: 600;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 .button-primary {
@@ -145,7 +177,7 @@ a {
 .hero h1 {
   max-width: 760px;
   margin: 22px 0;
-  font-size: clamp(38px, 6vw, 68px);
+  font-size: clamp(34px, 5vw, 56px);
   line-height: 1.08;
 }
 
@@ -173,7 +205,7 @@ a {
 }
 
 .section-heading h2 {
-  font-size: clamp(30px, 4vw, 44px);
+  font-size: clamp(28px, 3.5vw, 38px);
   margin: 14px 0;
 }
 
@@ -189,11 +221,32 @@ a {
 }
 
 .service-card {
+  display: block;
   border: 1px solid var(--color-border);
   border-radius: 14px;
   padding: 28px;
   background: white;
   transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.service-card-link {
+  display: flex;
+  flex-direction: column;
+  color: inherit;
+  text-decoration: none;
+}
+
+.service-card-link .service-card-action {
+  margin-top: auto;
+  padding-top: 12px;
+  color: var(--color-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.service-card-link:focus-visible {
+  outline: 3px solid #7000B833;
+  outline-offset: 3px;
 }
 
 .service-card:hover,
@@ -265,6 +318,20 @@ a {
   margin-top: auto;
 }
 
+.plan-card .button-outline {
+  color: var(--color-primary);
+}
+
+.plan-card .button-outline:hover {
+  background: var(--color-primary);
+  color: white;
+}
+
+.plan-card .button-outline:focus-visible {
+  outline: 3px solid #7000b833;
+  outline-offset: 3px;
+}
+
 .plans-note {
   margin-top: 24px;
   color: var(--color-muted);
@@ -285,13 +352,13 @@ a {
 .provider-directory .section-heading h1 {
   margin: 14px 0;
   color: var(--color-text);
-  font-size: clamp(36px, 5vw, 54px);
+  font-size: clamp(30px, 4vw, 44px);
   line-height: 1.08;
 }
 
 .provider-directory .section-heading p {
   max-width: 720px;
-  font-size: 18px;
+  font-size: 17px;
 }
 
 .specialty-section {
@@ -582,14 +649,19 @@ a {
     overflow-x: auto;
   }
 
+  .header-actions {
+    order: 2;
+    margin-left: auto;
+  }
+
   .nav-list {
     width: max-content;
     padding: 12px 0;
   }
 
-  .header-content > .button {
+  .header-actions .button {
     font-size: 12px;
-    padding: 10px;
+    padding: 10px 12px;
   }
 
   .hero {
@@ -598,6 +670,20 @@ a {
 
   .hero-home {
     padding: 48px 0;
+  }
+
+  .header-content {
+    align-items: flex-start;
+  }
+
+  .header-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .header-actions .button {
+    flex: 1;
+    white-space: nowrap;
   }
 
   .service-grid {

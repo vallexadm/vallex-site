@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
+import {
+  isAsaasPeriodExpired,
+  nextMonthlyAsaasDueDate,
+} from "@/lib/server/asaas-billing-dates";
 
 export const runtime = "nodejs";
 
@@ -16,7 +20,7 @@ function responseError(message: string, status: number) {
 
 export async function POST(request: Request) {
   try {
-    const apiUrl = process.env.ASAAS_API_URL?.trim();
+    const apiUrl = process.env.ASAAS_API_URL?.trim().replace(/\/+$/, "");
     const apiKey = process.env.ASAAS_API_KEY?.trim();
     const environment = process.env.ASAAS_ENV?.trim();
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
@@ -25,9 +29,15 @@ export async function POST(request: Request) {
     const authUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const authAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (environment !== "sandbox" || !apiUrl?.startsWith("https://api-sandbox.asaas.com/v3")) {
+    const expectedApiUrl =
+      environment === "sandbox"
+        ? "https://api-sandbox.asaas.com/v3"
+        : environment === "production"
+          ? "https://api.asaas.com/v3"
+          : null;
+    if (!expectedApiUrl || apiUrl !== expectedApiUrl) {
       return responseError(
-        "A contratação está liberada somente no Sandbox durante a homologação.",
+        "Configure ASAAS_ENV e ASAAS_API_URL para o mesmo ambiente do Asaas.",
         503
       );
     }
@@ -116,7 +126,7 @@ export async function POST(request: Request) {
 
     const { data: currentSubscription, error: subscriptionError } = await admin
       .from("organization_subscriptions")
-      .select("id, plan_id, status")
+      .select("id, plan_id, status, current_period_end")
       .eq("organization_id", organization.id)
       .maybeSingle();
 
@@ -125,7 +135,12 @@ export async function POST(request: Request) {
       return responseError("Não foi possível consultar seu plano atual.", 500);
     }
 
-    if (currentSubscription?.status === "active") {
+    const currentSubscriptionIsActive =
+      currentSubscription?.status === "active" &&
+      (!currentSubscription.current_period_end ||
+        !isAsaasPeriodExpired(currentSubscription.current_period_end));
+
+    if (currentSubscriptionIsActive) {
       const { data: currentPlan } = await admin
         .from("plans")
         .select("code")
@@ -146,6 +161,7 @@ export async function POST(request: Request) {
       .from("asaas_checkout_sessions")
       .select("id, checkout_url")
       .eq("organization_id", organization.id)
+      .eq("plan_id", plan.id)
       .eq("status", "pending")
       .not("checkout_url", "is", null)
       .order("created_at", { ascending: false })
@@ -194,9 +210,9 @@ export async function POST(request: Request) {
       return responseError("Configure uma URL HTTPS pública para o retorno do checkout.", 503);
     }
     const callbackPath = siteUrl.startsWith("https://") ? "/sistema/planos?pagamento=" : "/?pagamento=";
-    const nextDueDate = new Date(Date.now() + 24 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 10);
+    // Checkout collects the initial payment; this is the first recurring charge.
+    // Schedule it one month later to avoid charging again the day after purchase.
+    const nextDueDate = nextMonthlyAsaasDueDate();
 
     const asaasResponse = await fetch(
       apiUrl.replace(/\/+$/, "") + "/checkouts",
@@ -220,7 +236,7 @@ export async function POST(request: Request) {
           items: [
             {
               name: "Plano " + plan.name + " - ServiçoFácil",
-              description: "Assinatura mensal da plataforma ServiçoFácil.",
+              description: `Assinatura mensal do plano ${plan.name} - ServiçoFácil.`,
               quantity: 1,
               value: Number(plan.monthly_price),
             },

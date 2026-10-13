@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
@@ -51,7 +52,15 @@ export default function LoginPage() {
 
         if (error) throw error;
 
-        router.replace("/sistema");
+        const requestedDestination = new URLSearchParams(
+          window.location.search
+        ).get("next");
+        const destination =
+          requestedDestination === "/sistema/planos"
+            ? requestedDestination
+            : "/sistema";
+
+        window.location.replace(destination);
         return;
       }
     } catch (error) {
@@ -68,6 +77,33 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-950 px-4 py-10">
       <section className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
+        <Link
+          href="/"
+          aria-label="Voltar à página inicial da VALLEX"
+          title="Página inicial da VALLEX"
+          className="mb-6 inline-flex size-11 items-center justify-center rounded-lg border border-violet-200 text-violet-700 shadow-sm transition hover:border-violet-400 hover:bg-violet-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            className="size-5"
+          >
+            <path
+              d="m3.5 10.5 8.5-7 8.5 7v9a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1v-9Z"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M9 20.5v-7h6v7"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </Link>
+
         <div className="mb-8 text-center">
           <p className="text-sm font-semibold tracking-[0.25em] text-violet-700">
             VALLEX
@@ -87,11 +123,12 @@ export default function LoginPage() {
               setMode("login");
               setMessage("");
             }}
+            aria-pressed={mode === "login"}
             className={`rounded-md px-3 py-2 text-sm font-medium ${
               mode === "login"
-                ? "bg-white text-violet-700 shadow"
-                : "text-slate-600"
-            }`}
+                ? "bg-white text-violet-700 shadow ring-1 ring-violet-200"
+                : "text-slate-600 hover:bg-white/80 hover:text-violet-700 hover:shadow-sm"
+            } transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600`}
           >
             Entrar
           </button>
@@ -102,11 +139,12 @@ export default function LoginPage() {
               setMode("signup");
               setMessage("");
             }}
+            aria-pressed={mode === "signup"}
             className={`rounded-md px-3 py-2 text-sm font-medium ${
               mode === "signup"
-                ? "bg-white text-violet-700 shadow"
-                : "text-slate-600"
-            }`}
+                ? "bg-white text-violet-700 shadow ring-1 ring-violet-200"
+                : "text-slate-600 hover:bg-white/80 hover:text-violet-700 hover:shadow-sm"
+            } transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600`}
           >
             Criar conta
           </button>
@@ -221,9 +259,6 @@ export default function LoginPage() {
           </p>
         )}
 
-        <p className="mt-6 text-center text-xs text-slate-500">
-          VALLEX | SERVIÇOFÁCIL <a href="/" className="font-medium text-violet-700 hover:text-violet-900">· Página inicial da VALLEX</a>
-        </p>
       </section>
     </main>
   );
