@@ -2,6 +2,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ContactForm from "@/components/ContactForm";
 import Link from "next/link";
+import { siteConfig } from "@/config/site";
 
 export const metadata = {
   title: "Contato | VALLEX SERVIÇOFÁCIL",
@@ -50,8 +51,8 @@ export default function Contato() {
                 <span className="service-number">01</span>
                 <h3>E-mail comercial</h3>
                 <p>Envie sua solicitação ou descreva sua necessidade.</p>
-                <a href="mailto:vallexbusiness@gmail.com">
-                  vallexbusiness@gmail.com
+                <a href={`mailto:${siteConfig.contact.email}`}>
+                  {siteConfig.contact.email}
                 </a>
               </article>
 
@@ -60,11 +61,20 @@ export default function Contato() {
                 <h3>WhatsApp</h3>
                 <p>Entre em contato para conversar sobre seu atendimento.</p>
                 <a
-                  href="https://wa.me/5562985408497"
+                  href={`https://wa.me/${siteConfig.contact.whatsapp.replace(/\D/g, "")}`}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   Conversar pelo WhatsApp
+                </a>
+              </article>
+
+              <article className="service-card">
+                <span className="service-number">03</span>
+                <h3>Telefone comercial</h3>
+                <p>Ligue para falar diretamente com a equipe VALLEX.</p>
+                <a href={`tel:${siteConfig.contact.phone.replace(/[^+\d]/g, "")}`}>
+                  {siteConfig.contact.phone}
                 </a>
               </article>
 
@@ -73,7 +83,7 @@ export default function Contato() {
                 className="service-card service-card-link"
                 aria-label="Ir para o formulário de solicitação de orçamento"
               >
-                <span className="service-number">03</span>
+                <span className="service-number">04</span>
                 <h3>Solicitação de orçamento</h3>
                 <p>
                   Registre sua necessidade pelo formulário. A equipe VALLEX

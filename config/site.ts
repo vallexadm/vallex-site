@@ -15,9 +15,14 @@ export const siteConfig = {
   ],
 
   contact: {
-    email: "",
-    phone: "",
-    whatsapp: "",
+    email: "vallexbusiness@gmail.com",
+    phone: "+55 (62) 98540-8497",
+    whatsapp: "+55 (62) 98540-8497",
+  },
+
+  social: {
+    facebook: "https://www.facebook.com/val.alexandre.2025",
+    instagram: "https://www.instagram.com/vallexbustech/",
   },
 
   navigation: [

@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { siteConfig } from "@/config/site";
 
@@ -19,7 +20,14 @@ export default function Header() {
       <div className="container header-content">
 
         <Link href="/" className="brand" aria-label="VALLEX - Página inicial">
-          <span className="brand-name">VALLEX</span>
+          <Image
+            src="/vallex-logo.png"
+            alt="VALLEX"
+            width={7271}
+            height={5879}
+            priority
+            className="brand-logo"
+          />
           <span className="brand-subtitle">SERVIÇOFÁCIL</span>
         </Link>
 

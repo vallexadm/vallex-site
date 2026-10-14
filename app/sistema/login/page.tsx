@@ -1,19 +1,63 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup" | "recovery" | "reset">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [organizationName, setOrganizationName] = useState("");
   const [businessType, setBusinessType] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("redefinir-senha") === "1") {
+      void supabase.auth.getSession().then(({ data }) => {
+        setMode("reset");
+        setMessage(data.session
+          ? "Escolha uma nova senha para sua conta."
+          : "Abra o link mais recente recebido por e-mail para continuar a redefinição.");
+      });
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setMode("reset");
+        setMessage("Escolha uma nova senha para sua conta.");
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  function getSafeDestination() {
+    const requestedDestination = new URLSearchParams(
+      window.location.search
+    ).get("next");
+
+    if (!requestedDestination || !requestedDestination.startsWith("/")) {
+      return "/sistema";
+    }
+
+    try {
+      const destinationUrl = new URL(requestedDestination, window.location.origin);
+      const allowedPaths = ["/sistema/planos", "/sistema/convites/aceitar"];
+
+      if (
+        destinationUrl.origin !== window.location.origin ||
+        !allowedPaths.includes(destinationUrl.pathname)
+      ) {
+        return "/sistema";
+      }
+
+      return `${destinationUrl.pathname}${destinationUrl.search}`;
+    } catch {
+      return "/sistema";
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -21,7 +65,20 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      if (mode === "signup") {
+      if (mode === "recovery") {
+        const { error } = await supabase.auth.resetPasswordForEmail(
+          email.trim().toLowerCase(),
+          { redirectTo: `${window.location.origin}/sistema/login?redefinir-senha=1` }
+        );
+        if (error) throw error;
+        setMessage("Se essa conta puder redefinir a senha, enviaremos um link para o e-mail informado.");
+      } else if (mode === "reset") {
+        const { error } = await supabase.auth.updateUser({ password });
+        if (error) throw error;
+        setMessage("Senha atualizada. Entrando na sua conta...");
+        window.location.replace("/sistema");
+        return;
+      } else if (mode === "signup") {
         const { data, error } = await supabase.auth.signUp({
           email: email.trim().toLowerCase(),
           password,
@@ -36,7 +93,7 @@ export default function LoginPage() {
         if (error) throw error;
 
         if (data.session) {
-          router.replace("/sistema");
+          window.location.replace(getSafeDestination());
           return;
         }
 
@@ -52,14 +109,7 @@ export default function LoginPage() {
 
         if (error) throw error;
 
-        const requestedDestination = new URLSearchParams(
-          window.location.search
-        ).get("next");
-        const destination =
-          requestedDestination === "/sistema/planos"
-            ? requestedDestination
-            : "/sistema";
-
+        const destination = getSafeDestination();
         window.location.replace(destination);
         return;
       }
@@ -105,10 +155,17 @@ export default function LoginPage() {
         </Link>
 
         <div className="mb-8 text-center">
-          <p className="text-sm font-semibold tracking-[0.25em] text-violet-700">
-            VALLEX
-          </p>
-          <h1 className="mt-2 text-3xl font-bold text-slate-900">
+          <div style={{ width: "270px", height: "210px" }} className="mx-auto flex items-center justify-center rounded-xl bg-[#17002E] p-3">
+            <Image
+              src="/vallex-logo.png"
+              alt="VALLEX"
+              width={240}
+              height={194}
+              priority
+              style={{ width: "240px", height: "194px", objectFit: "contain" }}
+            />
+          </div>
+          <h1 className="mt-3 text-3xl font-bold text-slate-900">
             ServiçoFácil
           </h1>
           <p className="mt-2 text-sm text-slate-600">
@@ -116,7 +173,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <div className="mb-6 grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
+        {(mode === "login" || mode === "signup") && <div className="mb-6 grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
           <button
             type="button"
             onClick={() => {
@@ -148,7 +205,7 @@ export default function LoginPage() {
           >
             Criar conta
           </button>
-        </div>
+        </div>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === "signup" && (
@@ -196,7 +253,7 @@ export default function LoginPage() {
             </>
           )}
 
-          <div>
+          {mode !== "reset" && <div>
             <label
               htmlFor="email"
               className="mb-1 block text-sm font-medium text-slate-700"
@@ -213,9 +270,9 @@ export default function LoginPage() {
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100"
               placeholder="seu@email.com"
             />
-          </div>
+          </div>}
 
-          <div>
+          {(mode === "login" || mode === "signup" || mode === "reset") && <div>
             <label
               htmlFor="password"
               className="mb-1 block text-sm font-medium text-slate-700"
@@ -235,7 +292,7 @@ export default function LoginPage() {
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100"
               placeholder="Mínimo de 6 caracteres"
             />
-          </div>
+          </div>}
 
           <button
             type="submit"
@@ -246,9 +303,32 @@ export default function LoginPage() {
               ? "Aguarde..."
               : mode === "login"
                 ? "Entrar"
-                : "Criar minha conta"}
+                : mode === "signup"
+                  ? "Criar minha conta"
+                  : mode === "recovery"
+                    ? "Enviar link de recuperação"
+                    : "Salvar nova senha"}
           </button>
         </form>
+
+        {mode === "login" && (
+          <button
+            type="button"
+            onClick={() => { setMode("recovery"); setMessage(""); }}
+            className="mt-4 w-full text-sm font-medium text-violet-700 hover:text-violet-900"
+          >
+            Esqueci minha senha
+          </button>
+        )}
+        {(mode === "recovery" || mode === "reset") && (
+          <button
+            type="button"
+            onClick={() => { setMode("login"); setPassword(""); setMessage(""); window.history.replaceState({}, "", "/sistema/login"); }}
+            className="mt-4 w-full text-sm font-medium text-violet-700 hover:text-violet-900"
+          >
+            Voltar para entrar
+          </button>
+        )}
 
         {message && (
           <p

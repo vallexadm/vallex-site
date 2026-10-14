@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
+import SystemBrand from "@/components/SystemBrand";
 import { supabase } from "@/lib/supabase/client";
 
 type Customer = {
@@ -435,21 +436,13 @@ const [changingStatusId, setChangingStatusId] = useState<string | null>(
     <main className="min-h-screen bg-slate-100">
       <header className="bg-[#17002E] px-6 py-5 text-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <div>
-            <p className="text-sm tracking-[0.2em] text-purple-300">
-              VALLEX
-            </p>
-
-            <h1 className="text-xl font-bold">
-              ServiçoFácil
-            </h1>
-          </div>
+          <SystemBrand />
 
           <Link
             href="/sistema"
-            className="rounded-lg border border-purple-300 px-4 py-2 text-sm hover:bg-purple-900"
+            className="inline-flex items-center gap-2 rounded-lg border border-purple-300 px-4 py-2 text-sm font-medium transition hover:bg-purple-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#17002E]"
           >
-            Voltar ao painel
+            <span aria-hidden="true">←</span> Voltar ao painel
           </Link>
         </div>
       </header>

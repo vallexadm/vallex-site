@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -15,6 +15,8 @@ type PublicProfile = {
   whatsapp: string | null;
   email: string | null;
   address: string | null;
+  service_area: string | null;
+  service_modes: string[];
   logo_url: string | null;
   is_published: boolean;
   publication_authorized_at: string | null;
@@ -22,6 +24,12 @@ type PublicProfile = {
   created_at: string;
   updated_at: string;
 };
+
+const serviceModeOptions = [
+  { value: "presencial", label: "Presencial", description: "No meu estabelecimento, salão ou escritório" },
+  { value: "domicilio", label: "Em domicílio", description: "Vou até o endereço do cliente dentro da região informada" },
+  { value: "online", label: "Online", description: "Atendimento remoto, por chamada ou internet" },
+] as const;
 
 type Organization = {
   id: string;
@@ -64,8 +72,25 @@ function slugify(value: string) {
     .slice(0, 80);
 }
 
+function formatBrazilianPhone(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 2) return digits ? `(${digits}` : "";
+  const ddd = digits.slice(0, 2);
+  const number = digits.slice(2);
+  const split = number.length > 8 ? number.length - 4 : Math.min(4, number.length);
+  const prefix = number.slice(0, split);
+  const suffix = number.slice(split);
+  return `(${ddd}) ${prefix}${suffix ? `-${suffix}` : ""}`;
+}
+
+function isBrazilianPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return /^[\d\s()+-]+$/.test(value) && (digits.length === 10 || digits.length === 11);
+}
+
 export default function VitrinePage() {
   const router = useRouter();
+  const previewDialogRef = useRef<HTMLDialogElement>(null);
 
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -73,6 +98,7 @@ export default function VitrinePage() {
   const [enviandoLogo, setEnviandoLogo] = useState(false);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const [organization, setOrganization] =
     useState<Organization | null>(null);
@@ -86,6 +112,8 @@ export default function VitrinePage() {
   const [whatsapp, setWhatsapp] = useState("");
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
+  const [serviceArea, setServiceArea] = useState("");
+  const [serviceModes, setServiceModes] = useState<string[]>([]);
   const [logoUrl, setLogoUrl] = useState("");
   const [services, setServices] = useState<VitrineService[]>([]);
   const [carregandoServicos, setCarregandoServicos] = useState(true);
@@ -99,6 +127,16 @@ export default function VitrinePage() {
   const [servicePrice, setServicePrice] = useState("");
   const [serviceDisplayOrder, setServiceDisplayOrder] = useState("1");
   const [servicePublished, setServicePublished] = useState(true);
+
+  const phoneInvalid = Boolean(phone) && !isBrazilianPhone(phone);
+  const whatsappInvalid = Boolean(whatsapp) && !isBrazilianPhone(whatsapp);
+
+  useEffect(() => {
+    const dialog = previewDialogRef.current;
+    if (!dialog) return;
+    if (previewOpen && !dialog.open) dialog.showModal();
+    if (!previewOpen && dialog.open) dialog.close();
+  }, [previewOpen]);
 
   useEffect(() => {
   carregarVitrine();
@@ -425,10 +463,12 @@ async function excluirServico(service: VitrineService) {
     setDisplayName(dados.display_name || "");
     setSlug(dados.slug || "");
     setDescription(dados.description || "");
-    setPhone(dados.phone || "");
-    setWhatsapp(dados.whatsapp || "");
+    setPhone(dados.phone ? formatBrazilianPhone(dados.phone) : "");
+    setWhatsapp(dados.whatsapp ? formatBrazilianPhone(dados.whatsapp) : "");
     setEmail(dados.email || "");
     setAddress(dados.address || "");
+    setServiceArea(dados.service_area || "");
+    setServiceModes(dados.service_modes || []);
     setLogoUrl(dados.logo_url || "");
   }
 
@@ -446,12 +486,23 @@ async function excluirServico(service: VitrineService) {
       whatsapp: whatsapp.trim(),
       email: email.trim(),
       address: address.trim(),
+      service_area: serviceArea.trim(),
+      service_modes: serviceModes,
       logo_url: logoUrl.trim(),
     };
   }
 
   async function salvarVitrine(event?: FormEvent) {
     event?.preventDefault();
+
+    if (phone && !isBrazilianPhone(phone)) {
+      setErro("Informe um telefone válido com DDD, usando 10 ou 11 números.");
+      return;
+    }
+    if (!whatsapp || !isBrazilianPhone(whatsapp)) {
+      setErro("Informe um WhatsApp válido com DDD, usando 10 ou 11 números.");
+      return;
+    }
 
     limparMensagens();
     setSalvando(true);
@@ -641,22 +692,47 @@ async function excluirServico(service: VitrineService) {
 
           <Link
             href="/sistema"
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium hover:bg-gray-100"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold transition hover:border-violet-400 hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2"
           >
-            Voltar ao painel
+            <span aria-hidden="true">←</span> Voltar ao painel
           </Link>
         </div>
 
         {process.env.NODE_ENV !== "production" && (
           <div className="mb-6">
-            <Link
-              href="/servicos?previsualizar=1"
+            <button
+              type="button"
+              onClick={() => setPreviewOpen(true)}
               className="inline-flex rounded-lg bg-purple-700 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-800"
             >
               Pré-visualizar no catálogo local
-            </Link>
+            </button>
           </div>
         )}
+
+        <dialog
+          ref={previewDialogRef}
+          aria-labelledby="vitrine-preview-title"
+          className="vitrine-preview-dialog"
+          onCancel={(event) => {
+            event.preventDefault();
+            setPreviewOpen(false);
+          }}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setPreviewOpen(false);
+          }}
+        >
+          <div className="vitrine-preview-header">
+            <div>
+              <h2 id="vitrine-preview-title">Prévia da Vitrine</h2>
+              <p>Visualização do catálogo local em uma janela sobre esta página.</p>
+            </div>
+            <button type="button" className="vitrine-preview-close" onClick={() => setPreviewOpen(false)} aria-label="Fechar prévia">
+              ×
+            </button>
+          </div>
+          <iframe title="Prévia do catálogo local" src="/catalogo?previsualizar=1" />
+        </dialog>
 
         {erro && (
           <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
@@ -835,12 +911,17 @@ async function excluirServico(service: VitrineService) {
                   id="phone"
                   value={phone}
                   onChange={(event) =>
-                    setPhone(event.target.value)
+                    setPhone(formatBrazilianPhone(event.target.value))
                   }
-                  maxLength={40}
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={15}
+                  pattern="\(\d{2}\) \d{4,5}-\d{4}"
+                  aria-invalid={phoneInvalid}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
                   placeholder="(62) 00000-0000"
                 />
+                {phoneInvalid && <p className="mt-1 text-xs text-red-600">Informe DDD e telefone com 10 ou 11 números.</p>}
               </div>
 
               <div>
@@ -855,12 +936,19 @@ async function excluirServico(service: VitrineService) {
                   id="whatsapp"
                   value={whatsapp}
                   onChange={(event) =>
-                    setWhatsapp(event.target.value)
+                    setWhatsapp(formatBrazilianPhone(event.target.value))
                   }
-                  maxLength={40}
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={15}
+                  pattern="\(\d{2}\) \d{4,5}-\d{4}"
+                  required
+                  aria-invalid={whatsappInvalid}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
                   placeholder="(62) 00000-0000"
                 />
+                <p className="mt-1 text-xs text-gray-500">Obrigatório para aparecer na Vitrine e permitir contato dos clientes.</p>
+                {whatsappInvalid && <p className="mt-1 text-xs text-red-600">Informe DDD e WhatsApp com 10 ou 11 números.</p>}
               </div>
 
               <div>
@@ -878,7 +966,7 @@ async function excluirServico(service: VitrineService) {
                   onChange={(event) =>
                     setEmail(event.target.value)
                   }
-                  maxLength={320}
+                  maxLength={254}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
                   placeholder="contato@empresa.com"
                 />
@@ -889,7 +977,7 @@ async function excluirServico(service: VitrineService) {
                   htmlFor="address"
                   className="mb-2 block text-sm font-medium text-gray-700"
                 >
-                  Endereço
+                  Endereço público (opcional)
                 </label>
 
                 <input
@@ -900,10 +988,77 @@ async function excluirServico(service: VitrineService) {
                   }
                   maxLength={500}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
-                  placeholder="Cidade, bairro ou endereço"
+                  placeholder="Endereço do estabelecimento, se quiser divulgá-lo"
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  Este endereço pode ficar visível na sua Vitrine. Informe apenas um local comercial que deseja compartilhar; sua região de atendimento fica no campo abaixo.
+                </p>
               </div>
             </div>
+          </section>
+
+          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="mb-5">
+              <h2 className="text-xl font-semibold">
+                Região e modalidade de atendimento
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Essas informações ajudam clientes da sua região a encontrar você. Informe a área de cobertura e escolha uma ou mais formas de atendimento.
+              </p>
+            </div>
+
+            <div className="mb-5">
+              <label
+                htmlFor="service_area"
+                className="mb-2 block text-sm font-medium text-gray-700"
+              >
+                Cidade, bairros ou região atendida
+              </label>
+              <input
+                id="service_area"
+                value={serviceArea}
+                onChange={(event) => setServiceArea(event.target.value)}
+                maxLength={300}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                placeholder="Ex.: Goiânia e região metropolitana"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Obrigatório para publicar. Ex.: Goiânia e região metropolitana. Se atender somente online, informe a abrangência, como “Online em todo o Brasil”.
+              </p>
+            </div>
+
+            <fieldset>
+              <legend className="mb-2 block text-sm font-medium text-gray-700">
+                Como você atende? (obrigatório para publicar)
+              </legend>
+              <div className="grid gap-3 md:grid-cols-3">
+                {serviceModeOptions.map((option) => {
+                  const checked = serviceModes.includes(option.value);
+                  return (
+                    <label
+                      key={option.value}
+                      className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition ${checked ? "border-purple-500 bg-purple-50" : "border-gray-200 bg-white hover:border-purple-300"}`}
+                    >
+                      <input
+                        type="checkbox"
+                        value={option.value}
+                        checked={checked}
+                        onChange={() => setServiceModes((current) =>
+                          checked
+                            ? current.filter((mode) => mode !== option.value)
+                            : [...current, option.value]
+                        )}
+                        className="mt-1 accent-purple-700"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold text-gray-800">{option.label}</span>
+                        <span className="mt-1 block text-xs leading-5 text-gray-500">{option.description}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
           </section>
 
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -1068,6 +1223,7 @@ async function excluirServico(service: VitrineService) {
           id="service_price"
           type="number"
           min="0"
+          max="9999999999.99"
           step="0.01"
           value={servicePrice}
           onChange={(event) => setServicePrice(event.target.value)}
@@ -1119,6 +1275,7 @@ async function excluirServico(service: VitrineService) {
           id="service_display_order"
           type="number"
           min="0"
+          max="999"
           step="1"
           value={serviceDisplayOrder}
           onChange={(event) =>

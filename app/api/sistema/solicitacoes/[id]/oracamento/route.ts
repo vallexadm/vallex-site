@@ -250,6 +250,8 @@ export async function POST(
         titulo: `Orçamento - ${nomeServico}`,
         descricao: descricao || null,
         valor,
+        valor_servico: valor,
+        custos_internos: [],
         status: "rascunho",
         validade_ate: null,
         observacoes: observacoes || null,

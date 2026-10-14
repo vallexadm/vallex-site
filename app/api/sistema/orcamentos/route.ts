@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { normalizeQuoteInternalCosts } from "@/lib/orcamento-custos";
 
 function errorResponse(message: string, status: number) {
   return NextResponse.json(
@@ -82,6 +83,7 @@ async function getUserOrganization(
   if (!adminClient) {
     return {
       organization: null,
+      role: null,
       error: errorResponse(
         "Configuração do servidor incompleta.",
         500
@@ -100,6 +102,7 @@ async function getUserOrganization(
 
     return {
       organization: null,
+      role: null,
       error: errorResponse(
         "Não foi possível consultar a organização.",
         500
@@ -107,20 +110,37 @@ async function getUserOrganization(
     };
   }
 
-  if (!organization) {
-    return {
-      organization: null,
-      error: errorResponse(
-        "Organização não encontrada.",
-        403
-      ),
-    };
+  if (organization) {
+    return { organization, role: "owner" as const, error: null };
   }
 
-  return {
-    organization,
-    error: null,
-  };
+  const { data: membership, error: membershipError } = await adminClient
+    .from("organization_members")
+    .select("organization_id, role")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (membershipError) {
+    console.error("Erro ao consultar associação para orçamentos:", membershipError);
+    return { organization: null, role: null, error: errorResponse("Não foi possível consultar sua equipe.", 500) };
+  }
+
+  if (!membership || membership.role !== "member") {
+    return { organization: null, role: null, error: errorResponse("Organização não encontrada.", 403) };
+  }
+
+  const { data: memberOrganization, error: memberOrganizationError } = await adminClient
+    .from("organizations")
+    .select("id, name, owner_id")
+    .eq("id", membership.organization_id)
+    .maybeSingle();
+
+  if (memberOrganizationError || !memberOrganization) {
+    console.error("Erro ao localizar organização do colaborador:", memberOrganizationError);
+    return { organization: null, role: null, error: errorResponse("Não foi possível carregar a organização.", 500) };
+  }
+
+  return { organization: memberOrganization, role: "member" as const, error: null };
 }
 
 export async function GET(request: Request) {
@@ -133,13 +153,30 @@ export async function GET(request: Request) {
 
     const adminClient = createAdminClient();
 
-    const { organization, error: organizationResponse } =
+    const { organization, role, error: organizationResponse } =
       await getUserOrganization(adminClient, auth.user.id);
 
     if (organizationResponse) {
       return organizationResponse;
     }
 
+    if (new URL(request.url).searchParams.get("dados") === "clientes") {
+      const { data: customers, error: customersError } = await adminClient!
+        .from("customers")
+        .select("id, name")
+        .eq("organization_id", organization!.id)
+        .eq("status", "ativo")
+        .order("name", { ascending: true });
+
+      if (customersError) {
+        console.error("Erro ao consultar opções de cliente para orçamento:", customersError);
+        return errorResponse("Não foi possível carregar as opções de clientes.", 500);
+      }
+
+      return NextResponse.json({ ok: true, role, customers: customers ?? [] });
+    }
+
+    const customerFields = role === "owner" ? "id, name, phone, email" : "id, name";
     const { data: orcamentos, error } = await adminClient!
       .from("orcamentos")
       .select(
@@ -150,17 +187,14 @@ export async function GET(request: Request) {
         titulo,
         descricao,
         valor,
+        valor_servico,
+        custos_internos,
         status,
         validade_ate,
         observacoes,
         created_at,
         updated_at,
-        customers (
-          id,
-          name,
-          phone,
-          email
-        )
+        customers (${customerFields})
         `
       )
       .eq("organization_id", organization!.id)
@@ -181,6 +215,7 @@ export async function GET(request: Request) {
         id: organization!.id,
         name: organization!.name,
       },
+      role,
       orcamentos: orcamentos ?? [],
     });
   } catch (error) {
@@ -203,7 +238,7 @@ export async function POST(request: Request) {
 
     const adminClient = createAdminClient();
 
-    const { organization, error: organizationResponse } =
+    const { organization, role, error: organizationResponse } =
       await getUserOrganization(adminClient, auth.user.id);
 
     if (organizationResponse) {
@@ -256,10 +291,10 @@ export async function POST(request: Request) {
         ? data.validade_ate.trim()
         : null;
 
-    const valor =
-      typeof data.valor === "number"
-        ? data.valor
-        : Number(data.valor);
+    const valorServico = typeof data.valor_servico === "number"
+      ? data.valor_servico
+      : typeof data.valor === "number" ? data.valor : Number(data.valor);
+    const normalizedCosts = normalizeQuoteInternalCosts(data.custos_internos ?? []);
 
     if (!customerId || !titulo) {
       return errorResponse(
@@ -275,12 +310,14 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!Number.isFinite(valor) || valor < 0) {
+    if (!Number.isFinite(valorServico) || valorServico < 0) {
       return errorResponse(
-        "Informe um valor válido para o orçamento.",
+        "Informe um valor válido para o serviço.",
         400
       );
     }
+    if (!normalizedCosts.ok) return errorResponse(normalizedCosts.message, 400);
+    const valor = Math.round((valorServico + normalizedCosts.total) * 100) / 100;
 
     if (
       titulo.length > 200 ||
@@ -335,7 +372,9 @@ export async function POST(request: Request) {
         titulo,
         descricao: descricao || null,
         valor,
-        status: "rascunho",
+        valor_servico: valorServico,
+        custos_internos: normalizedCosts.items,
+        status: role === "owner" ? "rascunho" : "enviado",
         validade_ate: validadeAte,
         observacoes: observacoes || null,
       })
@@ -347,17 +386,14 @@ export async function POST(request: Request) {
         titulo,
         descricao,
         valor,
+        valor_servico,
+        custos_internos,
         status,
         validade_ate,
         observacoes,
         created_at,
         updated_at,
-        customers (
-          id,
-          name,
-          phone,
-          email
-        )
+        customers (id, name)
         `
       )
       .single();
@@ -374,7 +410,9 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: true,
-        message: "Orçamento cadastrado com sucesso.",
+        message: role === "owner"
+          ? "Orçamento cadastrado com sucesso."
+          : "Orçamento enviado ao proprietário para aprovação.",
         orcamento,
       },
       { status: 201 }
@@ -398,7 +436,7 @@ export async function PATCH(request: Request) {
 
     const adminClient = createAdminClient();
 
-    const { organization, error: organizationResponse } =
+    const { organization, role, error: organizationResponse } =
       await getUserOrganization(adminClient, auth.user.id);
 
     if (organizationResponse) {
@@ -461,10 +499,10 @@ export async function PATCH(request: Request) {
         ? data.validade_ate.trim()
         : null;
 
-    const valor =
-      typeof data.valor === "number"
-        ? data.valor
-        : Number(data.valor);
+    const hasInternalCostFields = Object.prototype.hasOwnProperty.call(data, "valor_servico") || Object.prototype.hasOwnProperty.call(data, "custos_internos");
+    const valorServicoInput = typeof data.valor_servico === "number"
+      ? data.valor_servico
+      : typeof data.valor === "number" ? data.valor : Number(data.valor);
 
     const allowedStatuses = [
       "rascunho",
@@ -491,9 +529,9 @@ export async function PATCH(request: Request) {
       );
     }
 
-    if (!Number.isFinite(valor) || valor < 0) {
+    if (hasInternalCostFields && (!Number.isFinite(valorServicoInput) || valorServicoInput < 0)) {
       return errorResponse(
-        "Informe um valor válido para o orçamento.",
+        "Informe um valor válido para o serviço.",
         400
       );
     }
@@ -503,6 +541,43 @@ export async function PATCH(request: Request) {
         "Status do orçamento inválido.",
         400
       );
+    }
+
+    const { data: currentQuote, error: currentQuoteError } = await adminClient!
+      .from("orcamentos")
+      .select("id, status, valor, valor_servico, custos_internos")
+      .eq("id", id)
+      .eq("organization_id", organization!.id)
+      .maybeSingle();
+
+    if (currentQuoteError) {
+      console.error("Erro ao consultar orçamento para atualização:", currentQuoteError);
+      return errorResponse("Não foi possível validar o orçamento.", 500);
+    }
+
+    if (!currentQuote) return errorResponse("Orçamento não encontrado.", 404);
+
+    const normalizedCosts = hasInternalCostFields
+      ? normalizeQuoteInternalCosts(data.custos_internos ?? [])
+      : null;
+    if (normalizedCosts && !normalizedCosts.ok) return errorResponse(normalizedCosts.message, 400);
+    const valorServico = hasInternalCostFields
+      ? valorServicoInput
+      : Number(currentQuote.valor_servico ?? currentQuote.valor);
+    const custosInternos = normalizedCosts?.ok
+      ? normalizedCosts.items
+      : currentQuote.custos_internos ?? [];
+    const custoInternoTotal = normalizedCosts?.ok
+      ? normalizedCosts.total
+      : Array.isArray(custosInternos)
+        ? custosInternos.reduce((sum: number, item: { amount?: number }) => sum + Number(item.amount ?? 0), 0)
+        : 0;
+    const valor = hasInternalCostFields
+      ? Math.round((valorServico + custoInternoTotal) * 100) / 100
+      : Number(currentQuote.valor);
+
+    if (role === "member" && (currentQuote.status !== "enviado" || status !== "enviado")) {
+      return errorResponse("Colaboradores podem editar somente propostas pendentes; apenas o proprietário pode aprovar ou alterar o status.", 403);
     }
 
     if (
@@ -560,6 +635,8 @@ export async function PATCH(request: Request) {
         titulo,
         descricao: descricao || null,
         valor,
+        valor_servico: valorServico,
+        custos_internos: custosInternos,
         status,
         validade_ate: validadeAte,
         observacoes: observacoes || null,
@@ -575,17 +652,14 @@ export async function PATCH(request: Request) {
         titulo,
         descricao,
         valor,
+        valor_servico,
+        custos_internos,
         status,
         validade_ate,
         observacoes,
         created_at,
         updated_at,
-        customers (
-          id,
-          name,
-          phone,
-          email
-        )
+        customers (${role === "owner" ? "id, name, phone, email" : "id, name"})
         `
       )
       .maybeSingle();
@@ -634,11 +708,15 @@ export async function DELETE(request: Request) {
 
     const adminClient = createAdminClient();
 
-    const { organization, error: organizationResponse } =
+    const { organization, role, error: organizationResponse } =
       await getUserOrganization(adminClient, auth.user.id);
 
     if (organizationResponse) {
       return organizationResponse;
+    }
+
+    if (role !== "owner") {
+      return errorResponse("Somente o proprietário pode excluir orçamentos.", 403);
     }
 
     let body: unknown;

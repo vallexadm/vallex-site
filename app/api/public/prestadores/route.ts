@@ -10,6 +10,8 @@ type PublicProfile = {
   display_name: string;
   description: string | null;
   address: string | null;
+  service_area: string | null;
+  service_modes: string[];
   logo_url: string | null;
   is_published: boolean;
 };
@@ -92,7 +94,7 @@ export async function GET(request: Request) {
     await supabaseAdmin
       .from("organization_public_profiles")
       .select(
-        "id,organization_id,slug,display_name,description,address,logo_url,is_published"
+        "id,organization_id,slug,display_name,description,address,service_area,service_modes,logo_url,is_published"
       )
       .eq("is_published", true)
       .order("display_name", { ascending: true });
@@ -116,7 +118,7 @@ export async function GET(request: Request) {
       await supabaseAdmin
         .from("organization_public_profiles")
         .select(
-          "id,organization_id,slug,display_name,description,address,logo_url,is_published"
+          "id,organization_id,slug,display_name,description,address,service_area,service_modes,logo_url,is_published"
         )
         .eq("organization_id", ownedOrganizationId)
         .maybeSingle();

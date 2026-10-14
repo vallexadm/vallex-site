@@ -3,7 +3,23 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase/client";
+import LocalClock from "@/components/LocalClock";
+
+type OwnerDashboardMetrics = { charged: number; received: number; receivable: number; expenses: number; pendingBills: number; estimatedProfit: number };
+
+function currentMonthRange() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return { from: `${year}-${month}-01`, to: `${year}-${month}-${day}`, label: now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) };
+}
+
+function formatDashboardCurrency(value: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+}
 
 export default function SistemaPage() {
   const router = useRouter();
@@ -15,6 +31,8 @@ export default function SistemaPage() {
   const [contextError, setContextError] = useState("");
   const [needsOrganization, setNeedsOrganization] = useState(false);
   const [savingOrganization, setSavingOrganization] = useState(false);
+  const [dashboardMetrics, setDashboardMetrics] = useState<OwnerDashboardMetrics | null>(null);
+  const [loadingDashboard, setLoadingDashboard] = useState(false);
 
   useEffect(() => {
     async function checkSession() {
@@ -83,6 +101,48 @@ export default function SistemaPage() {
     checkSession();
   }, [router]);
 
+  useEffect(() => {
+    if (role !== "owner") return;
+    let cancelled = false;
+    async function loadOwnerOverview() {
+      setLoadingDashboard(true);
+      try {
+        const { data } = await supabase.auth.getSession();
+        const accessToken = data.session?.access_token;
+        if (!accessToken) return;
+        const range = currentMonthRange();
+        const headers = { Authorization: `Bearer ${accessToken}` };
+        const [financeResponse, receivablesResponse] = await Promise.all([
+          fetch(`/api/sistema/financeiro?from=${range.from}&to=${range.to}`, { headers, cache: "no-store" }),
+          fetch("/api/sistema/financeiro?receivables=all", { headers, cache: "no-store" }),
+        ]);
+        if (!financeResponse.ok || !receivablesResponse.ok) return;
+        const [finance, receivables] = await Promise.all([financeResponse.json(), receivablesResponse.json()]);
+        if (!finance.ok || !receivables.ok) return;
+        const services = finance.services ?? [];
+        const expenses = finance.expenses ?? [];
+        const charged = services.reduce((sum: number, service: { amount_charged: number | string }) => sum + Number(service.amount_charged), 0);
+        const directCosts = services.reduce((sum: number, service: { direct_cost: number | string }) => sum + Number(service.direct_cost), 0);
+        const received = (finance.payments ?? []).reduce((sum: number, payment: { amount: number | string }) => sum + Number(payment.amount), 0);
+        const expensesTotal = expenses.reduce((sum: number, expense: { amount: number | string }) => sum + Number(expense.amount), 0);
+        if (!cancelled) setDashboardMetrics({
+          charged,
+          received,
+          receivable: (receivables.receivables ?? []).reduce((sum: number, service: { amount_charged: number | string; amount_received: number | string }) => sum + Math.max(0, Number(service.amount_charged) - Number(service.amount_received)), 0),
+          expenses: expensesTotal,
+          pendingBills: expenses.filter((expense: { payment_status: string }) => expense.payment_status === "pendente").length,
+          estimatedProfit: charged - directCosts - expensesTotal,
+        });
+      } catch {
+        // O painel continua navegável mesmo quando o resumo financeiro não carregar.
+      } finally {
+        if (!cancelled) setLoadingDashboard(false);
+      }
+    }
+    void loadOwnerOverview();
+    return () => { cancelled = true; };
+  }, [role]);
+
   async function handleLogout() {
     await supabase.auth.signOut();
     router.replace("/sistema/login");
@@ -147,17 +207,27 @@ export default function SistemaPage() {
     return (
       <main className="min-h-screen bg-slate-100">
         <header className="bg-[#17002E] px-6 py-5 text-white">
-          <div className="mx-auto flex max-w-3xl items-center justify-between">
-            <div>
-              <p className="text-sm tracking-[0.2em] text-purple-300">VALLEX</p>
-              <h1 className="text-xl font-bold">ServiçoFácil</h1>
+          <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Image
+                src="/vallex-logo.png"
+                alt="VALLEX"
+                width={7271}
+                height={5879}
+                priority
+                className="h-[54px] w-[66px] object-contain"
+              />
+              <h1 className="text-xl font-bold text-purple-200">ServiçoFácil</h1>
             </div>
-            <button
-              onClick={handleLogout}
-              className="rounded-lg border border-purple-300 px-4 py-2 text-sm hover:bg-purple-900"
-            >
-              Sair
-            </button>
+            <div className="flex items-center gap-3">
+              <LocalClock variant="dark" />
+              <button
+                onClick={handleLogout}
+                className="rounded-lg border border-purple-300 px-4 py-2 text-sm hover:bg-purple-900"
+              >
+                Sair
+              </button>
+            </div>
           </div>
         </header>
 
@@ -240,20 +310,28 @@ export default function SistemaPage() {
   return (
     <main className="min-h-screen bg-slate-100">
       <header className="bg-[#17002E] px-6 py-5 text-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <div>
-            <p className="text-sm tracking-[0.2em] text-purple-300">
-              VALLEX
-            </p>
-            <h1 className="text-xl font-bold">ServiçoFácil</h1>
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Image
+              src="/vallex-logo.png"
+              alt="VALLEX"
+              width={7271}
+              height={5879}
+              priority
+              className="h-[54px] w-[66px] object-contain"
+            />
+            <h1 className="text-xl font-bold text-purple-200">ServiçoFácil</h1>
           </div>
 
-          <button
-            onClick={handleLogout}
-            className="rounded-lg border border-purple-300 px-4 py-2 text-sm hover:bg-purple-900"
-          >
-            Sair
-          </button>
+          <div className="flex items-center gap-3">
+            <LocalClock variant="dark" />
+            <button
+              onClick={handleLogout}
+              className="rounded-lg border border-purple-300 px-4 py-2 text-sm hover:bg-purple-900"
+            >
+              Sair
+            </button>
+          </div>
         </div>
       </header>
 
@@ -282,10 +360,29 @@ export default function SistemaPage() {
   </p>
 )}
         {role === "owner" && (
+          <section aria-labelledby="owner-dashboard-heading" className="mt-8">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div><p className="text-sm font-medium capitalize text-violet-700">Visão geral · {currentMonthRange().label}</p><h3 id="owner-dashboard-heading" className="mt-1 text-xl font-semibold text-slate-900">Resumo do negócio</h3></div>
+              <Link href="/sistema/financeiro" className="inline-flex items-center gap-2 rounded-lg border border-violet-300 bg-white px-4 py-2.5 text-sm font-semibold text-violet-800 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-500 hover:bg-violet-50 hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2">Abrir financeiro <span aria-hidden="true">→</span></Link>
+            </div>
+            {loadingDashboard && <p className="mt-4 text-sm text-slate-500">Carregando indicadores…</p>}
+            {dashboardMetrics ? <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+              {[
+                { label: "Faturamento", value: dashboardMetrics.charged, hint: "Serviços no mês", style: "border-blue-200 bg-blue-50 text-blue-900" },
+                { label: "Recebido", value: dashboardMetrics.received, hint: "Pagamentos no mês", style: "border-emerald-200 bg-emerald-50 text-emerald-900" },
+                { label: "A receber", value: dashboardMetrics.receivable, hint: "Saldo aberto de clientes", style: "border-amber-200 bg-amber-50 text-amber-900" },
+                { label: "Despesas", value: dashboardMetrics.expenses, hint: `${dashboardMetrics.pendingBills} conta(s) pendente(s) no mês`, style: "border-orange-200 bg-orange-50 text-orange-900" },
+                { label: "Resultado estimado", value: dashboardMetrics.estimatedProfit, hint: "Faturamento − custos e despesas", style: dashboardMetrics.estimatedProfit >= 0 ? "border-teal-200 bg-teal-50 text-teal-900" : "border-red-200 bg-red-50 text-red-900" },
+              ].map((metric) => <article key={metric.label} className={`rounded-xl border p-5 shadow-sm ${metric.style}`}><p className="text-sm font-medium">{metric.label}</p><p className="mt-2 text-2xl font-bold">{formatDashboardCurrency(metric.value)}</p><p className="mt-1 text-xs opacity-80">{metric.hint}</p></article>)}
+            </div> : !loadingDashboard && <p className="mt-4 rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">Os indicadores não estão disponíveis agora. Você ainda pode acessar os módulos abaixo.</p>}
+          </section>
+        )}
+        <div className="mt-8 flex flex-wrap items-end justify-between gap-2"><div><p className="text-sm font-medium text-violet-700">Navegação</p><h3 className="mt-1 text-xl font-semibold text-slate-900">Acessos rápidos</h3></div><p className="text-sm text-slate-500">Selecione uma área para abrir o módulo.</p></div>
+        {role === "owner" && (
         <div className="mt-6">
   <Link
     href="/sistema/solicitacoes"
-    className="flex flex-col gap-2 rounded-xl border border-purple-200 bg-white p-6 shadow-sm transition hover:border-purple-400 hover:shadow-md sm:flex-row sm:items-center sm:justify-between"
+    className="group flex flex-col gap-2 rounded-xl border border-purple-200 bg-white p-6 shadow-sm transition duration-150 hover:-translate-y-0.5 hover:border-purple-400 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2 sm:flex-row sm:items-center sm:justify-between"
   >
     <div>
       <h3 className="text-lg font-semibold text-slate-900">
@@ -297,7 +394,7 @@ export default function SistemaPage() {
       </p>
     </div>
 
-    <span className="inline-flex w-fit items-center rounded-lg bg-purple-700 px-4 py-2 text-sm font-medium text-white">
+    <span className="inline-flex w-fit items-center gap-2 rounded-lg bg-purple-700 px-4 py-2 text-sm font-semibold text-white transition group-hover:bg-purple-800">
       Acessar solicitações →
     </span>
   </Link>
@@ -312,11 +409,17 @@ export default function SistemaPage() {
   },
   {
     title: "Orçamentos",
-    description: "Registro e acompanhamento de propostas.",
+    description: role === "owner"
+      ? "Revise as propostas da equipe e aprove os orçamentos."
+      : "Crie propostas para a organização enviar ao proprietário para aprovação.",
+    href: "/sistema/orcamentos",
   },
   {
     title: "Agenda",
-    description: "Agendamento de visitas e atendimentos.",
+    description: role === "owner"
+      ? "Agende atendimentos e atribua à sua equipe."
+      : "Consulte e atualize os atendimentos atribuídos a você.",
+    href: "/sistema/agenda",
   },
   {
     title: "Serviços",
@@ -325,16 +428,14 @@ export default function SistemaPage() {
   {
     title: "Financeiro",
     description: "Controle de receitas e despesas.",
+    href: "/sistema/financeiro",
   },
   {
     title: "Configurações",
     description: "Dados do profissional e do negócio.",
   },
-].map((item) => (
-  <article
-    key={item.title}
-    className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
-  >
+].filter((item) => role === "owner" || ["Orçamentos", "Agenda"].includes(item.title)).map((item) => item.href ? (
+  <Link key={item.title} href={item.href} className="group rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition duration-150 hover:-translate-y-1 hover:border-violet-300 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2">
     <h3 className="text-lg font-semibold text-slate-900">
       {item.title}
     </h3>
@@ -343,24 +444,19 @@ export default function SistemaPage() {
       {item.description}
     </p>
 
-    {item.href ? (
-      <Link
-        href={item.href}
-        className="mt-4 inline-flex items-center rounded-lg bg-purple-700 px-4 py-2 text-xs font-medium text-white transition hover:bg-purple-800"
-      >
-        Acessar módulo →
-      </Link>
-    ) : (
-      <span className="mt-4 inline-block text-xs font-medium text-purple-700">
-        Módulo planejado
-      </span>
-    )}
+    <span className="mt-5 inline-flex items-center gap-2 rounded-lg bg-purple-700 px-4 py-2 text-sm font-semibold text-white transition group-hover:bg-purple-800">Acessar módulo <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">→</span></span>
+  </Link>
+) : (
+  <article key={item.title} className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <h3 className="text-lg font-semibold text-slate-900">{item.title}</h3>
+    <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
+    <span className="mt-4 inline-block text-xs font-medium text-slate-500">Em breve</span>
   </article>
 ))}
 {role === "owner" && (
   <Link
     href="/sistema/vitrine"
-    className="rounded-xl border border-purple-200 bg-white p-6 shadow-sm transition hover:border-purple-400 hover:shadow-md"
+    className="group rounded-xl border border-purple-200 bg-white p-6 shadow-sm transition duration-150 hover:-translate-y-1 hover:border-violet-400 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2"
   >
     <h3 className="text-lg font-semibold text-slate-900">
       Vitrine pública
@@ -370,8 +466,8 @@ export default function SistemaPage() {
       Configure e publique sua apresentação no ServiçoFácil.
     </p>
 
-    <span className="mt-4 inline-block text-xs font-medium text-purple-700">
-      Configurar Vitrine →
+    <span className="mt-5 inline-flex items-center gap-2 rounded-lg bg-purple-700 px-4 py-2 text-sm font-semibold text-white transition group-hover:bg-purple-800">
+      Configurar Vitrine <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">→</span>
     </span>
   </Link>
 )}
@@ -379,18 +475,20 @@ export default function SistemaPage() {
   {role === "owner" && (
     <Link
 href="/sistema/planos"
-      className="rounded-xl border border-purple-200 bg-white p-6 shadow-sm transition hover:border-purple-400 hover:shadow-md"
+    className="group rounded-xl border border-purple-200 bg-white p-6 shadow-sm transition duration-150 hover:-translate-y-1 hover:border-violet-400 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2"
     >
       <h3 className="text-lg font-semibold text-slate-900">Planos e assinatura</h3>
       <p className="mt-2 text-sm leading-6 text-slate-600">Consulte seu plano e conheça as opções de assinatura mensal.</p>
-      <span className="mt-4 inline-block text-xs font-medium text-purple-700">Ver planos →</span>
+      <span className="mt-5 inline-flex items-center gap-2 rounded-lg bg-purple-700 px-4 py-2 text-sm font-semibold text-white transition group-hover:bg-purple-800">
+        Ver planos <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">→</span>
+      </span>
     </Link>
   )}
 
   {role === "owner" && (
     <Link
       href="/sistema/equipe"
-      className="rounded-xl border border-purple-200 bg-white p-6 shadow-sm transition hover:border-purple-400 hover:shadow-md"
+      className="group rounded-xl border border-purple-200 bg-white p-6 shadow-sm transition duration-150 hover:-translate-y-1 hover:border-violet-400 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2"
     >
       <h3 className="text-lg font-semibold text-slate-900">
         Equipe
@@ -400,8 +498,8 @@ href="/sistema/planos"
         Gerencie colaboradores, convites e acessos da organização.
       </p>
 
-      <span className="mt-4 inline-block text-xs font-medium text-purple-700">
-        Gerenciar equipe →
+      <span className="mt-5 inline-flex items-center gap-2 rounded-lg bg-purple-700 px-4 py-2 text-sm font-semibold text-white transition group-hover:bg-purple-800">
+        Gerenciar equipe <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">→</span>
       </span>
     </Link>
   )}

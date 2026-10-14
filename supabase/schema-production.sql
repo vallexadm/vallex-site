@@ -609,6 +609,8 @@ CREATE TABLE IF NOT EXISTS "public"."organization_public_profiles" (
     "whatsapp" "text",
     "email" "text",
     "address" "text",
+    "service_area" "text",
+    "service_modes" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
     "logo_url" "text",
     "is_published" boolean DEFAULT false NOT NULL,
     "publication_authorized_at" timestamp with time zone,
@@ -617,6 +619,8 @@ CREATE TABLE IF NOT EXISTS "public"."organization_public_profiles" (
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     CONSTRAINT "organization_public_profiles_description_length" CHECK ((("description" IS NULL) OR ("char_length"("description") <= 2000))),
     CONSTRAINT "organization_public_profiles_display_name_length" CHECK ((("char_length"(TRIM(BOTH FROM "display_name")) >= 2) AND ("char_length"(TRIM(BOTH FROM "display_name")) <= 160))),
+    CONSTRAINT "organization_public_profiles_service_area_length" CHECK (("service_area" IS NULL) OR ("char_length"("service_area") <= 300)),
+    CONSTRAINT "organization_public_profiles_service_modes_allowed" CHECK (("service_modes" <@ ARRAY['presencial'::"text", 'domicilio'::"text", 'online'::"text"])),
     CONSTRAINT "organization_public_profiles_published_requires_authorization" CHECK ((("is_published" = false) OR ("publication_authorized_at" IS NOT NULL))),
     CONSTRAINT "organization_public_profiles_slug_format" CHECK (("slug" ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'::"text"))
 );

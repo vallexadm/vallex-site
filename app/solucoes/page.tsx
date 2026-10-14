@@ -3,32 +3,80 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
 export const metadata = {
-  title: "Soluções Digitais | VALLEX SERVIÇOFÁCIL",
+  title: "Soluções para prestadores | VALLEX SERVIÇOFÁCIL",
   description:
-    "Conheça as soluções digitais da VALLEX para organização de serviços, atendimento e processos comerciais.",
+    "Divulgue seus serviços, receba solicitações e organize clientes, agenda e finanças com o ServiçoFácil da VALLEX.",
 };
 
-const solutions = [
+const providerBenefits = [
   {
     number: "01",
-    title: "ServiçoFácil",
+    title: "Uma vitrine para o seu trabalho",
     description:
-      "Uma proposta de sistema para organizar solicitações de serviços, agendamentos, atendimentos e acompanhamento das atividades técnicas.",
-    status: "Em desenvolvimento",
+      "Apresente seu negócio, os serviços que realiza, sua região e as formas de atendimento: presencial, em domicílio ou online.",
   },
   {
     number: "02",
-    title: "Gestão de Leads e Clientes",
+    title: "Solicitações registradas",
     description:
-      "Uma solução para registrar contatos, organizar oportunidades comerciais, acompanhar negociações e manter o histórico de relacionamento.",
-    status: "Em desenvolvimento",
+      "Quando um cliente encontra sua Vitrine e pede um orçamento, a solicitação fica organizada no painel para você acompanhar.",
   },
   {
     number: "03",
-    title: "Aplicações Web Personalizadas",
+    title: "Você combina o atendimento",
     description:
-      "Desenvolvimento de ferramentas digitais conforme as necessidades e os processos de cada negócio.",
-    status: "Sob consulta",
+      "Defina diretamente com o cliente o local, o dia, o horário e as condições do serviço. A plataforma registra a intermediação e ajuda você a acompanhar o processo.",
+  },
+  {
+    number: "04",
+    title: "Mais visão do negócio",
+    description:
+      "Organize clientes, agenda, orçamentos e movimentações financeiras para entender melhor seus recebimentos, custos e resultados.",
+  },
+];
+
+const plans = [
+  {
+    code: "FREE",
+    name: "Comece no seu ritmo",
+    price: "R$ 0",
+    period: "/ mês",
+    users: "1 usuário na equipe",
+    features: [
+      "Acesso inicial ao painel",
+      "Consulta das solicitações recebidas",
+      "Ideal para conhecer o ServiçoFácil",
+    ],
+    action: "Criar conta grátis",
+    featured: false,
+  },
+  {
+    code: "BASIC",
+    name: "Organize a rotina",
+    price: "R$ 49,70",
+    period: "/ mês",
+    users: "Até 3 usuários na equipe",
+    features: [
+      "Gerenciamento das solicitações",
+      "Filtros para localizar e acompanhar pedidos",
+      "Recursos do plano Free",
+    ],
+    action: "Conhecer o Basic",
+    featured: true,
+  },
+  {
+    code: "PROFESSIONAL",
+    name: "Acompanhe mais de perto",
+    price: "R$ 79,00",
+    period: "/ mês",
+    users: "Até 10 usuários na equipe",
+    features: [
+      "Exportação de solicitações em CSV",
+      "Gerenciamento e filtros de solicitações",
+      "Recursos dos planos anteriores",
+    ],
+    action: "Conhecer o Professional",
+    featured: false,
   },
 ];
 
@@ -38,144 +86,125 @@ export default function Solucoes() {
       <Header />
 
       <main>
-        <section className="hero">
+        <section className="hero solutions-provider-hero" id="para-prestadores">
           <div className="container hero-content">
-            <span className="eyebrow">Soluções digitais VALLEX</span>
-
-            <h1>Tecnologia para organizar e simplificar processos.</h1>
-
+            <span className="eyebrow">Soluções VALLEX para prestadores</span>
+            <h1>Seu serviço merece ser encontrado e seu negócio, bem acompanhado.</h1>
             <p>
-              Desenvolvemos propostas de soluções digitais para apoiar
-              atividades técnicas, atendimento ao cliente e processos
-              comerciais de pessoas e empresas.
+              A VALLEX conecta clientes a profissionais de diferentes áreas.
+              Com o ServiçoFácil, você divulga seu trabalho, acompanha os
+              contatos recebidos e organiza a rotina do seu negócio em um só lugar.
             </p>
-
             <div className="hero-actions">
-              <Link href="/contato" className="button button-primary">
-                Fale sobre seu projeto
+              <Link href="/sistema/login" className="button button-primary">
+                Quero me cadastrar
               </Link>
-
-              <Link href="/servicos" className="button button-outline">
-                Conhecer serviços
-              </Link>
-
               <Link href="#planos" className="button button-outline">
-                Ver planos ServiçoFácil
+                Comparar planos
               </Link>
             </div>
+            <p className="solutions-hero-note">
+              Para profissionais autônomos e negócios locais: de barbearias e
+              assistência técnica a consultorias e serviços especializados.
+            </p>
           </div>
         </section>
 
-        <section className="section">
+        <section className="section solutions-difference">
           <div className="container">
             <div className="section-heading">
-              <span className="eyebrow">Nossas soluções</span>
-              <h2>Ferramentas para diferentes necessidades</h2>
+              <span className="eyebrow">O que torna a VALLEX diferente</span>
+              <h2>Uma ponte entre a descoberta e a gestão do atendimento</h2>
               <p>
-                Conheça as iniciativas digitais da VALLEX. As soluções
-                identificadas como em desenvolvimento ainda estão em fase
-                de construção e validação.
+                A Vitrine ajuda o cliente a conhecer seu trabalho. Quando ele
+                envia uma solicitação, você recebe o contato e decide como
+                conduzir o atendimento — no escritório, no estabelecimento,
+                em domicílio ou online.
               </p>
             </div>
 
-            <div className="service-grid">
-              {solutions.map((solution) => (
-                <article className="service-card" key={solution.number}>
-                  <span className="service-number">{solution.number}</span>
-
-                  <h3>{solution.title}</h3>
-
-                  <p>{solution.description}</p>
-
-                  <p>
-                    <strong>Status:</strong> {solution.status}
-                  </p>
+            <div className="service-grid solutions-benefit-grid">
+              {providerBenefits.map((benefit) => (
+                <article className="service-card about-capability-card" key={benefit.number}>
+                  <span className="service-number">{benefit.number}</span>
+                  <h3>{benefit.title}</h3>
+                  <p>{benefit.description}</p>
                 </article>
               ))}
             </div>
           </div>
         </section>
 
+        <section className="section solutions-flow">
+          <div className="container solutions-flow-content">
+            <div>
+              <span className="eyebrow">Como funciona</span>
+              <h2>Você mantém o controle de cada atendimento</h2>
+              <p>
+                A VALLEX registra a conexão. O prestador e o cliente combinam
+                os detalhes do serviço diretamente, com liberdade para definir
+                a melhor forma de trabalhar.
+              </p>
+            </div>
+            <ol className="solutions-steps">
+              <li><span>1</span><div><strong>Monte sua Vitrine</strong><p>Informe seus serviços, sua região e como atende.</p></div></li>
+              <li><span>2</span><div><strong>Seja encontrado</strong><p>O cliente pesquisa por serviço e localidade e conhece sua apresentação.</p></div></li>
+              <li><span>3</span><div><strong>Receba e combine</strong><p>A solicitação fica registrada; você conversa com o cliente e agenda o atendimento.</p></div></li>
+              <li><span>4</span><div><strong>Acompanhe os números</strong><p>Organize recebimentos e gastos para enxergar melhor os resultados do negócio.</p></div></li>
+            </ol>
+          </div>
+        </section>
+
         <section className="section" id="planos">
           <div className="container">
             <div className="section-heading">
-              <span className="eyebrow">Planos ServiçoFácil</span>
-              <h2>Organize seus atendimentos no ritmo da sua empresa</h2>
+              <span className="eyebrow">Planos do ServiçoFácil</span>
+              <h2>Escolha o nível de gestão que faz sentido para você</h2>
               <p>
-                Comece gratuitamente e evolua quando precisar de mais pessoas
-                na equipe ou de ferramentas para acompanhar o fluxo de
-                atendimento. Todos os planos incluem acesso ao painel; os
-                recursos de análise aumentam conforme o plano.
+                Todos começam com acesso ao painel. Os planos pagos ampliam a
+                gestão das solicitações; o Professional também permite exportá-las
+                em CSV. Você pode começar no Free e avançar quando precisar.
               </p>
             </div>
 
             <div className="service-grid plans-grid">
-              <article className="service-card plan-card">
-                <span className="service-number">FREE</span>
-                <h3>R$ 0,00 <small>/ mês</small></h3>
-                <p>Para conhecer a plataforma e começar a organizar a rotina.</p>
-                <ul>
-                  <li>1 usuário na equipe</li>
-                  <li>Painel do fluxo em modo de visualização</li>
-                  <li>Acesso inicial aos recursos da plataforma</li>
-                </ul>
-                <Link href="/sistema/login" className="button button-outline">
-                  Criar conta grátis
-                </Link>
-              </article>
-
-              <article className="service-card plan-card">
-                <span className="service-number">BASIC</span>
-                <h3>R$ 49,70 <small>/ mês</small></h3>
-                <p>Para pequenos negócios que precisam acompanhar melhor os atendimentos.</p>
-                <ul>
-                  <li>Até 3 usuários na equipe</li>
-                  <li>Painel do fluxo com filtros</li>
-                  <li>Recursos do plano Free</li>
-                </ul>
-                <Link href="/sistema/login" className="button button-primary">
-                  Acessar para contratar
-                </Link>
-              </article>
-
-              <article className="service-card plan-card">
-                <span className="service-number">PROFESSIONAL</span>
-                <h3>R$ 79,00 <small>/ mês</small></h3>
-                <p>Para equipes em crescimento que precisam analisar e compartilhar resultados.</p>
-                <ul>
-                  <li>Até 10 usuários na equipe</li>
-                  <li>Painel com filtros e exportação para planilha</li>
-                  <li>Recursos dos planos anteriores</li>
-                </ul>
-                <Link href="/sistema/login" className="button button-primary">
-                  Acessar para contratar
-                </Link>
-              </article>
+              {plans.map((plan) => (
+                <article className={`service-card plan-card${plan.featured ? " plan-card-featured" : ""}`} key={plan.code}>
+                  <span className="service-number">{plan.code}</span>
+                  <h3 className="plan-name">{plan.name}</h3>
+                  <p className="plan-price">{plan.price}<small> {plan.period}</small></p>
+                  <p className="plan-users">{plan.users}</p>
+                  <ul className="plan-feature-list">
+                    {plan.features.map((feature) => <li key={feature}>{feature}</li>)}
+                  </ul>
+                  <Link href="/sistema/login" className={`button ${plan.featured ? "button-primary" : "button-outline"}`}>
+                    {plan.action}
+                  </Link>
+                </article>
+              ))}
             </div>
-
             <p className="plans-note">
-              A contratação dos planos Basic e Professional é feita dentro da
-              plataforma, após entrar ou criar uma conta. O plano Enterprise
-              não está disponível para contratação neste momento.
+              Os valores e recursos exibidos refletem os planos atuais. Basic e
+              Professional são contratados dentro da plataforma, após entrar ou
+              criar uma conta. O plano Enterprise não está disponível para
+              contratação neste momento.
             </p>
           </div>
         </section>
 
-        <section className="section">
-          <div className="container">
-            <div className="section-heading">
-              <span className="eyebrow">Vamos conversar?</span>
-              <h2>Tem uma necessidade específica?</h2>
+        <section className="section solutions-final-cta">
+          <div className="container solutions-final-card">
+            <div>
+              <span className="eyebrow">Seu próximo passo</span>
+              <h2>Comece apresentando o seu trabalho.</h2>
               <p>
-                Entre em contato para apresentar sua demanda e avaliar
-                possibilidades de atendimento ou desenvolvimento de uma
-                solução digital.
+                Crie seu acesso, configure os serviços e deixe sua Vitrine pronta
+                para ser encontrada por clientes.
               </p>
-
-              <Link href="/contato" className="button button-primary">
-                Solicitar atendimento
-              </Link>
             </div>
+            <Link href="/sistema/login" className="button button-primary">
+              Quero divulgar meus serviços
+            </Link>
           </div>
         </section>
       </main>

@@ -14,6 +14,8 @@ export type PublicProvider = {
   display_name: string;
   description: string | null;
   address: string | null;
+  service_area: string | null;
+  service_modes: string[];
   logo_url: string | null;
   is_published: boolean;
   is_preview: boolean;
@@ -34,7 +36,7 @@ export async function loadPublicProviders(): Promise<PublicProvider[]> {
 
   const { data: profiles, error: profilesError } = await admin
     .from("organization_public_profiles")
-    .select("id,organization_id,slug,display_name,description,address,logo_url,is_published")
+    .select("id,organization_id,slug,display_name,description,address,service_area,service_modes,logo_url,is_published")
     .eq("is_published", true)
     .order("display_name", { ascending: true });
 

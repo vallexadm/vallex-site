@@ -6,33 +6,16 @@ import { supabase } from "@/lib/supabase/client";
 import SolicitacaoForm from "@/app/prestador/[slug]/SolicitacaoForm";
 import type { PublicProvider } from "@/lib/public-providers";
 
-const specialties = [
-  {
-    title: "Informática",
-    description: "Suporte e manutenção para residências, empresas e comércios.",
-    icon: "01",
-  },
-  {
-    title: "Elétrica",
-    description: "Instalações e reparos em diferentes ambientes.",
-    icon: "02",
-  },
-  {
-    title: "Redes e conectividade",
-    description: "Wi-Fi e conectividade para casa, empresa ou comércio.",
-    icon: "03",
-  },
-  {
-    title: "Soluções digitais",
-    description: "Sites e aplicações para profissionais e negócios.",
-    icon: "04",
-  },
-];
-
 type DirectoryResponse = {
   ok: boolean;
   message?: string;
   prestadores?: PublicProvider[];
+};
+
+const serviceModeLabels: Record<string, string> = {
+  presencial: "Presencial",
+  domicilio: "Em domicílio",
+  online: "Online",
 };
 
 function formatPrice(price: number | string | null) {
@@ -54,9 +37,23 @@ function normalizeSearch(value: string) {
     .toLocaleLowerCase("pt-BR");
 }
 
-export default function Services({ initialProviders = [] }: { initialProviders?: PublicProvider[] }) {
+export default function Services({
+  initialProviders = [],
+  isHome = false,
+}: {
+  initialProviders?: PublicProvider[];
+  isHome?: boolean;
+}) {
   const [providers, setProviders] = useState<PublicProvider[]>(initialProviders);
   const [search, setSearch] = useState("");
+  const [selectedService, setSelectedService] = useState("");
+  const [selectedMode, setSelectedMode] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState(() => {
+    const goiania = initialProviders.find((provider) =>
+      normalizeSearch(provider.service_area || provider.address || "").includes("goiania")
+    );
+    return goiania ? normalizeSearch(goiania.service_area || goiania.address || "") : "";
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [previewMode, setPreviewMode] = useState(false);
@@ -79,7 +76,7 @@ export default function Services({ initialProviders = [] }: { initialProviders?:
           const token = data.session?.access_token;
 
           if (!token) {
-          window.location.replace("/sistema/login?next=/servicos%3Fprevisualizar%3D1");
+          window.location.replace("/sistema/login?next=/catalogo%3Fprevisualizar%3D1");
             return;
           }
 
@@ -116,15 +113,71 @@ export default function Services({ initialProviders = [] }: { initialProviders?:
     };
   }, []);
 
+  const serviceOptions = useMemo(() => {
+    const services = new Map<string, string>();
+    providers.forEach((provider) => {
+      (provider.services ?? []).forEach((service) => {
+        const key = normalizeSearch(service.name.trim());
+        if (key && !services.has(key)) services.set(key, service.name.trim());
+      });
+    });
+    return [...services.entries()]
+      .map(([key, label]) => ({ key, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  }, [providers]);
+
+  const locationOptions = useMemo(() => {
+    const locations = new Map<string, string>();
+    providers.forEach((provider) => {
+      const location = (provider.service_area || provider.address)?.trim();
+      const key = location ? normalizeSearch(location) : "";
+      if (key && location && !locations.has(key)) locations.set(key, location);
+    });
+    return [...locations.entries()]
+      .map(([key, label]) => ({ key, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  }, [providers]);
+
+  const modeOptions = useMemo(() => {
+    const modes = new Set(providers.flatMap((provider) => provider.service_modes ?? []));
+    return [...modes]
+      .filter((mode) => serviceModeLabels[mode])
+      .sort((a, b) => serviceModeLabels[a].localeCompare(serviceModeLabels[b], "pt-BR"));
+  }, [providers]);
+
+  const goianiaLocationKey = locationOptions.find(({ label }) =>
+    normalizeSearch(label).includes("goiania")
+  )?.key;
+
   const filteredProviders = useMemo(() => {
     const term = normalizeSearch(search.trim());
-    if (!term) return providers;
-
     return providers.filter((provider) => {
+      const servesOnline = (provider.service_modes ?? []).includes("online");
+      const matchesLocation = normalizeSearch(provider.service_area || provider.address || "") === selectedLocation;
+      if (selectedLocation && !matchesLocation && !servesOnline) {
+        return false;
+      }
+
+      if (
+        selectedService &&
+        !(provider.services ?? []).some(
+          (service) => normalizeSearch(service.name.trim()) === selectedService
+        )
+      ) {
+        return false;
+      }
+
+      if (selectedMode && !(provider.service_modes ?? []).includes(selectedMode)) {
+        return false;
+      }
+
+      if (!term) return true;
       const searchable = [
         provider.display_name,
         provider.description,
         provider.address,
+        provider.service_area,
+        ...(provider.service_modes ?? []).map((mode) => serviceModeLabels[mode] ?? mode),
         ...(provider.services ?? []).flatMap((service) => [service.name, service.description]),
       ]
         .filter(Boolean)
@@ -132,19 +185,32 @@ export default function Services({ initialProviders = [] }: { initialProviders?:
 
       return normalizeSearch(searchable).includes(term);
     });
-  }, [providers, search]);
+  }, [providers, search, selectedService, selectedMode, selectedLocation]);
+
+  const hasActiveFilters = Boolean(search || selectedService || selectedMode || selectedLocation);
+
+  function clearFilters() {
+    setSearch("");
+    setSelectedService("");
+    setSelectedMode("");
+    setSelectedLocation("");
+  }
 
   return (
     <>
-      <section className="provider-directory section" aria-labelledby="providers-heading">
+      <section id="prestadores" className={`provider-directory section${isHome ? " provider-directory-home" : ""}`} aria-labelledby="providers-heading">
         <div className="container">
           <div className="section-heading">
-            <span className="eyebrow">Serviços VALLEX | ServiçoFácil</span>
-            <h1 id="providers-heading">Encontre o serviço ideal</h1>
+            <span className="eyebrow">Prestadores | ServiçoFácil</span>
+            {isHome ? (
+              <h2 id="providers-heading">Prestadores perto de você</h2>
+            ) : (
+              <h1 id="providers-heading">Encontre o serviço ideal</h1>
+            )}
             <p>
-              Soluções para residências, empresas e comércios. Pesquise os
-              serviços disponíveis e solicite um orçamento pela Vitrine do
-              prestador.
+              Pesquise por nome ou serviço e refine por especialidade e
+              localidade. Começamos por Goiânia e ampliamos a busca conforme
+              novos prestadores chegam à plataforma.
             </p>
           </div>
 
@@ -155,17 +221,89 @@ export default function Services({ initialProviders = [] }: { initialProviders?:
             </div>
           )}
 
-          <label className="directory-search-label" htmlFor="provider-search">
-            Buscar por serviço, prestador ou localização
-          </label>
-          <input
-            id="provider-search"
-            className="directory-search"
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Ex.: manutenção de computadores"
-          />
+          <div className="directory-filters" role="search" aria-label="Buscar prestadores">
+            <div className="directory-filter directory-filter-search">
+              <label className="directory-search-label" htmlFor="provider-search">
+                Buscar prestador ou serviço
+              </label>
+              <input
+                id="provider-search"
+                className="directory-search"
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Ex.: advogada, barbearia, geladeira"
+              />
+            </div>
+
+            <div className="directory-filter">
+              <label className="directory-search-label" htmlFor="provider-service">
+                Tipo de serviço
+              </label>
+              <select
+                id="provider-service"
+                className="directory-select"
+                value={selectedService}
+                onChange={(event) => setSelectedService(event.target.value)}
+              >
+                <option value="">Todos os serviços</option>
+                {serviceOptions.map((option) => (
+                  <option value={option.key} key={option.key}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="directory-filter">
+              <label className="directory-search-label" htmlFor="provider-location">
+                Cidade ou região
+              </label>
+              <select
+                id="provider-location"
+                className="directory-select"
+                value={selectedLocation}
+                onChange={(event) => setSelectedLocation(event.target.value)}
+              >
+                <option value="">Todas as localidades</option>
+                {locationOptions.map((option) => (
+                  <option value={option.key} key={option.key}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="directory-filter">
+              <label className="directory-search-label" htmlFor="provider-mode">
+                Forma de atendimento
+              </label>
+              <select
+                id="provider-mode"
+                className="directory-select"
+                value={selectedMode}
+                onChange={(event) => setSelectedMode(event.target.value)}
+              >
+                <option value="">Todas as formas</option>
+                {modeOptions.map((mode) => (
+                  <option value={mode} key={mode}>{serviceModeLabels[mode]}</option>
+                ))}
+              </select>
+            </div>
+
+            {hasActiveFilters && (
+              <button type="button" className="directory-clear" onClick={clearFilters}>
+                Limpar filtros
+              </button>
+            )}
+          </div>
+
+          <p className="directory-filter-note">
+            Os prestadores informam as regiões e formas de atendimento.
+            {goianiaLocationKey ? " A busca começa por Goiânia; prestadores online também podem aparecer. Selecione outra localidade ou limpe os filtros para ver todos." : " Goiânia é o ponto de partida; novas cidades poderão ser incluídas pelos prestadores."}
+          </p>
+
+          {!loading && !error && (
+            <p className="directory-result-count" aria-live="polite">
+              {filteredProviders.length} {filteredProviders.length === 1 ? "prestador encontrado" : "prestadores encontrados"}
+            </p>
+          )}
 
           {loading ? (
             <p className="directory-feedback">Carregando prestadores...</p>
@@ -176,15 +314,20 @@ export default function Services({ initialProviders = [] }: { initialProviders?:
           ) : filteredProviders.length === 0 ? (
             <div className="directory-empty">
               <h3>
-                {search
+                {hasActiveFilters
                   ? "Nenhum prestador encontrado"
                   : "Ainda não há prestadores publicados"}
               </h3>
               <p>
-                {search
-                  ? "Tente buscar por outro serviço ou nome."
+                {hasActiveFilters
+                  ? "Tente mudar a busca ou os filtros para encontrar outros prestadores."
                   : "Quando os prestadores publicarem suas Vitrines, eles aparecerão aqui."}
               </p>
+              {hasActiveFilters && (
+                <button type="button" className="button button-outline directory-empty-button" onClick={clearFilters}>
+                  Ver todos os prestadores
+                </button>
+              )}
             </div>
           ) : (
             <div className="provider-grid">
@@ -201,13 +344,21 @@ export default function Services({ initialProviders = [] }: { initialProviders?:
                     )}
                     <div>
                       <h3>{provider.display_name}</h3>
-                      {provider.address && <p className="provider-location">{provider.address}</p>}
+                      {(provider.service_area || provider.address) && <p className="provider-location">{provider.service_area || provider.address}</p>}
                     </div>
                     {provider.is_preview && <span className="provider-preview-badge">Prévia privada</span>}
                   </div>
 
                   {provider.description && (
                     <p className="provider-description">{provider.description}</p>
+                  )}
+
+                  {(provider.service_modes ?? []).length > 0 && (
+                    <ul className="provider-mode-list" aria-label="Formas de atendimento">
+                      {(provider.service_modes ?? []).map((mode) => (
+                        <li key={mode}>{serviceModeLabels[mode] ?? mode}</li>
+                      ))}
+                    </ul>
                   )}
 
                   <div className="provider-services">
@@ -262,28 +413,25 @@ export default function Services({ initialProviders = [] }: { initialProviders?:
         </div>
       </section>
 
-      <section className="services section specialty-section">
-        <div className="container">
-          <div className="section-heading">
-            <span className="eyebrow">Áreas de atendimento</span>
-            <h2>Serviços para diferentes necessidades</h2>
-            <p>
-              Conheça algumas das áreas atendidas pelos prestadores da
-              plataforma.
-            </p>
+      {isHome && (
+        <section className="provider-join-section" aria-labelledby="provider-join-heading">
+          <div className="container">
+            <div className="provider-join-card">
+              <div>
+                <span className="eyebrow">Para quem presta serviços</span>
+                <h2 id="provider-join-heading">Faça seu trabalho chegar a mais clientes</h2>
+                <p>
+                  Apresente seus serviços na VALLEX, receba pedidos de orçamento e organize seus atendimentos e finanças em um só lugar.
+                </p>
+              </div>
+              <Link href="/solucoes#para-prestadores" className="button button-primary">
+                Quero divulgar meus serviços
+              </Link>
+            </div>
           </div>
+        </section>
+      )}
 
-          <div className="service-grid">
-            {specialties.map((specialty) => (
-              <article className="service-card" key={specialty.icon}>
-                <span className="service-number">{specialty.icon}</span>
-                <h3>{specialty.title}</h3>
-                <p>{specialty.description}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
     </>
   );
 }

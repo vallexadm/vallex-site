@@ -102,6 +102,10 @@ export async function GET(request: Request) {
           canManageSettings: true,
           canManageOperationalData: true,
           canViewOperationalData: true,
+          canViewClientDirectory: true,
+          canCreateQuotes: true,
+          canApproveQuotes: true,
+          canViewAgenda: true,
           readOnly: false,
         },
       });
@@ -177,7 +181,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // 6. O papel member é o Colaborador de leitura.
+    // 6. Membros têm acesso operacional limitado; as APIs aplicam cada permissão.
     if (membership.role !== "member") {
       return NextResponse.json(
         {
@@ -197,9 +201,13 @@ export async function GET(request: Request) {
         canManageOrganization: false,
         canManageTeam: false,
         canManageSettings: false,
-        canManageOperationalData: false,
+        canManageOperationalData: true,
         canViewOperationalData: true,
-        readOnly: true,
+        canViewClientDirectory: false,
+        canCreateQuotes: true,
+        canApproveQuotes: false,
+        canViewAgenda: true,
+        readOnly: false,
       },
     });
   } catch (error) {

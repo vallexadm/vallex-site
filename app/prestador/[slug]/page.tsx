@@ -12,6 +12,8 @@ type PublicProfile = {
   whatsapp: string | null;
   email: string | null;
   address: string | null;
+  service_area: string | null;
+  service_modes: string[];
   logo_url: string | null;
   is_published: boolean;
 };
@@ -28,6 +30,12 @@ type PublicService = {
 type PublicVitrine = {
   profile: PublicProfile;
   services: PublicService[];
+};
+
+const serviceModeLabels: Record<string, string> = {
+  presencial: "Presencial",
+  domicilio: "Em domicílio",
+  online: "Online",
 };
 
 async function carregarVitrine(
@@ -48,7 +56,7 @@ async function carregarVitrine(
   const { data: profile, error: profileError } = await admin
     .from("organization_public_profiles")
     .select(
-      "id,slug,display_name,description,phone,whatsapp,email,address,logo_url,is_published,organization_id"
+      "id,slug,display_name,description,phone,whatsapp,email,address,service_area,service_modes,logo_url,is_published,organization_id"
     )
     .eq("slug", normalizedSlug)
     .eq("is_published", true)
@@ -231,6 +239,32 @@ Gostaria de saber mais sobre seus valores e condições de atendimento local, po
                 <p className="mt-1 text-sm text-slate-700">
                   {profile.address}
                 </p>
+              </div>
+            )}
+
+            {profile.service_area && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Região atendida
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  {profile.service_area}
+                </p>
+              </div>
+            )}
+
+            {(profile.service_modes ?? []).length > 0 && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Modalidades
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(profile.service_modes ?? []).map((mode) => (
+                    <span key={mode} className="rounded-full bg-purple-50 px-3 py-1 text-xs font-semibold text-purple-700">
+                      {serviceModeLabels[mode] ?? mode}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </div>

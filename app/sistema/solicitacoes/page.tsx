@@ -581,9 +581,9 @@ async function criarOrcamento(id: string) {
 
           <Link
             href="/sistema"
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium hover:bg-gray-100"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold transition hover:border-violet-400 hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2"
           >
-            Voltar ao painel
+            <span aria-hidden="true">←</span> Voltar ao painel
           </Link>
         </div>
 
