@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+function createSupabaseAdmin() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
 
-if (!supabaseUrl || !supabaseSecretKey || !supabaseAnonKey) {
-  throw new Error("As variáveis do Supabase não foram configuradas.");
+  if (!supabaseUrl || !supabaseSecretKey) {
+    throw new Error("As variáveis do Supabase não foram configuradas.");
+  }
+
+  return createClient(supabaseUrl, supabaseSecretKey);
 }
-
-const supabaseAdmin = createClient(supabaseUrl, supabaseSecretKey);
 
 function slugifyOrganizationName(value: string) {
   return value
@@ -39,21 +40,21 @@ export async function GET(request: Request) {
 
     // 2. Valida a identidade usando o Supabase Auth.
     const authUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const authAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const authAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!authUrl || !authAnonKey) {
-  console.error("Configuração de autenticação ausente.");
+    if (!authUrl || !authAnonKey) {
+      console.error("Configuração de autenticação ausente.");
 
-  return NextResponse.json(
-    {
-      ok: false,
-      message: "Configuração de autenticação incompleta.",
-    },
-    { status: 500 }
-  );
-}
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "Configuração de autenticação incompleta.",
+        },
+        { status: 500 }
+      );
+    }
 
-const authClient = createClient(authUrl, authAnonKey);
+    const authClient = createClient(authUrl, authAnonKey);
 
     const { data: authData, error: authError } =
       await authClient.auth.getUser(token);
@@ -66,6 +67,7 @@ const authClient = createClient(authUrl, authAnonKey);
     }
 
     const userId = authData.user.id;
+    const supabaseAdmin = createSupabaseAdmin();
 
     // 3. Procura uma organização da qual o usuário seja proprietário.
     const { data: ownedOrganization, error: ownerError } =
@@ -100,6 +102,10 @@ const authClient = createClient(authUrl, authAnonKey);
           canManageSettings: true,
           canManageOperationalData: true,
           canViewOperationalData: true,
+          canViewClientDirectory: true,
+          canCreateQuotes: true,
+          canApproveQuotes: true,
+          canViewAgenda: true,
           readOnly: false,
         },
       });
@@ -175,7 +181,7 @@ const authClient = createClient(authUrl, authAnonKey);
       );
     }
 
-    // 6. O papel member é o Colaborador de leitura.
+    // 6. Membros têm acesso operacional limitado; as APIs aplicam cada permissão.
     if (membership.role !== "member") {
       return NextResponse.json(
         {
@@ -195,9 +201,13 @@ const authClient = createClient(authUrl, authAnonKey);
         canManageOrganization: false,
         canManageTeam: false,
         canManageSettings: false,
-        canManageOperationalData: false,
+        canManageOperationalData: true,
         canViewOperationalData: true,
-        readOnly: true,
+        canViewClientDirectory: false,
+        canCreateQuotes: true,
+        canApproveQuotes: false,
+        canViewAgenda: true,
+        readOnly: false,
       },
     });
   } catch (error) {
@@ -216,6 +226,7 @@ const authClient = createClient(authUrl, authAnonKey);
 export async function POST(request: Request) {
   try {
     const authUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     const authorization = request.headers.get("authorization");
     const token = authorization?.startsWith("Bearer ")
       ? authorization.slice("Bearer ".length).trim()
@@ -296,6 +307,7 @@ export async function POST(request: Request) {
       );
     }
 
+    const supabaseAdmin = createSupabaseAdmin();
     const { data: existingOrganization, error: existingError } =
       await supabaseAdmin
         .from("organizations")

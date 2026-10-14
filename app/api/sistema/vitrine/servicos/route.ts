@@ -210,6 +210,10 @@ function validarDisplayOrder(value: unknown) {
     return "A ordem de exibição deve ser um número inteiro maior ou igual a zero.";
   }
 
+  if (ordem > 999) {
+    return "A ordem de exibição deve ser no máximo 999.";
+  }
+
   return null;
 }
 

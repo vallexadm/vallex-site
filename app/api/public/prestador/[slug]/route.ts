@@ -49,7 +49,7 @@ export async function GET(
     await supabaseAdmin
       .from("organization_public_profiles")
       .select(
-        "id,organization_id,slug,display_name,description,phone,whatsapp,email,address,logo_url,is_published"
+        "id,organization_id,slug,display_name,description,phone,whatsapp,email,address,service_area,service_modes,logo_url,is_published"
       )
       .eq("slug", normalizedSlug)
       .eq("is_published", true)
@@ -107,6 +107,8 @@ export async function GET(
       whatsapp: profile.whatsapp,
       email: profile.email,
       address: profile.address,
+      service_area: profile.service_area,
+      service_modes: profile.service_modes,
       logo_url: profile.logo_url,
       is_published: profile.is_published,
     },

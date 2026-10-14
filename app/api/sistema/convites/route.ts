@@ -35,14 +35,22 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null);
     const email =
       typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+    const inviteeName = typeof body?.name === "string" ? body.name.trim() : "";
+    const contactPhone = typeof body?.phone === "string" ? body.phone.trim() : "";
+    const phoneDigits = contactPhone.replace(/\D/g, "");
 
     if (
       !email ||
       email.length > 320 ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      inviteeName.length < 2 ||
+      inviteeName.length > 120 ||
+      contactPhone.length > 40 ||
+      phoneDigits.length < 8 ||
+      phoneDigits.length > 15
     ) {
       return NextResponse.json(
-        { ok: false, message: "Informe um e-mail válido." },
+        { ok: false, message: "Informe e-mail, nome e telefone de contato válidos." },
         { status: 400 }
       );
     }
@@ -179,13 +187,42 @@ export async function POST(request: Request) {
       );
     }
 
+    // Store the invitee's contact details on the organization-scoped invitation.
+    // The accepted invitation remains as the member's profile for this organization.
+    const { data: savedInvitation, error: profileError } = await supabaseAdmin
+      .from("organization_invitations")
+      .update({ invitee_name: inviteeName, contact_phone: contactPhone })
+      .eq("id", invitation.invitation_id)
+      .eq("organization_id", organization.id)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle();
+
+    if (profileError || !savedInvitation) {
+      console.error("Erro ao salvar contato do convite:", profileError);
+      if (invitation.invitation_id) {
+        await supabaseAdmin
+          .from("organization_invitations")
+          .update({ status: "revoked", revoked_at: new Date().toISOString() })
+          .eq("id", invitation.invitation_id)
+          .eq("organization_id", organization.id)
+          .eq("status", "pending");
+      }
+      return NextResponse.json(
+        { ok: false, message: "Não foi possível salvar nome e telefone. Aplique a atualização SQL de convites no Supabase e tente novamente." },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
       {
         ok: true,
-        message: "Convite criado. Compartilhe o token com o convidado.",
+        message: "Convite criado. Copie e encaminhe o link ao colaborador.",
         invitation: {
           id: invitation.invitation_id,
           email,
+          inviteeName,
+          contactPhone,
           expiresAt: invitation.expires_at,
           plan: invitation.plan_code,
           maxUsers: invitation.max_users,

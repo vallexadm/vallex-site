@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
+function createSupabaseAdmin() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
 
-if (!supabaseUrl || !supabaseSecretKey) {
-  throw new Error("As variáveis do Supabase não foram configuradas.");
+  if (!supabaseUrl || !supabaseSecretKey) {
+    throw new Error("As variáveis do Supabase não foram configuradas.");
+  }
+
+  return createClient(supabaseUrl, supabaseSecretKey);
 }
-
-const supabase = createClient(supabaseUrl, supabaseSecretKey);
 
 export async function POST(request: Request) {
   try {
@@ -51,6 +53,7 @@ export async function POST(request: Request) {
       );
     }
 
+    const supabase = createSupabaseAdmin();
     const { error } = await supabase.from("contatos").insert({
       nome,
       telefone,
@@ -112,11 +115,19 @@ export async function GET(request: Request) {
     const adminUserId = process.env.SUPABASE_ADMIN_USER_ID;
 
     if (!supabaseUrl || !supabaseAnonKey || !adminUserId) {
-      console.error("Configuração de autenticação ou administrador ausente.");
+      const missing = [
+        ["NEXT_PUBLIC_SUPABASE_URL", supabaseUrl],
+        ["NEXT_PUBLIC_SUPABASE_ANON_KEY", supabaseAnonKey],
+        ["SUPABASE_ADMIN_USER_ID", adminUserId],
+      ].filter(([, value]) => !value).map(([name]) => name);
+      console.error("Configuração administrativa ausente:", missing.join(", "));
 
       return NextResponse.json(
-        { ok: false, message: "Configuração do sistema incompleta." },
-        { status: 500 }
+        {
+          ok: false,
+          message: `Configuração administrativa incompleta. Verifique no servidor: ${missing.join(", ")}.`,
+        },
+        { status: 503, headers: { "Cache-Control": "private, no-store, max-age=0" } }
       );
     }
 
@@ -141,6 +152,7 @@ export async function GET(request: Request) {
     }
 
     // Consulta executada no servidor usando a chave secreta.
+    const supabase = createSupabaseAdmin();
     const { data: contatos, error: contatosError } = await supabase
       .from("contatos")
       .select(
@@ -157,10 +169,13 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json({
-      ok: true,
-      contatos: contatos ?? [],
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        contatos: contatos ?? [],
+      },
+      { headers: { "Cache-Control": "private, no-store, max-age=0" } }
+    );
   } catch (error) {
     console.error("Erro na API GET de contatos:", error);
 
@@ -248,6 +263,7 @@ export async function PATCH(request: Request) {
     }
 
     // 6. Atualiza o registro no servidor
+    const supabase = createSupabaseAdmin();
     const { data: contato, error: updateError } = await supabase
       .from("contatos")
       .update({ status })

@@ -59,7 +59,7 @@ export default function ContactForm() {
   }
 
   return (
-    <section className="section">
+    <section id="formulario-orcamento" className="section">
       <div className="container">
         <div className="section-heading">
           <span className="eyebrow">Solicitação online</span>
@@ -165,6 +165,9 @@ export default function ContactForm() {
               <option value="Sugestão ou ideia para futuras soluções">
                 Sugestão ou ideia para futuras soluções
               </option>
+              <option value="Ajuda ou reclamação sobre serviço, prestador ou plataforma">
+                Ajuda ou reclamação sobre serviço, prestador ou plataforma
+              </option>
               <option value="Outro">Outro</option>
             </select>
           </div>
@@ -242,7 +245,11 @@ export default function ContactForm() {
           <p className="text-sm leading-6 text-slate-600">
             Os dados informados serão utilizados pela VALLEX para analisar e
             responder à sua solicitação. Evite inserir senhas ou informações
-            pessoais desnecessárias.
+            pessoais desnecessárias. Consulte a{" "}
+            <a className="font-medium text-violet-700 underline" href="/privacidade">
+              Política de Privacidade
+            </a>
+            .
           </p>
 
           <button

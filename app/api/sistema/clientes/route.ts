@@ -176,6 +176,13 @@ export async function GET(request: NextRequest) {
       role,
     } = context;
 
+    if (role !== "owner") {
+      return errorResponse(
+        "O cadastro de clientes está disponível somente para o proprietário.",
+        403
+      );
+    }
+
     const { data: customers, error } = await supabaseAdmin
       .from("customers")
       .select(

@@ -26,7 +26,7 @@
 
 .heading h1 {
   color: #241333;
-  font-size: clamp(32px, 5vw, 46px);
+  font-size: clamp(30px, 4.5vw, 40px);
   line-height: 1.15;
   margin-bottom: 16px;
 }
@@ -38,7 +38,7 @@
 }
 
 .form {
-  background: #ffffff;
+  background: #FCFAFD;
   padding: 36px;
   border: 1px solid #eee6f4;
   border-radius: 16px;
@@ -66,7 +66,7 @@
   border: 1px solid #ded5e7;
   border-radius: 8px;
   padding: 13px 14px;
-  background: #ffffff;
+  background: #FCFAFD;
   color: #241333;
   font: inherit;
   font-size: 14px;
@@ -199,7 +199,7 @@
 
 .successCard {
   width: min(100%, 600px);
-  background: #ffffff;
+  background: #FCFAFD;
   border: 1px solid #eee6f4;
   border-radius: 16px;
   padding: 48px 36px;

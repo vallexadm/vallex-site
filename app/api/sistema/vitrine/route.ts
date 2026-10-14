@@ -67,6 +67,11 @@ function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+function isValidBrazilianPhone(value: string): boolean {
+  const digits = value.replace(/\D/g, "");
+  return /^[\d\s()+-]+$/.test(value) && (digits.length === 10 || digits.length === 11);
+}
+
 function validateLength(
   value: string | null,
   fieldName: string,
@@ -197,6 +202,14 @@ function validateProfilePayload(body: Record<string, unknown>) {
   const whatsapp = normalizeOptionalString(body.whatsapp);
   const email = normalizeOptionalString(body.email);
   const address = normalizeOptionalString(body.address);
+  const serviceArea = normalizeOptionalString(body.service_area);
+  const allowedServiceModes = ["presencial", "domicilio", "online"] as const;
+  const serviceModesValue = body.service_modes;
+  const serviceModes = Array.isArray(serviceModesValue)
+    ? [...new Set(serviceModesValue.filter((mode): mode is (typeof allowedServiceModes)[number] =>
+        typeof mode === "string" && allowedServiceModes.includes(mode as (typeof allowedServiceModes)[number])
+      ))]
+    : [];
   const logoUrl = normalizeOptionalString(body.logo_url);
 
   let slug = validateSlug(body.slug);
@@ -223,18 +236,31 @@ function validateProfilePayload(body: Record<string, unknown>) {
     };
   }
 
-  if (email && (email.length > 320 || !isValidEmail(email))) {
+  if (email && (email.length > 254 || !isValidEmail(email))) {
     return {
       error: "Informe um e-mail válido.",
     };
   }
 
+  if (phone && !isValidBrazilianPhone(phone)) {
+    return {
+      error: "Informe um telefone válido com DDD, usando 10 ou 11 números.",
+    };
+  }
+
+  if (!whatsapp || !isValidBrazilianPhone(whatsapp)) {
+    return {
+      error: "Informe um WhatsApp válido com DDD, usando 10 ou 11 números.",
+    };
+  }
+
   const lengthChecks = [
     validateLength(description, "A descrição", 2000),
-    validateLength(phone, "O telefone", 40),
-    validateLength(whatsapp, "O WhatsApp", 40),
-    validateLength(email, "O e-mail", 320),
+    validateLength(phone, "O telefone", 15),
+    validateLength(whatsapp, "O WhatsApp", 15),
+    validateLength(email, "O e-mail", 254),
     validateLength(address, "O endereço", 500),
+    validateLength(serviceArea, "A cidade ou região de atendimento", 300),
     validateLength(logoUrl, "A URL do logotipo", 2048),
   ];
 
@@ -257,6 +283,8 @@ if (lengthError) {
       whatsapp,
       email,
       address,
+      service_area: serviceArea,
+      service_modes: serviceModes,
       logo_url: logoUrl,
     },
   };
@@ -289,6 +317,8 @@ export async function GET(request: Request) {
         whatsapp,
         email,
         address,
+        service_area,
+        service_modes,
         logo_url,
         is_published,
         publication_authorized_at,
@@ -398,6 +428,8 @@ export async function POST(request: Request) {
     whatsapp,
     email,
     address,
+    service_area,
+    service_modes,
     logo_url,
     is_published,
     publication_authorized_at,
@@ -491,6 +523,8 @@ export async function PATCH(request: Request) {
           whatsapp,
           email,
           address,
+          service_area,
+          service_modes,
           logo_url,
           is_published,
           publication_authorized_at,
@@ -530,6 +564,21 @@ export async function PATCH(request: Request) {
 );
   }
 
+  if (action === "publish") {
+    if (!validation.data.service_area) {
+      return errorResponse(
+        "Informe a cidade ou região atendida antes de publicar sua Vitrine.",
+        400
+      );
+    }
+    if (validation.data.service_modes.length === 0) {
+      return errorResponse(
+        "Selecione pelo menos uma forma de atendimento antes de publicar sua Vitrine.",
+        400
+      );
+    }
+  }
+
   const profileData = {
     ...validation.data,
     updated_at: new Date().toISOString(),
@@ -555,6 +604,8 @@ export async function PATCH(request: Request) {
           whatsapp,
           email,
           address,
+          service_area,
+          service_modes,
           logo_url,
           is_published,
           publication_authorized_at,
@@ -628,6 +679,8 @@ export async function PATCH(request: Request) {
             whatsapp,
             email,
             address,
+            service_area,
+            service_modes,
             logo_url,
             is_published,
             publication_authorized_at,
@@ -684,6 +737,8 @@ export async function PATCH(request: Request) {
             whatsapp,
             email,
             address,
+            service_area,
+            service_modes,
             logo_url,
             is_published,
             publication_authorized_at,
@@ -797,6 +852,8 @@ export async function PATCH(request: Request) {
             whatsapp,
             email,
             address,
+            service_area,
+            service_modes,
             logo_url,
             is_published,
             publication_authorized_at,
@@ -853,6 +910,8 @@ export async function PATCH(request: Request) {
             whatsapp,
             email,
             address,
+            service_area,
+            service_modes,
             logo_url,
             is_published,
             publication_authorized_at,

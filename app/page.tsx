@@ -15,7 +15,7 @@ export default async function Home() {
 
       <main>
         <Hero />
-        <Services initialProviders={providers} />
+        <Services initialProviders={providers} isHome />
       </main>
 
       <Footer />
