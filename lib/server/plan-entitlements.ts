@@ -5,6 +5,7 @@ export type PlanEntitlements = {
   code: "free" | "basic" | "professional" | "enterprise";
   name: string;
   canAccessPanel: boolean;
+  canViewRequests: boolean;
   canManageRequests: boolean;
   canFilterRequests: boolean;
   canExportCsv: boolean;
@@ -18,6 +19,7 @@ const FREE_ENTITLEMENTS: PlanEntitlements = {
   code: "free",
   name: "Free",
   canAccessPanel: false,
+  canViewRequests: true,
   canManageRequests: false,
   canFilterRequests: false,
   canExportCsv: false,
@@ -88,6 +90,7 @@ export async function getPlanEntitlements(
       code,
       name: plan.name || code,
       canAccessPanel: paid,
+      canViewRequests: true,
       canManageRequests: paid,
       canFilterRequests: paid,
       canExportCsv: code === "professional" || code === "enterprise",

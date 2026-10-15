@@ -113,6 +113,7 @@ export async function GET(request: Request) {
           code: planResult.entitlements.code,
           name: planResult.entitlements.name,
           canAccessPanel: planResult.entitlements.canAccessPanel,
+          canViewRequests: planResult.entitlements.canViewRequests,
         },
         role: "owner",
         permissions: {
@@ -232,6 +233,7 @@ export async function GET(request: Request) {
         code: planResult.entitlements.code,
         name: planResult.entitlements.name,
         canAccessPanel: planResult.entitlements.canAccessPanel,
+        canViewRequests: planResult.entitlements.canViewRequests,
       },
       role: "member",
       permissions: {

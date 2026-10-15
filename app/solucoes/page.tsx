@@ -41,10 +41,10 @@ const plans = [
     name: "Comece no seu ritmo",
     price: "R$ 0",
     period: "/ mês",
-    users: "",
+    users: "1 usuário na equipe",
     features: [
-      "Sem acesso ao painel de gestão",
-      "Contrate Basic ou Professional para usar o ServiçoFácil",
+      "Consulte solicitações recebidas em modo somente leitura",
+      "Gestão e filtros disponíveis no Basic; exportação CSV no Professional",
     ],
     action: "Criar conta para escolher um plano",
     featured: false,

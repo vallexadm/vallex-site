@@ -59,6 +59,18 @@ export default function SistemaLayout({
           throw new Error(result.message ?? "Não foi possível verificar seu plano.");
         }
 
+        if (
+          result.plan?.code === "free" &&
+          result.plan?.canViewRequests === true
+        ) {
+          if (pathname === "/sistema/solicitacoes") {
+            if (!cancelled) setAccess({ path: pathname, status: "allowed" });
+          } else {
+            router.replace("/sistema/solicitacoes");
+          }
+          return;
+        }
+
         if (result.plan?.canAccessPanel !== true) {
           router.replace("/sistema/planos?acesso=painel");
           return;
