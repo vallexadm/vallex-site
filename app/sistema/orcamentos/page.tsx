@@ -6,6 +6,7 @@ import SystemBrand from "@/components/SystemBrand";
 import { createClient } from "@supabase/supabase-js";
 import { calculateFuelCost, type FuelCostDetails } from "@/lib/fuel-cost";
 import { quoteCostCategories, type QuoteInternalCost } from "@/lib/orcamento-custos";
+import { defaultMemberPermissions, normalizeMemberPermissions, type MemberPermissions } from "@/lib/team-permissions";
 
 type QuoteCostForm = {
   id: string;
@@ -112,6 +113,9 @@ export default function OrcamentosPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
   const [role, setRole] = useState<"owner" | "member" | "">("");
+  const [permissions, setPermissions] = useState<MemberPermissions>(defaultMemberPermissions);
+  const canCreateQuotes = role === "owner" || permissions.quotes.create;
+  const canEditQuotes = role === "owner" || permissions.quotes.edit;
   
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -216,14 +220,6 @@ export default function OrcamentosPage() {
       const customersResult = await customersResponse.json();
       const orcamentosResult = await orcamentosResponse.json();
 
-      if (!customersResponse.ok || !customersResult.ok) {
-        setError(
-          customersResult.message ??
-            "Não foi possível carregar os clientes."
-        );
-        return;
-      }
-
       if (!orcamentosResponse.ok || !orcamentosResult.ok) {
         setError(
           orcamentosResult.message ??
@@ -232,10 +228,13 @@ export default function OrcamentosPage() {
         return;
       }
 
-      setCustomers(customersResult.customers ?? []);
+      setCustomers(customersResponse.ok && customersResult.ok ? customersResult.customers ?? [] : []);
       setOrcamentos(orcamentosResult.orcamentos ?? []);
       setRole(orcamentosResult.role === "owner" ? "owner" : "member");
-      const requestedId = new URLSearchParams(window.location.search).get("editar");
+      setPermissions(normalizeMemberPermissions(orcamentosResult.permissions));
+      const requestedId = (orcamentosResult.role === "owner" || orcamentosResult.permissions?.quotes?.edit)
+        ? new URLSearchParams(window.location.search).get("editar")
+        : null;
       if (requestedId && !editParamHandled.current) {
         const requestedQuote = (orcamentosResult.orcamentos ?? []).find(
           (quote: Orcamento) => quote.id === requestedId
@@ -614,7 +613,7 @@ export default function OrcamentosPage() {
           </div>
         )}
 
-        <div className="mt-8 rounded-2xl border border-purple-100 bg-white p-7 shadow-sm">
+        {(canCreateQuotes || (Boolean(editingId) && canEditQuotes)) ? <div className="mt-8 rounded-2xl border border-purple-100 bg-white p-7 shadow-sm">
           <h2 className="text-2xl font-semibold text-slate-950">
             {role === "member" ? "Enviar proposta para aprovação" : "Cadastrar orçamento"}
           </h2>
@@ -893,7 +892,7 @@ export default function OrcamentosPage() {
                     : "Criar rascunho e salvar orçamento" }
             </button>
           </form>
-        </div>
+        </div> : <div className="mt-8 rounded-xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-950">Você pode consultar os orçamentos, mas o proprietário ainda não liberou a criação ou edição para sua conta.</div>}
 
         <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
@@ -1010,7 +1009,7 @@ export default function OrcamentosPage() {
 
         <td className="px-3 py-4">
           <div className="flex justify-end gap-2">
-            {(role === "owner" || orcamento.status === "enviado") && <button
+            {canEditQuotes && (role === "owner" || orcamento.status === "enviado") && <button
                 type="button"
                 onClick={() => void handleEdit(orcamento)}
                     className="rounded-lg border border-purple-200 px-3 py-2 text-xs font-medium text-purple-700 transition hover:bg-purple-50"

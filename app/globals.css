@@ -28,6 +28,21 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+main {
+  animation: page-content-enter 680ms 40ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes page-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -49,6 +64,28 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
+}
+
+.header-content nav { margin-left: auto; }
+
+.access-dock { position: fixed; z-index: 1200; top: 44vh; right: 0; }
+.access-dock-disclosure { position: relative; }
+.access-dock-trigger { display: block; list-style: none; border: 1px solid #c084fc; border-right: 0; border-radius: 12px 0 0 12px; background: #7500bf; padding: 15px 11px; color: #fff; font: inherit; font-size: .84rem; font-weight: 750; cursor: pointer; writing-mode: vertical-rl; transform: rotate(180deg); box-shadow: 0 8px 24px rgb(23 0 46 / 25%); }
+.access-dock-trigger::-webkit-details-marker { display: none; }
+.access-dock-trigger:focus-visible { outline: 3px solid #e9d5ff; outline-offset: 3px; }
+.access-dock-panel { position: absolute; top: 0; right: calc(100% + 10px); display: grid; width: 245px; gap: 8px; border: 1px solid #d8c4ee; border-radius: 14px; background: #fff; padding: 15px; box-shadow: 0 12px 32px rgb(23 0 46 / 18%); }
+.access-dock-panel strong { margin: 0 0 3px; color: #4c087c; font-size: .9rem; }
+.access-dock-panel a { border-radius: 8px; padding: 10px 11px; color: #39234d; font-size: .9rem; font-weight: 650; text-decoration: none; }
+.access-dock-panel a:hover, .access-dock-panel a:focus-visible { outline: none; background: #f5ebff; color: #6500a8; }
+
+@media (max-width: 2000px) {
+  .header-content { gap: 14px; }
+  .brand { flex-shrink: 0; }
+  .header-content nav { flex: 1 1 auto; min-width: 0; }
+  .nav-list { justify-content: center; gap: 8px; }
+  .nav-list a { padding-right: 7px; padding-left: 7px; }
+  .header-actions { gap: 6px; }
+  .header-actions .button { padding: 11px 12px; font-size: 14px; }
 }
 
 .brand {
@@ -120,6 +157,13 @@ a {
   gap: 10px;
 }
 
+.admin-entry-link {
+  padding-right: 14px;
+  padding-left: 14px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .button {
   display: inline-flex;
   justify-content: center;
@@ -127,7 +171,11 @@ a {
   padding: 13px 20px;
   border-radius: 8px;
   font-weight: 600;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.button:hover {
+  transform: translateY(-1px);
 }
 
 .button-primary {
@@ -137,6 +185,24 @@ a {
 
 .button-primary:hover {
   background: var(--color-accent);
+  box-shadow: 0 6px 16px #7000B826;
+}
+
+.hero-home .button {
+  transition: background 0.22s ease, color 0.22s ease, transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+.hero-home .button:hover {
+  transform: translateY(-2px);
+}
+
+.hero-home .button-primary:hover {
+  box-shadow: 0 7px 18px #A020F04A;
+}
+
+.hero-home .button-outline:hover {
+  background: #FFFFFF14;
+  box-shadow: 0 6px 16px #10002030;
 }
 
 .button-outline {
@@ -149,10 +215,14 @@ a {
     radial-gradient(ellipse at 85% 20%, #5B168F 0%, transparent 45%),
     linear-gradient(120deg, #17002E, #32005D);
   color: white;
-  padding: 110px 0;
+  display: flex;
+  min-height: 560px;
+  align-items: center;
+  padding: 56px 0;
 }
 
 .hero-home {
+  min-height: 560px;
   padding: 22px 0 38px;
 }
 
@@ -161,10 +231,23 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
+  animation: home-content-enter 500ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 .hero-home-copy {
   max-width: 850px;
+  animation: home-content-enter 620ms 90ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes home-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .hero-home h1 {
@@ -445,6 +528,170 @@ a {
   line-height: 1.65;
 }
 
+.document-page {
+  min-height: 60vh;
+  background: #FBF9FD;
+}
+
+.document-container {
+  max-width: 920px;
+  padding-top: 64px;
+  padding-bottom: 72px;
+}
+
+.document-header {
+  max-width: 760px;
+  margin-bottom: 30px;
+}
+
+.document-header h1 {
+  margin: 14px 0 12px;
+  font-size: clamp(34px, 5vw, 48px);
+  line-height: 1.12;
+}
+
+.document-header p {
+  color: var(--color-muted);
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+.document-meta {
+  font-size: 13px !important;
+}
+
+.document-review-note {
+  display: grid;
+  gap: 6px;
+  margin: 24px 0 32px;
+  padding: 16px 18px;
+  border: 1px solid #E8CD8A;
+  border-radius: 12px;
+  background: #FFF9E8;
+  color: #5F4A17;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.document-body {
+  display: grid;
+  gap: 24px;
+}
+
+.document-body section,
+.faq-section {
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.document-body h2,
+.faq-section h2,
+.faq-support h2 {
+  margin: 0 0 12px;
+  font-size: 22px;
+}
+
+.document-body p,
+.document-body li {
+  color: var(--color-muted);
+  line-height: 1.75;
+}
+
+.document-body p + p {
+  margin-top: 12px;
+}
+
+.document-body ul {
+  display: grid;
+  gap: 10px;
+  padding-left: 22px;
+}
+
+.document-body a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.document-related {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid var(--color-border);
+}
+
+.document-related a {
+  color: var(--color-primary);
+  font-weight: 650;
+}
+
+.faq-section + .faq-section {
+  margin-top: 30px;
+}
+
+.faq-list {
+  display: grid;
+  gap: 10px;
+}
+
+.faq-item {
+  padding: 17px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.faq-item summary {
+  color: var(--color-text);
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.faq-item summary::marker {
+  color: var(--color-primary);
+}
+
+.faq-item p {
+  margin: 12px 0 0;
+  color: var(--color-muted);
+  line-height: 1.7;
+}
+
+.faq-support {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  margin-top: 32px;
+  padding: 26px;
+  border: 1px solid #E0C8F5;
+  border-radius: 16px;
+  background: #F8F1FF;
+}
+
+.faq-support .eyebrow {
+  display: inline-block;
+  margin-bottom: 10px;
+}
+
+.faq-support p {
+  margin: 8px 0 0;
+  color: var(--color-muted);
+  line-height: 1.65;
+}
+
+.faq-support-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .service-number {
   display: inline-block;
   color: var(--color-primary);
@@ -476,9 +723,9 @@ a {
 
 .plan-card:hover,
 .plan-card:focus-within {
-  border-color: #A020F0;
-  box-shadow: 0 0 0 2px #A020F01A, 0 12px 30px #30005012;
-  transform: translateY(-4px);
+  border-color: var(--color-border);
+  box-shadow: none;
+  transform: none;
 }
 
 .plan-card h3 {
@@ -505,6 +752,16 @@ a {
 .plan-card .button {
   width: 100%;
   margin-top: auto;
+}
+
+.plan-card:hover .button,
+.plan-card:focus-within .button,
+.plan-card:active .button {
+  transform: translateY(-1px);
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+  box-shadow: 0 6px 16px #7000B826;
 }
 
 .plan-card .button-outline {
@@ -535,7 +792,11 @@ a {
 }
 
 .solutions-provider-hero {
-  padding: 76px 0;
+  padding: 56px 0;
+}
+
+.solutions-provider-hero h1 {
+  max-width: 980px;
 }
 
 .solutions-difference {
@@ -927,6 +1188,12 @@ a {
   transform: translateY(-3px);
 }
 
+.provider-directory-home .provider-card:hover,
+.provider-directory-home .provider-card:focus-within {
+  transform: translateY(-2px);
+  box-shadow: 0 9px 22px #30005012;
+}
+
 .provider-card-heading {
   display: flex;
   align-items: center;
@@ -1151,6 +1418,7 @@ a {
 }
 
 @media (max-width: 900px) {
+  .traffic-plan-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .nav-list {
     gap: 12px;
   }
@@ -1182,6 +1450,7 @@ a {
   .header-actions {
     order: 2;
     margin-left: auto;
+    flex-wrap: wrap;
   }
 
   .nav-list {
@@ -1194,15 +1463,40 @@ a {
     padding: 10px 12px;
   }
 
+  .header-actions .admin-entry-link {
+    flex: 1 0 100%;
+  }
+
   .hero {
-    padding: 75px 0;
+    min-height: 0;
+    padding: 52px 0;
   }
 
   .section {
     padding: 44px 0;
   }
 
+  .document-container {
+    padding-top: 42px;
+    padding-bottom: 48px;
+  }
+
+  .document-body section,
+  .faq-section {
+    padding: 19px;
+  }
+
+  .faq-support {
+    grid-template-columns: 1fr;
+    padding: 21px;
+  }
+
+  .faq-support-actions {
+    justify-content: flex-start;
+  }
+
   .hero-home {
+    min-height: 0;
     padding: 18px 0 28px;
   }
 
@@ -1278,6 +1572,10 @@ a {
     white-space: nowrap;
   }
 
+  .header-actions .admin-entry-link {
+    flex: 1 0 100%;
+  }
+
   .service-grid {
     grid-template-columns: 1fr;
   }
@@ -1335,6 +1633,7 @@ a {
   *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+    animation: none !important;
   }
 }
 .vitrine-preview-dialog {
@@ -1407,10 +1706,272 @@ a {
 }
 
 @media (max-width: 640px) {
+  .traffic-plan-grid { grid-template-columns: 1fr; }
   .vitrine-preview-dialog {
     width: 100vw;
     height: 94dvh;
     margin: auto 0 0;
     border-radius: 16px 16px 0 0;
   }
+}
+
+.vallex-admin-page {
+  min-height: 100vh;
+  padding: 48px 24px 64px;
+  background: #0b1020;
+  color: #e5e7eb;
+}
+
+.vallex-admin-shell { max-width: 1180px; margin: 0 auto; }
+.vallex-admin-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 30px; }
+.vallex-admin-brand { color: #e9d5ff; font-size: 1rem; font-weight: 800; letter-spacing: .14em; text-decoration: none; }
+.vallex-admin-brand span { margin-left: 8px; color: #c084fc; font-size: .72rem; letter-spacing: .12em; }
+.vallex-admin-header h1 { margin: 14px 0 5px; font-size: clamp(1.8rem, 3vw, 2.55rem); }
+.vallex-admin-header p, .vallex-admin-section-heading p { margin: 0; color: #aab6c7; }
+.vallex-admin-header .vallex-admin-restricted-notice { margin-top: 10px; color: #d8b4fe; font-size: .85rem; font-weight: 600; }
+.vallex-admin-header-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.vallex-admin-primary, .vallex-admin-secondary, .vallex-admin-back { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; border-radius: 10px; padding: 10px 16px; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
+.vallex-admin-primary { border: 1px solid #7500bf; background: #7500bf; color: #fff; }
+.vallex-admin-secondary { border: 1px solid #62427e; background: #1c2438; color: #e9d5ff; }
+.vallex-admin-back { border: 1px solid #46536a; background: #151c2e; color: #e5e7eb; }
+.vallex-admin-tabs { display: flex; gap: 8px; overflow-x: auto; border-bottom: 1px solid #30394c; margin-bottom: 26px; }
+.vallex-admin-tabs button { flex: 0 0 auto; border: 0; border-bottom: 3px solid transparent; background: transparent; padding: 12px 16px; color: #aab6c7; font: inherit; font-weight: 700; cursor: pointer; }
+.vallex-admin-tabs button.is-active { border-bottom-color: #c084fc; color: #e9d5ff; }
+.vallex-admin-eyebrow { color: #c084fc; font-size: .75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.vallex-admin-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.vallex-admin-metrics article, .vallex-admin-section, .vallex-admin-access { border: 1px solid #343d52; border-radius: 18px; background: #151c2e; box-shadow: 0 10px 30px rgb(0 0 0 / 18%); }
+.vallex-admin-metrics article { display: flex; min-height: 142px; flex-direction: column; gap: 8px; padding: 21px; }
+.vallex-admin-metrics article > span { color: #c2ccda; font-size: .9rem; }
+.vallex-admin-metrics strong { color: #f8fafc; font-size: 2rem; line-height: 1.1; }
+.vallex-admin-metrics small, .vallex-admin-table small { color: #aab6c7; font-size: .8rem; }
+.vallex-admin-section { margin-top: 22px; padding: 24px; }
+.vallex-admin-section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+.vallex-admin-section-heading h2 { margin: 5px 0 7px; font-size: 1.35rem; }
+.vallex-admin-section-heading p { max-width: 690px; font-size: .92rem; line-height: 1.55; }
+.vallex-admin-shortcuts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.vallex-admin-shortcuts a, .vallex-admin-shortcuts button { display: flex; min-height: 112px; flex-direction: column; align-items: flex-start; gap: 10px; border: 1px solid #384359; border-radius: 13px; background: #1b2438; padding: 16px; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
+.vallex-admin-shortcuts a:hover, .vallex-admin-shortcuts button:hover { transform: translateY(-2px); border-color: #bc8ae4; box-shadow: 0 8px 18px rgb(87 0 140 / 8%); }
+.vallex-admin-shortcuts strong, .vallex-admin-roadmap strong { color: #f1e7ff; }
+.vallex-admin-shortcuts span { color: #b4c0d1; font-size: .85rem; line-height: 1.45; }
+.vallex-admin-roadmap { background: linear-gradient(135deg, #151c2e, #201a35); }
+.vallex-admin-roadmap-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
+.vallex-admin-roadmap-grid article { border-left: 3px solid #c084fc; padding: 3px 0 3px 14px; }
+.vallex-admin-roadmap-grid p { margin: 8px 0; color: #b4c0d1; font-size: .88rem; line-height: 1.55; }
+.vallex-admin-roadmap-grid article > span { color: #7e22ce; font-size: .78rem; font-weight: 700; }
+.vallex-admin-table-wrap { overflow-x: auto; }
+.vallex-admin-table { width: 100%; border-collapse: collapse; text-align: left; }
+.vallex-admin-table th, .vallex-admin-table td { border-bottom: 1px solid #30394c; padding: 14px 12px; vertical-align: top; }
+.vallex-admin-table th { color: #b4c0d1; font-size: .78rem; font-weight: 700; }
+.vallex-admin-table td > strong, .vallex-admin-table td > small, .vallex-admin-table td > a { display: block; }
+.vallex-admin-table td > small, .vallex-admin-table td > a { margin-top: 5px; }
+.vallex-admin-table td > a { color: #d8b4fe; font-size: .82rem; font-weight: 700; }
+.vallex-admin-badge { display: inline-flex; border-radius: 999px; background: #293449; padding: 4px 9px; color: #e5e7eb; font-size: .76rem; font-weight: 700; }
+.vallex-admin-badge.is-good { background: #123c32; color: #a7f3d0; }
+.vallex-admin-search, .vallex-admin-status { display: grid; gap: 6px; color: #c2ccda; font-size: .82rem; font-weight: 700; }
+.vallex-admin-search input, .vallex-admin-status select { min-height: 42px; border: 1px solid #46536a; border-radius: 9px; background: #101727; padding: 9px 11px; color: #f3f4f6; font: inherit; font-weight: 400; }
+.vallex-admin-search input { width: min(330px, 70vw); }
+.vallex-admin-support-list { display: grid; gap: 12px; }
+.vallex-admin-support-card { border: 1px solid #384359; border-radius: 13px; background: #1b2438; padding: 17px; }
+.vallex-admin-support-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.vallex-admin-support-top h3 { margin: 5px 0 3px; font-size: 1.12rem; }
+.vallex-admin-support-top small { color: #b4c0d1; }
+.vallex-admin-status select { min-width: 170px; }
+.vallex-admin-description { margin: 14px 0; color: #e5e7eb; line-height: 1.6; white-space: pre-wrap; }
+.vallex-admin-contact-links { display: flex; flex-wrap: wrap; gap: 8px 18px; color: #b4c0d1; font-size: .85rem; }
+.vallex-admin-contact-links a { color: #d8b4fe; font-weight: 700; }
+.vallex-admin-suggestion { margin: 13px 0 0; border-radius: 8px; background: #30213e; padding: 10px 12px; color: #e9d5ff; font-size: .88rem; }
+.vallex-admin-empty { border-radius: 10px; background: #101727; padding: 22px; color: #b4c0d1; text-align: center; }
+.vallex-admin-error { margin: 0 0 16px; border: 1px solid #7f343d; border-radius: 10px; background: #351c2a; padding: 12px 14px; color: #fecdd3; }
+.vallex-admin-footer { padding-top: 20px; color: #aab6c7; font-size: .8rem; text-align: center; }
+.vallex-admin-access { max-width: 560px; margin: 8vh auto; padding: clamp(24px, 5vw, 40px); }
+.vallex-admin-access h1 { margin: 10px 0; }
+.vallex-admin-access p { margin: 0 0 22px; color: #c2ccda; line-height: 1.6; }
+.vallex-admin-access .vallex-admin-back { margin-left: 8px; }
+
+.vallex-admin-chart-section { overflow: hidden; }
+.vallex-admin-chart-heading { align-items: center; }
+.vallex-admin-chart-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px 16px; margin: 12px 0 18px; }
+.vallex-admin-chart-controls > label:not(.vallex-admin-compare) { display: grid; gap: 6px; color: #c2ccda; font-size: .8rem; font-weight: 700; }
+.vallex-admin-chart-controls select, .vallex-admin-chart-controls input[type="date"] { min-height: 40px; border: 1px solid #46536a; border-radius: 9px; background: #101727; padding: 8px 10px; color: #f3f4f6; font: inherit; }
+.vallex-admin-compare { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; color: #c2ccda; font-size: .84rem; }
+.vallex-admin-compare input { width: 17px; height: 17px; accent-color: #a855f7; }
+.vallex-admin-period-stepper { display: inline-flex; align-items: center; gap: 10px; margin-left: auto; color: #f3e8ff; }
+.vallex-admin-period-stepper strong { min-width: 150px; text-align: center; font-size: .88rem; }
+.vallex-admin-period-stepper button { width: 34px; height: 34px; border: 1px solid #46536a; border-radius: 9px; background: #1b2438; color: #e9d5ff; font: inherit; font-size: 1.3rem; cursor: pointer; }
+.vallex-admin-period-stepper button:hover { border-color: #c084fc; }
+.vallex-admin-chart-scroll { width: 100%; overflow-x: auto; }
+.vallex-admin-chart { display: block; width: 100%; min-width: 620px; height: auto; overflow: visible; }
+.vallex-admin-chart-grid { stroke: #354055; stroke-width: 1; }
+.vallex-admin-chart-axis { fill: #b4c0d1; font-size: 12px; }
+.vallex-admin-chart-legend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 14px; color: #d1d9e5; font-size: .8rem; }
+.vallex-admin-chart-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.vallex-admin-chart-legend i { width: 10px; height: 10px; border-radius: 50%; }
+.vallex-admin-chart-legend .vallex-admin-chart-previous-key { border: 2px dashed #b4c0d1; background: transparent; }
+.vallex-admin-chart-warning { margin: 14px 0 0; color: #fcd34d; font-size: .82rem; }
+.vallex-admin-chart-footnote { margin: 16px 0 0; color: #aab6c7; font-size: .8rem; line-height: 1.55; }
+
+.vallex-admin-page .traffic-admin-heading p,
+.vallex-admin-page .traffic-admin-metrics article > span,
+.vallex-admin-page .traffic-admin-metrics small,
+.vallex-admin-page .traffic-lead-head small,
+.vallex-admin-page .traffic-campaign-card header p,
+.vallex-admin-page .traffic-attribution,
+.vallex-admin-page .traffic-history { color: #b4c0d1; }
+.vallex-admin-page .traffic-admin-metrics article,
+.vallex-admin-page .traffic-lead-card,
+.vallex-admin-page .traffic-campaign-card { border-color: #384359; background: #1b2438; color: #e5e7eb; }
+.vallex-admin-page .traffic-admin-metrics strong,
+.vallex-admin-page .traffic-lead-head h3,
+.vallex-admin-page .traffic-campaign-card h3 { color: #f1e7ff; }
+.vallex-admin-page .traffic-plan-editor,
+.vallex-admin-page .traffic-campaign-form { border-color: #384359; background: #1b2438; color: #e5e7eb; }
+.vallex-admin-page .traffic-plan-editor > label,
+.vallex-admin-page .traffic-campaign-form > label,
+.vallex-admin-page .traffic-lead-fields > label,
+.vallex-admin-page .traffic-campaign-metrics > label { color: #d1d9e5; }
+.vallex-admin-page .traffic-plan-editor input:not([type="checkbox"]),
+.vallex-admin-page .traffic-plan-editor textarea,
+.vallex-admin-page .traffic-lead-fields input,
+.vallex-admin-page .traffic-lead-fields select,
+.vallex-admin-page .traffic-campaign-form input,
+.vallex-admin-page .traffic-campaign-form select,
+.vallex-admin-page .traffic-campaign-form textarea,
+.vallex-admin-page .traffic-campaign-metrics input,
+.vallex-admin-page .traffic-campaign-metrics select,
+.vallex-admin-page .traffic-campaign-metrics textarea { border-color: #46536a; background: #101727; color: #f3f4f6; }
+.vallex-admin-page .traffic-lead-contact a { color: #d8b4fe; }
+.vallex-admin-page .traffic-lead-need { color: #e5e7eb; }
+.vallex-admin-page .traffic-history { border-color: #354055; }
+.vallex-admin-page .bg-white { background-color: #1b2438; }
+.vallex-admin-page .bg-slate-50 { background-color: #202a3e; }
+.vallex-admin-page .text-slate-900 { color: #f1f5f9; }
+.vallex-admin-page .text-slate-700,
+.vallex-admin-page .text-slate-600,
+.vallex-admin-page .text-slate-500 { color: #bac6d6; }
+.vallex-admin-page .border-violet-100,
+.vallex-admin-page .border-slate-300 { border-color: #384359; }
+.vallex-admin-page input:disabled { background-color: #293449; color: #bac6d6; }
+@media (max-width: 640px) {
+  .access-dock { top: auto; right: 14px; bottom: 18px; }
+  .access-dock-trigger { border: 1px solid #c084fc; border-radius: 999px; padding: 12px 16px; writing-mode: initial; transform: none; }
+  .access-dock-panel { top: auto; right: 0; bottom: calc(100% + 10px); width: min(280px, calc(100vw - 28px)); }
+  .vallex-admin-chart-heading { align-items: stretch; flex-direction: column; }
+  .vallex-admin-period-stepper { width: 100%; justify-content: space-between; margin-left: 0; }
+}
+
+@media (max-width: 900px) {
+  .vallex-admin-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vallex-admin-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1200px) and (min-width: 681px) {
+  .header-content { flex-wrap: wrap; }
+  .header-content nav { order: 3; flex: 1 0 100%; overflow-x: auto; }
+  .header-actions { order: 2; flex: 1 1 auto; justify-content: flex-end; }
+  .nav-list { width: max-content; margin-left: auto; }
+}
+@media (max-width: 640px) {
+  .vallex-admin-page { padding: 28px 14px 42px; }
+  .vallex-admin-header, .vallex-admin-section-heading { align-items: stretch; flex-direction: column; }
+  .vallex-admin-header-actions { width: 100%; }
+  .vallex-admin-header-actions > * { flex: 1; }
+  .vallex-admin-metrics, .vallex-admin-shortcuts, .vallex-admin-roadmap-grid { grid-template-columns: 1fr; }
+  .vallex-admin-metrics article { min-height: 118px; }
+  .vallex-admin-section { padding: 18px 14px; }
+  .vallex-admin-support-top { flex-direction: column; }
+  .vallex-admin-status, .vallex-admin-status select { width: 100%; }
+  .vallex-admin-search input { width: 100%; }
+  .vallex-admin-access .vallex-admin-back { margin: 8px 0 0; }
+}
+
+.traffic-hero { background: radial-gradient(ellipse at 85% 18%, #5B168F 0%, transparent 45%), linear-gradient(120deg, #17002E, #32005D); }
+.traffic-hero .hero-content { max-width: 1120px; }
+.traffic-hero h1 { max-width: 820px; }
+.traffic-hero p { max-width: 700px; }
+.traffic-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.traffic-steps article, .traffic-plan-card { display: flex; flex-direction: column; align-items: flex-start; }
+.traffic-steps article { min-height: 190px; border: 1px solid var(--color-border); border-radius: 16px; background: #fff; padding: 24px; }
+.traffic-steps article > span { color: var(--color-primary); font-weight: 800; letter-spacing: .1em; }
+.traffic-steps h3 { margin: 24px 0 8px; font-size: 19px; }
+.traffic-steps p, .traffic-plan-card > p { color: var(--color-muted); line-height: 1.65; }
+.traffic-plan-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
+.traffic-plan-card { min-height: 400px; padding: 28px; }
+.traffic-plan-card h3 { margin: 18px 0 8px; font-size: 24px; }
+.traffic-plan-card .traffic-plan-tagline { color: var(--color-text); font-weight: 650; }
+.traffic-plan-card .traffic-price { display: block; margin: 14px 0; color: var(--color-primary); font-size: 20px; }
+.traffic-plan-card ul { display: grid; gap: 9px; width: 100%; margin: 8px 0 24px; padding-left: 20px; color: var(--color-muted); line-height: 1.55; }
+.traffic-plan-card .button { width: 100%; justify-content: center; margin-top: auto; }
+.traffic-budget-note, .traffic-disclaimer { margin-top: 22px; color: var(--color-muted); font-size: 14px; line-height: 1.7; }
+.traffic-form-section { background: #f8f4fc; }
+.traffic-form-layout { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); align-items: start; gap: clamp(30px, 6vw, 80px); }
+.traffic-form-layout h2 { margin: 12px 0; font-size: clamp(30px, 4vw, 42px); line-height: 1.15; }
+.traffic-form-layout > div > p { color: var(--color-muted); line-height: 1.7; }
+.traffic-lead-form { border: 1px solid var(--color-border); border-radius: 18px; background: #fff; padding: clamp(20px, 4vw, 32px); box-shadow: 0 12px 30px #3000500d; }
+.traffic-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px; }
+.traffic-form-grid label, .traffic-plan-editor > label, .traffic-campaign-form > label, .traffic-lead-fields > label, .traffic-campaign-metrics > label { display: grid; gap: 7px; color: #382a46; font-size: 14px; font-weight: 650; }
+.traffic-form-grid input:not([type="checkbox"]), .traffic-form-grid select, .traffic-form-grid textarea, .traffic-plan-editor input:not([type="checkbox"]), .traffic-plan-editor textarea, .traffic-lead-fields input, .traffic-lead-fields select, .traffic-campaign-form input, .traffic-campaign-form select, .traffic-campaign-form textarea, .traffic-campaign-metrics input, .traffic-campaign-metrics select, .traffic-campaign-metrics textarea { width: 100%; min-height: 44px; border: 1px solid #d8cbe4; border-radius: 9px; background: #fff; padding: 10px 12px; color: #241333; font: inherit; font-weight: 400; }
+.traffic-form-grid textarea, .traffic-plan-editor textarea, .traffic-campaign-form textarea, .traffic-campaign-metrics textarea { resize: vertical; }
+.traffic-full { grid-column: 1 / -1; }
+.traffic-consent { display: flex !important; align-items: flex-start; gap: 10px !important; font-weight: 400 !important; line-height: 1.55; }
+.traffic-consent input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--color-primary); }
+.traffic-consent a { color: var(--color-primary); text-decoration: underline; }
+.traffic-honeypot { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.traffic-lead-form > .button { margin-top: 20px; }
+.traffic-success, .traffic-error, .traffic-admin-notice { margin: 16px 0 0; border-radius: 9px; padding: 12px 14px; line-height: 1.55; }
+.traffic-success, .traffic-admin-notice { border: 1px solid #86d1a7; background: #edfff4; color: #14532d; }
+.traffic-error { border: 1px solid #fecaca; background: #fef2f2; color: #991b1b; }
+.traffic-admin-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+.traffic-admin-heading h2 { margin: 6px 0; font-size: 1.5rem; }
+.traffic-admin-heading p { margin: 0; color: #64748b; }
+.traffic-admin-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.traffic-admin-metrics article { display: flex; min-height: 132px; flex-direction: column; gap: 7px; border: 1px solid #e2d6ef; border-radius: 16px; background: #fff; padding: 18px; box-shadow: 0 8px 24px rgb(31 20 45 / 5%); }
+.traffic-admin-metrics article > span { color: #64748b; font-size: .88rem; }
+.traffic-admin-metrics strong { color: #27183b; font-size: clamp(1.3rem, 2.2vw, 1.8rem); line-height: 1.2; }
+.traffic-admin-metrics small { color: #64748b; line-height: 1.5; }
+.traffic-plan-editors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.traffic-plan-editor { display: grid; align-content: start; gap: 13px; border: 1px solid #e7def0; border-radius: 13px; padding: 17px; }
+.traffic-plan-editor h3 { margin: 0; font-size: 1.08rem; }
+.traffic-plan-editor .traffic-publish-toggle { display: flex; grid-template-columns: auto 1fr; align-items: center; }
+.traffic-plan-editor .traffic-publish-toggle input { width: 18px; height: 18px; accent-color: #7500bf; }
+.traffic-lead-list, .traffic-campaign-list { display: grid; gap: 13px; }
+.traffic-lead-card, .traffic-campaign-card { border: 1px solid #e7eaf0; border-radius: 14px; background: #fff; padding: 18px; }
+.traffic-lead-head, .traffic-campaign-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.traffic-lead-head h3, .traffic-campaign-card h3 { margin: 5px 0; font-size: 1.08rem; }
+.traffic-lead-head small, .traffic-campaign-card header p { color: #64748b; }
+.traffic-lead-contact { display: grid; gap: 6px; text-align: right; }
+.traffic-lead-contact a { color: #6800a8; font-weight: 650; }
+.traffic-lead-need { margin: 15px 0 8px; color: #334155; line-height: 1.6; white-space: pre-wrap; }
+.traffic-attribution { color: #64748b; font-size: .8rem; }
+.traffic-lead-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 12px; margin-top: 16px; }
+.traffic-lead-event { grid-column: span 2; }
+.traffic-history { margin-top: 14px; border-top: 1px solid #edf0f5; padding-top: 12px; color: #475569; font-size: .85rem; }
+.traffic-history summary { cursor: pointer; font-weight: 700; }
+.traffic-history ul { display: grid; gap: 7px; margin: 10px 0 0; padding-left: 18px; }
+.traffic-history time { color: #7c3aed; font-weight: 650; }
+.traffic-campaign-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 13px; border: 1px solid #e7def0; border-radius: 14px; background: #fcfaff; padding: 18px; }
+.traffic-campaign-metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: end; gap: 10px; margin-top: 15px; }
+.traffic-campaign-card > header p { margin: 4px 0 0; font-size: .85rem; }
+.traffic-campaign-card .vallex-admin-badge { flex: 0 0 auto; }
+
+@media (max-width: 900px) {
+  .traffic-form-layout { grid-template-columns: 1fr; }
+  .traffic-plan-editors { grid-template-columns: 1fr; }
+  .traffic-admin-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .traffic-campaign-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .traffic-lead-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .traffic-steps { grid-template-columns: 1fr; }
+  .traffic-form-grid, .traffic-admin-metrics, .traffic-campaign-form, .traffic-campaign-metrics, .traffic-lead-fields { grid-template-columns: 1fr; }
+  .traffic-lead-event, .traffic-full { grid-column: 1; }
+  .traffic-admin-heading, .traffic-lead-head, .traffic-campaign-card > header { align-items: stretch; flex-direction: column; }
+  .traffic-lead-contact { text-align: left; }
+  .traffic-admin-heading > button { width: 100%; }
+}
+
+@media (max-width: 900px) {
+  .traffic-plan-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .traffic-plan-grid { grid-template-columns: 1fr; }
 }

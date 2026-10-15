@@ -5,12 +5,15 @@ import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase/client";
 
+const legalVersion = "2026-10-14-v1";
+
 export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "signup" | "recovery" | "reset">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [organizationName, setOrganizationName] = useState("");
   const [businessType, setBusinessType] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -44,7 +47,7 @@ export default function LoginPage() {
 
     try {
       const destinationUrl = new URL(requestedDestination, window.location.origin);
-      const allowedPaths = ["/sistema/planos", "/sistema/convites/aceitar"];
+      const allowedPaths = ["/sistema/planos", "/sistema/convites/aceitar", "/admin"];
 
       if (
         destinationUrl.origin !== window.location.origin ||
@@ -86,6 +89,8 @@ export default function LoginPage() {
             data: {
               organization_name: organizationName.trim(),
               business_type: businessType.trim(),
+              terms_version: legalVersion,
+              privacy_notice_version: legalVersion,
             },
           },
         });
@@ -178,6 +183,7 @@ export default function LoginPage() {
             type="button"
             onClick={() => {
               setMode("login");
+              setAcceptedTerms(false);
               setMessage("");
             }}
             aria-pressed={mode === "login"}
@@ -194,6 +200,7 @@ export default function LoginPage() {
             type="button"
             onClick={() => {
               setMode("signup");
+              setAcceptedTerms(false);
               setMessage("");
             }}
             aria-pressed={mode === "signup"}
@@ -294,6 +301,22 @@ export default function LoginPage() {
             />
           </div>}
 
+          {mode === "signup" && (
+            <label className="flex items-start gap-2 text-sm leading-5 text-slate-600">
+              <input
+                type="checkbox"
+                required
+                checked={acceptedTerms}
+                onChange={(event) => setAcceptedTerms(event.target.checked)}
+                className="mt-1 accent-violet-700"
+              />
+              <span>
+                Li e aceito os <Link className="font-semibold text-violet-700 underline underline-offset-2 hover:text-violet-900" href="/termos" target="_blank" rel="noopener noreferrer">Termos de Uso</Link> e li a{" "}
+                <Link className="font-semibold text-violet-700 underline underline-offset-2 hover:text-violet-900" href="/privacidade" target="_blank" rel="noopener noreferrer">Política de Privacidade</Link>.
+              </span>
+            </label>
+          )}
+
           <button
             type="submit"
             disabled={loading}
@@ -310,6 +333,14 @@ export default function LoginPage() {
                     : "Salvar nova senha"}
           </button>
         </form>
+
+        <p className="mt-6 text-center text-xs text-slate-500">
+          <Link className="underline hover:text-violet-700" href="/faq">Perguntas frequentes</Link>
+          {" · "}
+          <Link className="underline hover:text-violet-700" href="/termos">Termos de Uso</Link>
+          {" · "}
+          <Link className="underline hover:text-violet-700" href="/privacidade">Privacidade</Link>
+        </p>
 
         {mode === "login" && (
           <button

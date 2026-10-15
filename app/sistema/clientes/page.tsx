@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 import SystemBrand from "@/components/SystemBrand";
 import { supabase } from "@/lib/supabase/client";
+import { defaultMemberPermissions, normalizeMemberPermissions, type MemberPermissions } from "@/lib/team-permissions";
 
 type Customer = {
   id: string;
@@ -31,6 +32,7 @@ type CustomersResponse = {
     name: string;
   };
   role?: "owner" | "member";
+  permissions?: MemberPermissions;
   customers?: Customer[];
 };
 
@@ -38,6 +40,8 @@ export default function ClientesPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [organizationName, setOrganizationName] = useState("");
   const [role, setRole] = useState<"owner" | "member">("member");
+  const [permissions, setPermissions] = useState<MemberPermissions>(defaultMemberPermissions);
+  const canManageCustomers = role === "owner" || permissions.customers.manage;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -122,6 +126,7 @@ const [changingStatusId, setChangingStatusId] = useState<string | null>(
           ? "owner"
           : "member"
       );
+      setPermissions(normalizeMemberPermissions(result.permissions));
     } catch {
       setError(
         "Erro de comunicação ao carregar os clientes."
@@ -247,7 +252,7 @@ const [changingStatusId, setChangingStatusId] = useState<string | null>(
   }
 
   async function handleToggleStatus(customer: Customer) {
-  if (role !== "owner") {
+  if (!canManageCustomers) {
     return;
   }
 
@@ -322,7 +327,7 @@ const [changingStatusId, setChangingStatusId] = useState<string | null>(
 }
   
   async function handleDelete(id: string) {
-    if (role !== "owner") {
+    if (!canManageCustomers) {
       return;
     }
 
@@ -480,7 +485,7 @@ const [changingStatusId, setChangingStatusId] = useState<string | null>(
           </div>
         )}
 
-        {role === "owner" && (
+        {canManageCustomers && (
           <section className="mt-6 rounded-xl border border-purple-200 bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-1">
               <h3 className="text-lg font-semibold text-slate-900">
@@ -729,7 +734,7 @@ const [changingStatusId, setChangingStatusId] = useState<string | null>(
                       Cadastro
                     </th>
 
-                    {role === "owner" && (
+                    {canManageCustomers && (
                       <th className="px-3 py-3 text-right font-medium">
                         Ações
                       </th>
@@ -781,7 +786,7 @@ const [changingStatusId, setChangingStatusId] = useState<string | null>(
                             customer.created_at)}
                         </td>
 
-                        {role === "owner" && (
+                        {canManageCustomers && (
                           <td className="px-3 py-4">
                             <div className="flex justify-end gap-2">
                               <button

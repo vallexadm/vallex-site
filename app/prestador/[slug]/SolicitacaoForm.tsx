@@ -310,6 +310,15 @@ export default function SolicitacaoForm({
             />
           </div>
 
+          <p className="mt-5 text-sm leading-6 text-slate-600">
+            Ao enviar, seus dados serão usados para encaminhar e acompanhar
+            este pedido. Consulte a{" "}
+            <a className="font-medium text-purple-700 underline" href="/privacidade">
+              Política de Privacidade
+            </a>
+            .
+          </p>
+
           <div className="mt-6 flex flex-wrap gap-3">
             <button
               type="submit"

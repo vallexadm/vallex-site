@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import SystemBrand from "@/components/SystemBrand";
 import { createClient } from "@supabase/supabase-js";
+import { defaultMemberPermissions, normalizeMemberPermissions, type MemberPermissions } from "@/lib/team-permissions";
 
 type Customer = { id: string; name: string; phone: string | null; address: string | null };
 type TeamMember = { id: string; email: string; name: string; role: "owner" | "member" };
@@ -32,6 +33,7 @@ function formatDateTime(value: string) {
 
 export default function AgendaPage() {
   const [role, setRole] = useState<"owner" | "member" | "">("");
+  const [permissions, setPermissions] = useState<MemberPermissions>(defaultMemberPermissions);
   const [organizationName, setOrganizationName] = useState("");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -66,6 +68,7 @@ export default function AgendaPage() {
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível carregar a agenda.");
       setRole(result.role);
+      setPermissions(normalizeMemberPermissions(result.permissions));
       setOrganizationName(result.organization?.name ?? "");
       setAppointments(result.appointments ?? []);
       setCustomers(result.customers ?? []);
@@ -79,6 +82,9 @@ export default function AgendaPage() {
   }, [assignedTo, getToken]);
 
   useEffect(() => { void loadData(); }, [loadData]);
+
+  const canManageAgenda = role === "owner" || permissions.agenda.manage;
+  const canUpdateAssignedAgenda = role === "owner" || permissions.agenda.updateAssigned;
 
   async function submitAppointment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -150,12 +156,12 @@ export default function AgendaPage() {
       <section className="mx-auto max-w-6xl px-6 py-10">
         <p className="text-sm text-slate-500">Gestão da organização</p>
         <h2 className="mt-2 text-3xl font-bold text-slate-900">Agenda</h2>
-        <p className="mt-2 text-slate-600">{role === "owner" ? `Agende atendimentos e atribua à equipe de ${organizationName}.` : `Atendimentos atribuídos a você em ${organizationName}.`}</p>
+        <p className="mt-2 text-slate-600">{canManageAgenda ? `Agende atendimentos e atribua à equipe de ${organizationName}.` : `Atendimentos atribuídos a você em ${organizationName}.`}</p>
 
         {error && <p role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>}
         {message && <p role="status" className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">{message}</p>}
 
-        {role === "owner" && <form onSubmit={submitAppointment} className="mt-8 rounded-xl border border-purple-100 bg-white p-6 shadow-sm">
+        {canManageAgenda && <form onSubmit={submitAppointment} className="mt-8 rounded-xl border border-purple-100 bg-white p-6 shadow-sm">
           <h3 className="text-xl font-semibold text-slate-900">Agendar atendimento</h3>
           <p className="mt-1 text-sm text-slate-600">O colaborador verá somente os atendimentos atribuídos a ele e os dados necessários para atender.</p>
           <div className="mt-6 grid gap-5 sm:grid-cols-2">
@@ -189,11 +195,11 @@ export default function AgendaPage() {
         </form>}
 
         <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-wrap items-end justify-between gap-2"><div><h3 className="text-xl font-semibold text-slate-900">{role === "owner" ? "Atendimentos da organização" : "Meus atendimentos"}</h3><p className="mt-1 text-sm text-slate-600">{appointments.length} {appointments.length === 1 ? "atendimento" : "atendimentos"}</p></div></div>
+          <div className="flex flex-wrap items-end justify-between gap-2"><div><h3 className="text-xl font-semibold text-slate-900">{canManageAgenda ? "Atendimentos da organização" : "Meus atendimentos"}</h3><p className="mt-1 text-sm text-slate-600">{appointments.length} {appointments.length === 1 ? "atendimento" : "atendimentos"}</p></div></div>
           {appointments.length === 0 ? <p className="mt-6 rounded-lg bg-slate-50 p-8 text-center text-slate-600">{role === "owner" ? "Nenhum atendimento agendado ainda." : "Nenhum atendimento foi atribuído a você ainda."}</p> : <div className="mt-5 space-y-4">{appointments.map((appointment) => <article key={appointment.id} className="rounded-xl border border-slate-200 p-5">
             <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm text-slate-500">{formatDateTime(appointment.starts_at)}{appointment.ends_at ? ` – ${new Date(appointment.ends_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : ""}</p><h4 className="mt-1 text-lg font-semibold text-slate-900">{appointment.title}</h4></div><span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">{statusLabels[appointment.status]}</span></div>
-            <div className="mt-4 grid gap-4 text-sm text-slate-700 sm:grid-cols-2"><div><p><strong>Cliente:</strong> {appointment.customers?.name ?? "Cliente"}</p>{role === "owner" && <p className="mt-1"><strong>Responsável:</strong> {appointment.assigned_name ?? "Membro da equipe"}</p>}{appointment.customers?.phone && <p className="mt-1"><strong>Telefone:</strong> {appointment.customers.phone}</p>}{appointment.customers?.address && <p className="mt-1"><strong>Endereço:</strong> {appointment.customers.address}</p>}</div>{appointment.details && <p className="whitespace-pre-wrap"><strong>Orientações:</strong> {appointment.details}</p>}</div>
-            <div className="mt-4 flex flex-wrap gap-2">{role === "member" && appointment.status === "scheduled" && <button onClick={() => void updateStatus(appointment.id, "in_progress")} className="rounded-lg bg-purple-700 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-800">Iniciar atendimento</button>}{role === "member" && appointment.status === "in_progress" && <button onClick={() => void updateStatus(appointment.id, "completed")} className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800">Concluir atendimento</button>}{role === "owner" && ["scheduled", "in_progress"].includes(appointment.status) && <button onClick={() => void updateStatus(appointment.id, "cancelled")} className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">Cancelar atendimento</button>}</div>
+            <div className="mt-4 grid gap-4 text-sm text-slate-700 sm:grid-cols-2"><div><p><strong>Cliente:</strong> {appointment.customers?.name ?? "Cliente"}</p>{canManageAgenda && <p className="mt-1"><strong>Responsável:</strong> {appointment.assigned_name ?? "Membro da equipe"}</p>}{appointment.customers?.phone && <p className="mt-1"><strong>Telefone:</strong> {appointment.customers.phone}</p>}{appointment.customers?.address && <p className="mt-1"><strong>Endereço:</strong> {appointment.customers.address}</p>}</div>{appointment.details && <p className="whitespace-pre-wrap"><strong>Orientações:</strong> {appointment.details}</p>}</div>
+            <div className="mt-4 flex flex-wrap gap-2">{role === "member" && canUpdateAssignedAgenda && appointment.status === "scheduled" && <button onClick={() => void updateStatus(appointment.id, "in_progress")} className="rounded-lg bg-purple-700 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-800">Iniciar atendimento</button>}{role === "member" && canUpdateAssignedAgenda && appointment.status === "in_progress" && <button onClick={() => void updateStatus(appointment.id, "completed")} className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800">Concluir atendimento</button>}{canManageAgenda && ["scheduled", "in_progress"].includes(appointment.status) && <button onClick={() => void updateStatus(appointment.id, "cancelled")} className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">Cancelar atendimento</button>}</div>
           </article>)}</div>}
         </section>
       </section>

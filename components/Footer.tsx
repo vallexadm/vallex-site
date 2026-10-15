@@ -16,10 +16,14 @@ export default function Footer() {
         </div>
 
         <div>
-          <h3>Institucional</h3>
+          <h3>Institucional e ajuda</h3>
           <Link href="/sobre">Sobre a Vallex</Link>
           <Link href="/servicos">Serviços</Link>
-          <Link href="/privacidade">Privacidade</Link>
+          <Link href="/trafego-pago">Tráfego pago</Link>
+          <Link href="/faq">Perguntas frequentes</Link>
+          <Link href="/termos">Termos de Uso</Link>
+          <Link href="/privacidade">Política de Privacidade</Link>
+          <Link href="/admin">Administração VALLEX</Link>
         </div>
 
         <div>

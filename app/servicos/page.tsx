@@ -5,37 +5,45 @@ import Footer from "@/components/Footer";
 export const metadata = {
   title: "Serviços da VALLEX | VALLEX SERVIÇOFÁCIL",
   description:
-    "Conheça as frentes de atuação da VALLEX em informática, serviços elétricos, redes e soluções digitais.",
+    "Conheça o ServiçoFácil, as planilhas automatizadas e as soluções digitais sob medida da VALLEX.",
 };
 
 const vallexServices = [
   {
     number: "01",
-    title: "Informática e suporte",
+    title: "Plataforma ServiçoFácil",
     description:
-      "Manutenção, instalação, configuração e suporte técnico para computadores, equipamentos e sistemas.",
-    examples: ["Manutenção preventiva e corretiva", "Instalação e configuração", "Orientação para uso de equipamentos"],
+      "Uma vitrine digital para aproximar prestadores de serviços e clientes, com ferramentas para organizar o negócio.",
+    examples: ["Divulgação de serviços", "Recebimento de solicitações", "Gestão da rotina do prestador"],
   },
   {
     number: "02",
-    title: "Serviços elétricos",
+    title: "Planilhas automatizadas",
     description:
-      "Soluções e serviços elétricos planejados conforme a necessidade de cada solicitação.",
-    examples: ["Instalações e ajustes", "Avaliação da necessidade", "Atendimento sob consulta"],
+      "Planilhas desenvolvidas conforme a necessidade do cliente, com recursos para simplificar tarefas e acompanhar informações.",
+    examples: ["Automação de cálculos e rotinas", "Organização e acompanhamento de dados", "Prazo e valor definidos na proposta"],
   },
   {
     number: "03",
-    title: "Redes e conectividade",
+    title: "Soluções digitais sob medida",
     description:
-      "Configuração de redes, Wi-Fi e equipamentos de conectividade para casas e pequenos negócios.",
-    examples: ["Configuração de Wi-Fi", "Organização de rede local", "Suporte a equipamentos conectados"],
+      "Ferramentas digitais pensadas para apoiar processos de profissionais e pequenos negócios.",
+    examples: ["Aplicações web", "Ferramentas para processos", "Projetos dimensionados para cada demanda"],
   },
   {
     number: "04",
-    title: "Soluções digitais",
+    title: "Conte sua necessidade",
     description:
-      "Desenvolvimento de aplicações web e ferramentas digitais para apoiar processos e atividades.",
-    examples: ["Aplicações web", "Ferramentas para processos", "Projetos digitais sob consulta"],
+      "Precisa resolver algo com tecnologia ou não encontrou uma solução que combine com o seu caso? A VALLEX quer entender o que você procura.",
+    examples: ["Explique seu objetivo", "Avaliamos a viabilidade", "Receba uma proposta com escopo, prazo e valor"],
+  },
+  {
+    number: "05",
+    title: "Gestão de tráfego pago",
+    description:
+      "Planejamento e acompanhamento de campanhas digitais para ajudar seu negócio a alcançar mais pessoas.",
+    examples: ["Planos modelo para comparar", "Escopo definido conforme sua meta", "Acompanhamento dos indicadores combinados"],
+    href: "/trafego-pago",
   },
 ];
 
@@ -47,11 +55,11 @@ export default function ServicosVallex() {
         <section className="hero vallex-services-hero">
           <div className="container hero-content">
             <span className="eyebrow">Serviços VALLEX</span>
-            <h1>Tecnologia e soluções práticas para o dia a dia.</h1>
+            <h1>Soluções digitais que começam pela sua necessidade.</h1>
             <p>
-              A VALLEX atua em tecnologia, suporte e serviços para pessoas e
-              negócios. Conheça nossas frentes de trabalho e fale com a equipe
-              para apresentar sua necessidade.
+              Conectamos prestadores e clientes pelo ServiçoFácil e criamos
+              ferramentas digitais, como planilhas automatizadas, conforme a
+              demanda de cada negócio.
             </p>
             <div className="hero-actions">
               <Link href="/contato" className="button button-primary">Falar com a VALLEX</Link>
@@ -64,11 +72,11 @@ export default function ServicosVallex() {
           <div className="container">
             <div className="section-heading">
               <span className="eyebrow">Como podemos ajudar</span>
-              <h2>Serviços oferecidos pela equipe VALLEX</h2>
+              <h2>O que a VALLEX pode construir com você</h2>
               <p>
-                Esta página apresenta a atuação da própria VALLEX. Para buscar
-                profissionais independentes — como advogados, barbeiros ou
-                técnicos — use a busca de prestadores na página inicial.
+                A VALLEX oferece a plataforma ServiçoFácil e desenvolve soluções
+                digitais sob demanda. Para contratar um profissional independente,
+                busque prestadores na página inicial.
               </p>
             </div>
 
@@ -81,7 +89,7 @@ export default function ServicosVallex() {
                   <ul>
                     {service.examples.map((example) => <li key={example}>{example}</li>)}
                   </ul>
-                  <Link href="/contato" className="service-card-action">Consultar disponibilidade <span aria-hidden="true">→</span></Link>
+                  <Link href={"href" in service && typeof service.href === "string" ? service.href : "/contato"} className="service-card-action">{service.number === "04" ? "Apresentar minha necessidade" : service.number === "05" ? "Conhecer planos de tráfego" : "Conversar sobre esta solução"} <span aria-hidden="true">→</span></Link>
                 </article>
               ))}
             </div>

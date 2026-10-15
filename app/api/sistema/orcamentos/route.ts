@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { normalizeQuoteInternalCosts } from "@/lib/orcamento-custos";
+import { normalizeMemberPermissions, ownerPermissions } from "@/lib/team-permissions";
 
 function errorResponse(message: string, status: number) {
   return NextResponse.json(
@@ -84,6 +85,7 @@ async function getUserOrganization(
     return {
       organization: null,
       role: null,
+      permissions: null,
       error: errorResponse(
         "Configuração do servidor incompleta.",
         500
@@ -103,6 +105,7 @@ async function getUserOrganization(
     return {
       organization: null,
       role: null,
+      permissions: null,
       error: errorResponse(
         "Não foi possível consultar a organização.",
         500
@@ -111,22 +114,22 @@ async function getUserOrganization(
   }
 
   if (organization) {
-    return { organization, role: "owner" as const, error: null };
+    return { organization, role: "owner" as const, permissions: ownerPermissions, error: null };
   }
 
   const { data: membership, error: membershipError } = await adminClient
     .from("organization_members")
-    .select("organization_id, role")
+    .select("organization_id, role, permissions")
     .eq("user_id", userId)
     .maybeSingle();
 
   if (membershipError) {
     console.error("Erro ao consultar associação para orçamentos:", membershipError);
-    return { organization: null, role: null, error: errorResponse("Não foi possível consultar sua equipe.", 500) };
+    return { organization: null, role: null, permissions: null, error: errorResponse("Não foi possível consultar sua equipe.", 500) };
   }
 
   if (!membership || membership.role !== "member") {
-    return { organization: null, role: null, error: errorResponse("Organização não encontrada.", 403) };
+    return { organization: null, role: null, permissions: null, error: errorResponse("Organização não encontrada.", 403) };
   }
 
   const { data: memberOrganization, error: memberOrganizationError } = await adminClient
@@ -137,10 +140,10 @@ async function getUserOrganization(
 
   if (memberOrganizationError || !memberOrganization) {
     console.error("Erro ao localizar organização do colaborador:", memberOrganizationError);
-    return { organization: null, role: null, error: errorResponse("Não foi possível carregar a organização.", 500) };
+    return { organization: null, role: null, permissions: null, error: errorResponse("Não foi possível carregar a organização.", 500) };
   }
 
-  return { organization: memberOrganization, role: "member" as const, error: null };
+  return { organization: memberOrganization, role: "member" as const, permissions: normalizeMemberPermissions(membership.permissions), error: null };
 }
 
 export async function GET(request: Request) {
@@ -153,14 +156,17 @@ export async function GET(request: Request) {
 
     const adminClient = createAdminClient();
 
-    const { organization, role, error: organizationResponse } =
+    const { organization, role, permissions, error: organizationResponse } =
       await getUserOrganization(adminClient, auth.user.id);
 
     if (organizationResponse) {
       return organizationResponse;
     }
 
+    if (!permissions?.quotes.view) return errorResponse("O proprietário ainda não liberou a consulta de orçamentos para sua conta.", 403);
+
     if (new URL(request.url).searchParams.get("dados") === "clientes") {
+      if (!permissions.quotes.create && !permissions.quotes.edit) return errorResponse("O proprietário ainda não liberou a criação ou edição de orçamentos para sua conta.", 403);
       const { data: customers, error: customersError } = await adminClient!
         .from("customers")
         .select("id, name")
@@ -216,6 +222,7 @@ export async function GET(request: Request) {
         name: organization!.name,
       },
       role,
+      permissions,
       orcamentos: orcamentos ?? [],
     });
   } catch (error) {
@@ -238,12 +245,14 @@ export async function POST(request: Request) {
 
     const adminClient = createAdminClient();
 
-    const { organization, role, error: organizationResponse } =
+    const { organization, role, permissions, error: organizationResponse } =
       await getUserOrganization(adminClient, auth.user.id);
 
     if (organizationResponse) {
       return organizationResponse;
     }
+
+    if (!permissions?.quotes.create) return errorResponse("O proprietário ainda não liberou a criação de orçamentos para sua conta.", 403);
 
     let body: unknown;
 
@@ -436,12 +445,14 @@ export async function PATCH(request: Request) {
 
     const adminClient = createAdminClient();
 
-    const { organization, role, error: organizationResponse } =
+    const { organization, role, permissions, error: organizationResponse } =
       await getUserOrganization(adminClient, auth.user.id);
 
     if (organizationResponse) {
       return organizationResponse;
     }
+
+    if (role === "member" && !permissions?.quotes.edit) return errorResponse("O proprietário ainda não liberou a edição de orçamentos para sua conta.", 403);
 
     let body: unknown;
 

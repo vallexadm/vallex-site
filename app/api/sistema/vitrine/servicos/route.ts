@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { normalizeMemberPermissions, ownerPermissions } from "@/lib/team-permissions";
 
 export const runtime = "nodejs";
 
@@ -120,21 +121,22 @@ async function autenticarOwner(request: Request) {
   }
 
   if (!organization) {
-    return {
-      error: NextResponse.json(
-        {
-          ok: false,
-          message: "Organização não encontrada.",
-        },
-        { status: 403 }
-      ),
-    };
+    const { data: membership, error: membershipError } = await clients.supabaseAdmin
+      .from("organization_members").select("organization_id, role, permissions").eq("user_id", user.id).maybeSingle();
+    if (membershipError) return { error: NextResponse.json({ ok: false, message: "Não foi possível consultar suas permissões." }, { status: 500 }) };
+    if (!membership || membership.role !== "member") return { error: NextResponse.json({ ok: false, message: "Organização não encontrada." }, { status: 403 }) };
+    const { data: memberOrganization, error: memberOrganizationError } = await clients.supabaseAdmin
+      .from("organizations").select("id,name,owner_id").eq("id", membership.organization_id).maybeSingle();
+    if (memberOrganizationError || !memberOrganization) return { error: NextResponse.json({ ok: false, message: "Não foi possível validar a organização." }, { status: 500 }) };
+    return { supabaseAdmin: clients.supabaseAdmin, user, organization: memberOrganization, permissions: normalizeMemberPermissions(membership.permissions), role: "member" as const };
   }
 
   return {
     supabaseAdmin: clients.supabaseAdmin,
     user,
     organization,
+    permissions: ownerPermissions,
+    role: "owner" as const,
   };
 }
 
@@ -251,6 +253,8 @@ export async function GET(request: Request) {
     return auth.error;
   }
 
+  if (!auth.permissions.services.view) return NextResponse.json({ ok: false, message: "O proprietário ainda não liberou a consulta do catálogo de serviços para sua conta." }, { status: 403 });
+
   const { data, error } = await auth.supabaseAdmin
     .from("vitrine_services")
     .select(
@@ -272,6 +276,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     ok: true,
+    permissions: auth.permissions,
     services: data ?? [],
   });
 }
@@ -282,6 +287,8 @@ export async function POST(request: Request) {
   if ("error" in auth) {
     return auth.error;
   }
+
+  if (!auth.permissions.services.manage) return NextResponse.json({ ok: false, message: "O proprietário ainda não liberou alterações no catálogo de serviços para sua conta." }, { status: 403 });
 
   let body: unknown;
 
@@ -467,6 +474,8 @@ export async function PATCH(request: Request) {
   if ("error" in auth) {
     return auth.error;
   }
+
+  if (!auth.permissions.services.manage) return NextResponse.json({ ok: false, message: "O proprietário ainda não liberou alterações no catálogo de serviços para sua conta." }, { status: 403 });
 
   let body: unknown;
 
@@ -718,6 +727,8 @@ export async function DELETE(request: Request) {
   if ("error" in auth) {
     return auth.error;
   }
+
+  if (!auth.permissions.services.manage) return NextResponse.json({ ok: false, message: "O proprietário ainda não liberou alterações no catálogo de serviços para sua conta." }, { status: 403 });
 
   let body: unknown;
 

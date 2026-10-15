@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase/client";
 import LocalClock from "@/components/LocalClock";
+import { defaultMemberPermissions, normalizeMemberPermissions, type MemberPermissions } from "@/lib/team-permissions";
 
 type OwnerDashboardMetrics = { charged: number; received: number; receivable: number; expenses: number; pendingBills: number; estimatedProfit: number };
 
@@ -28,6 +29,8 @@ export default function SistemaPage() {
   const [organizationName, setOrganizationName] = useState("");
   const [businessType, setBusinessType] = useState("");
   const [role, setRole] = useState("");
+  const [isVallexAdmin, setIsVallexAdmin] = useState(false);
+  const [modulePermissions, setModulePermissions] = useState<MemberPermissions>(defaultMemberPermissions);
   const [contextError, setContextError] = useState("");
   const [needsOrganization, setNeedsOrganization] = useState(false);
   const [savingOrganization, setSavingOrganization] = useState(false);
@@ -64,6 +67,19 @@ export default function SistemaPage() {
   }
 
   try {
+    const adminAccessResponse = await fetch("/api/admin/access", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    });
+    if (adminAccessResponse.ok) {
+      const adminAccess = await adminAccessResponse.json();
+      setIsVallexAdmin(adminAccess.isAdmin === true || adminAccess.isStaff === true);
+    }
+  } catch {
+    // A conta continua acessível mesmo quando a verificação administrativa falha.
+  }
+
+  try {
     const response = await fetch("/api/sistema/organizacao", {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -91,6 +107,7 @@ export default function SistemaPage() {
 
     setOrganizationName(result.organization.name);
     setRole(result.role);
+    setModulePermissions(normalizeMemberPermissions(result.permissions?.modules));
   } catch {
     setContextError("Erro ao consultar os dados da organização.");
   }
@@ -184,6 +201,7 @@ export default function SistemaPage() {
       setBusinessType(result.organization.business_type ?? businessType);
       setRole("owner");
       setNeedsOrganization(false);
+      router.replace("/sistema/planos?acesso=painel");
     } catch (error) {
       setContextError(
         error instanceof Error
@@ -221,6 +239,7 @@ export default function SistemaPage() {
             </div>
             <div className="flex items-center gap-3">
               <LocalClock variant="dark" />
+              {isVallexAdmin && <Link href="/admin" className="rounded-lg border border-purple-300 px-4 py-2 text-sm hover:bg-purple-900">Admin VALLEX</Link>}
               <button
                 onClick={handleLogout}
                 className="rounded-lg border border-purple-300 px-4 py-2 text-sm hover:bg-purple-900"
@@ -325,6 +344,7 @@ export default function SistemaPage() {
 
           <div className="flex items-center gap-3">
             <LocalClock variant="dark" />
+            {isVallexAdmin && <Link href="/admin" className="rounded-lg border border-purple-300 px-4 py-2 text-sm hover:bg-purple-900">Admin VALLEX</Link>}
             <button
               onClick={handleLogout}
               className="rounded-lg border border-purple-300 px-4 py-2 text-sm hover:bg-purple-900"
@@ -406,6 +426,7 @@ export default function SistemaPage() {
     title: "Clientes",
     description: "Cadastro e organização dos clientes.",
     href: "/sistema/clientes",
+    permissionModule: "customers",
   },
   {
     title: "Orçamentos",
@@ -413,6 +434,7 @@ export default function SistemaPage() {
       ? "Revise as propostas da equipe e aprove os orçamentos."
       : "Crie propostas para a organização enviar ao proprietário para aprovação.",
     href: "/sistema/orcamentos",
+    permissionModule: "quotes",
   },
   {
     title: "Agenda",
@@ -420,21 +442,27 @@ export default function SistemaPage() {
       ? "Agende atendimentos e atribua à sua equipe."
       : "Consulte e atualize os atendimentos atribuídos a você.",
     href: "/sistema/agenda",
+    permissionModule: "agenda",
   },
   {
     title: "Serviços",
     description: "Catálogo de serviços e valores.",
+    href: "/sistema/servicos",
+    permissionModule: "services",
   },
   {
     title: "Financeiro",
     description: "Controle de receitas e despesas.",
     href: "/sistema/financeiro",
+    permissionModule: "finance",
   },
   {
     title: "Configurações",
     description: "Dados do profissional e do negócio.",
+    href: "/sistema/configuracoes",
+    permissionModule: null,
   },
-].filter((item) => role === "owner" || ["Orçamentos", "Agenda"].includes(item.title)).map((item) => item.href ? (
+].filter((item) => role === "owner" || Boolean(item.permissionModule && modulePermissions[item.permissionModule as keyof MemberPermissions].view)).map((item) => item.href ? (
   <Link key={item.title} href={item.href} className="group rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition duration-150 hover:-translate-y-1 hover:border-violet-300 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2">
     <h3 className="text-lg font-semibold text-slate-900">
       {item.title}

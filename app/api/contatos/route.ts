@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requirePlatformPermission } from "@/lib/server/platform-admin";
 
 function createSupabaseAdmin() {
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -98,50 +99,8 @@ export async function POST(request: Request) {
 }
 export async function GET(request: Request) {
   try {
-    const authorization = request.headers.get("authorization");
-    const token = authorization?.startsWith("Bearer ")
-      ? authorization.slice(7)
-      : null;
-
-    if (!token) {
-      return NextResponse.json(
-        { ok: false, message: "Acesso não autorizado." },
-        { status: 401 }
-      );
-    }
-
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    const adminUserId = process.env.SUPABASE_ADMIN_USER_ID;
-
-    if (!supabaseUrl || !supabaseAnonKey || !adminUserId) {
-      console.error("Configuração de autenticação ou administrador ausente.");
-
-      return NextResponse.json(
-        { ok: false, message: "Configuração do sistema incompleta." },
-        { status: 500 }
-      );
-    }
-
-    // Valida o token com o Supabase Auth.
-    const authClient = createClient(supabaseUrl, supabaseAnonKey);
-    const { data: authData, error: authError } =
-      await authClient.auth.getUser(token);
-
-    if (authError || !authData.user) {
-      return NextResponse.json(
-        { ok: false, message: "Sessão inválida ou expirada." },
-        { status: 401 }
-      );
-    }
-
-    // Permite acesso somente à conta administradora configurada.
-    if (authData.user.id !== adminUserId) {
-      return NextResponse.json(
-        { ok: false, message: "Você não tem permissão para visualizar solicitações." },
-        { status: 403 }
-      );
-    }
+    const access = await requirePlatformPermission(request, "support", "view");
+    if (!access.ok) return access.response;
 
     // Consulta executada no servidor usando a chave secreta.
     const supabase = createSupabaseAdmin();
@@ -161,10 +120,13 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json({
-      ok: true,
-      contatos: contatos ?? [],
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        contatos: contatos ?? [],
+      },
+      { headers: { "Cache-Control": "private, no-store, max-age=0" } }
+    );
   } catch (error) {
     console.error("Erro na API GET de contatos:", error);
 
@@ -185,52 +147,8 @@ const STATUS_PERMITIDOS = [
 
 export async function PATCH(request: Request) {
   try {
-    // 1. Exige token de sessão
-    const authorization = request.headers.get("authorization");
-    const token = authorization?.startsWith("Bearer ")
-      ? authorization.slice(7)
-      : null;
-
-    if (!token) {
-      return NextResponse.json(
-        { ok: false, message: "Acesso não autorizado." },
-        { status: 401 }
-      );
-    }
-
-    // 2. Confere as configurações necessárias
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    const adminUserId = process.env.SUPABASE_ADMIN_USER_ID;
-
-    if (!supabaseUrl || !supabaseAnonKey || !adminUserId) {
-      console.error("Configuração de autenticação ou administrador ausente.");
-
-      return NextResponse.json(
-        { ok: false, message: "Configuração do sistema incompleta." },
-        { status: 500 }
-      );
-    }
-
-    // 3. Valida o token com o Supabase Auth
-    const authClient = createClient(supabaseUrl, supabaseAnonKey);
-    const { data: authData, error: authError } =
-      await authClient.auth.getUser(token);
-
-    if (authError || !authData.user) {
-      return NextResponse.json(
-        { ok: false, message: "Sessão inválida ou expirada." },
-        { status: 401 }
-      );
-    }
-
-    // 4. Restringe a operação à sua conta administradora
-    if (authData.user.id !== adminUserId) {
-      return NextResponse.json(
-        { ok: false, message: "Você não tem permissão para alterar solicitações." },
-        { status: 403 }
-      );
-    }
+    const access = await requirePlatformPermission(request, "support", "edit");
+    if (!access.ok) return access.response;
 
     // 5. Valida os dados recebidos
     const body = await request.json();

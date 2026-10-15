@@ -18,6 +18,14 @@ const serviceModeLabels: Record<string, string> = {
   online: "Online",
 };
 
+export type DirectoryFilters = {
+  search: string;
+  service: string;
+  mode: string;
+  location: string;
+  allLocations: boolean;
+};
+
 function formatPrice(price: number | string | null) {
   if (price === null || price === undefined || price === "") {
     return "Preço sob consulta";
@@ -40,20 +48,25 @@ function normalizeSearch(value: string) {
 export default function Services({
   initialProviders = [],
   isHome = false,
+  initialFilters,
 }: {
   initialProviders?: PublicProvider[];
   isHome?: boolean;
+  initialFilters?: DirectoryFilters;
 }) {
   const [providers, setProviders] = useState<PublicProvider[]>(initialProviders);
-  const [search, setSearch] = useState("");
-  const [selectedService, setSelectedService] = useState("");
-  const [selectedMode, setSelectedMode] = useState("");
+  const [selectedService, setSelectedService] = useState(initialFilters?.service ?? "");
+  const [selectedMode, setSelectedMode] = useState(initialFilters?.mode ?? "");
+  const [allLocations, setAllLocations] = useState(initialFilters?.allLocations ?? false);
   const [selectedLocation, setSelectedLocation] = useState(() => {
+    if (initialFilters?.allLocations) return "";
+    if (initialFilters?.location) return initialFilters.location;
     const goiania = initialProviders.find((provider) =>
       normalizeSearch(provider.service_area || provider.address || "").includes("goiania")
     );
     return goiania ? normalizeSearch(goiania.service_area || goiania.address || "") : "";
   });
+  const [search, setSearch] = useState(initialFilters?.search ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [previewMode, setPreviewMode] = useState(false);
@@ -189,11 +202,38 @@ export default function Services({
 
   const hasActiveFilters = Boolean(search || selectedService || selectedMode || selectedLocation);
 
+  function syncFilters(next: Partial<DirectoryFilters>) {
+    const url = new URL(window.location.href);
+    const current: DirectoryFilters = {
+      search,
+      service: selectedService,
+      mode: selectedMode,
+      location: selectedLocation,
+      allLocations,
+      ...next,
+    };
+    const params: [string, string][] = [
+      ["buscar", current.search],
+      ["servico", current.service],
+      ["atendimento", current.mode],
+    ];
+    params.forEach(([key, value]) => {
+      if (value) url.searchParams.set(key, value);
+      else url.searchParams.delete(key);
+    });
+    if (current.allLocations) url.searchParams.set("localidade", "todas");
+    else if (current.location) url.searchParams.set("localidade", current.location);
+    else url.searchParams.delete("localidade");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }
+
   function clearFilters() {
     setSearch("");
     setSelectedService("");
     setSelectedMode("");
     setSelectedLocation("");
+    setAllLocations(true);
+    syncFilters({ search: "", service: "", mode: "", location: "", allLocations: true });
   }
 
   return (
@@ -216,8 +256,8 @@ export default function Services({
 
           {previewMode && (
             <div className="directory-preview-notice">
-              Prévia de desenvolvimento: sua Vitrine não publicada aparece
-              somente para você. Clientes não conseguem acessá-la por esta prévia.
+              Configure sua Vitrine e confira como ela ficará antes de publicar.
+              Esta prévia é particular; os clientes só poderão acessá-la depois da publicação.
             </div>
           )}
 
@@ -231,7 +271,11 @@ export default function Services({
                 className="directory-search"
                 type="search"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSearch(value);
+                  syncFilters({ search: value });
+                }}
                 placeholder="Ex.: advogada, barbearia, geladeira"
               />
             </div>
@@ -244,7 +288,11 @@ export default function Services({
                 id="provider-service"
                 className="directory-select"
                 value={selectedService}
-                onChange={(event) => setSelectedService(event.target.value)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSelectedService(value);
+                  syncFilters({ service: value });
+                }}
               >
                 <option value="">Todos os serviços</option>
                 {serviceOptions.map((option) => (
@@ -261,7 +309,13 @@ export default function Services({
                 id="provider-location"
                 className="directory-select"
                 value={selectedLocation}
-                onChange={(event) => setSelectedLocation(event.target.value)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  const nextAllLocations = !value;
+                  setSelectedLocation(value);
+                  setAllLocations(nextAllLocations);
+                  syncFilters({ location: value, allLocations: nextAllLocations });
+                }}
               >
                 <option value="">Todas as localidades</option>
                 {locationOptions.map((option) => (
@@ -278,7 +332,11 @@ export default function Services({
                 id="provider-mode"
                 className="directory-select"
                 value={selectedMode}
-                onChange={(event) => setSelectedMode(event.target.value)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSelectedMode(value);
+                  syncFilters({ mode: value });
+                }}
               >
                 <option value="">Todas as formas</option>
                 {modeOptions.map((mode) => (
