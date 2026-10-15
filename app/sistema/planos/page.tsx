@@ -25,6 +25,7 @@ const planFeatures: Record<string, string[]> = {
   ],
   basic: [
     "Acesso ao painel de gestão do prestador.",
+    "5 dias grátis para novos cadastros, sem cobrança durante o teste.",
     "Configure a Vitrine e organize serviços, clientes, agenda e financeiro.",
     "Gerencie solicitações, filtros e orçamentos.",
   ],
@@ -136,17 +137,17 @@ function PlanosContent() {
       {message && <p role="status" className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-900">{message}</p>}{panelAccessMessage && <p role="status" className="mt-6 rounded-xl border border-purple-200 bg-purple-50 p-4 text-purple-900">{panelAccessMessage}</p>}{notice && <p role="status" className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-green-800">{notice}</p>}{error && <p role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">{error}</p>}
       {loading ? <p className="mt-8 rounded-xl bg-white p-6 text-slate-600">Carregando planos...</p> : data && <>
         {data.current && <div className="mt-6 rounded-xl border border-purple-200 bg-white p-4 text-slate-700">
-          <p>Plano atual: <strong>{data.current.name}</strong> · Status: <strong>{data.current.cancellationPending ? "renovação cancelada" : data.current.status}</strong>
-            {data.current.currentPeriodEnd ? ` · ${data.current.cancellationPending ? "Acesso até" : data.current.status === "expired" ? "Vencido em" : "Próxima renovação"}: ${new Date(data.current.currentPeriodEnd).toLocaleDateString("pt-BR")}` : ""}
+          <p>Plano atual: <strong>{data.current.name}</strong> · Status: <strong>{data.current.status === "trialing" ? "teste grátis" : data.current.cancellationPending ? "renovação cancelada" : data.current.status}</strong>
+            {data.current.currentPeriodEnd ? ` · ${data.current.status === "trialing" ? "Teste até" : data.current.cancellationPending ? "Acesso até" : data.current.status === "expired" ? "Vencido em" : "Próxima renovação"}: ${new Date(data.current.currentPeriodEnd).toLocaleDateString("pt-BR")}` : ""}
           </p>
           {data.current.subscriptionSyncPending && <p className="mt-2 text-sm text-amber-700">O checkout foi pago, mas o ID da assinatura ainda não foi associado. Sincronize a assinatura para habilitar o cancelamento.</p>}
           {data.current.cancellationPending && <p className="mt-2 text-sm text-slate-600">Seu acesso permanece ativo até o fim do período já pago.</p>}
         </div>}
         <div className="mt-8 grid gap-5 md:grid-cols-3">{data.plans.map((plan) => {
-          const current = data.current?.code === plan.code && data.current.status === "active";
+          const current = data.current?.code === plan.code && (data.current.status === "active" || data.current.status === "trialing");
           const paid = plan.monthlyPrice > 0;
           const reactivatingExpiredPlan =
-            paid && data.current?.code === plan.code && data.current.status !== "active";
+            paid && data.current?.code === plan.code && data.current.status !== "active" && data.current.status !== "trialing";
           return <article key={plan.id} className={"flex flex-col rounded-2xl border bg-white p-6 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-purple-500 hover:shadow-lg focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-100 " + (current ? "border-purple-400 ring-2 ring-purple-100" : "border-slate-200")}>
             <p className="text-sm font-semibold uppercase tracking-wide text-purple-700">{plan.name}</p>
             <p className="mt-4 text-3xl font-bold text-slate-900">{money.format(plan.monthlyPrice)}<span className="text-base font-normal text-slate-500"> / mês</span></p>
@@ -157,7 +158,7 @@ function PlanosContent() {
             </ul>
             <div className="mt-auto space-y-3 pt-6">
               {current ? <>
-                <button disabled className="w-full rounded-lg border border-slate-300 px-4 py-3 font-semibold text-slate-500">Plano atual</button>
+                <button disabled className="w-full rounded-lg border border-slate-300 px-4 py-3 font-semibold text-slate-500">{data.current?.status === "trialing" ? "Teste Basic ativo" : "Plano atual"}</button>
                 {data.current?.canCancel && <button onClick={() => {
                   const endDate = data.current?.currentPeriodEnd
                     ? new Date(data.current.currentPeriodEnd).toLocaleDateString("pt-BR")

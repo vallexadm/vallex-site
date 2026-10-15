@@ -31,10 +31,25 @@ export async function GET(request: Request) {
     if (error) return fail("Não foi possível consultar seu plano atual.", 500);
     currentPlan = data;
   }
-  const currentStatus =
-    subscription?.status === "active" &&
-    subscription.current_period_end &&
-    isAsaasPeriodExpired(subscription.current_period_end)
+  const trialExpired =
+    subscription?.status === "trialing" &&
+    (!subscription.current_period_end ||
+      isAsaasPeriodExpired(subscription.current_period_end));
+  if (trialExpired) {
+    const { data: freePlan, error: freePlanError } = await admin
+      .from("plans")
+      .select("id, code, name")
+      .eq("code", "free")
+      .eq("is_active", true)
+      .maybeSingle();
+    if (freePlanError) return fail("Não foi possível consultar o plano Free.", 500);
+    currentPlan = freePlan;
+  }
+  const currentStatus = trialExpired
+    ? "active"
+    : subscription?.status === "active" &&
+        subscription.current_period_end &&
+        isAsaasPeriodExpired(subscription.current_period_end)
       ? "expired"
       : subscription?.status ?? "active";
   const currentPeriodIsValid =
@@ -49,7 +64,7 @@ export async function GET(request: Request) {
       code: currentPlan.code,
       name: currentPlan.name,
       status: currentStatus,
-      currentPeriodEnd: subscription?.current_period_end ?? null,
+      currentPeriodEnd: trialExpired ? null : subscription?.current_period_end ?? null,
       cancellationPending: Boolean(subscription?.canceled_at) && currentPeriodIsValid,
       canCancel: Boolean(
         isPaidAsaasPlan &&

@@ -43,14 +43,28 @@ export async function getPlanEntitlements(
     };
   }
 
-  if (!subscription || subscription.status !== "active") {
+  const isTrialing = subscription?.status === "trialing";
+  if (
+    !subscription ||
+    (subscription.status !== "active" && !isTrialing)
+  ) {
     return { entitlements: FREE_ENTITLEMENTS };
   }
 
-  if (subscription.current_period_end) {
-    if (isAsaasPeriodExpired(subscription.current_period_end)) {
-      return { entitlements: FREE_ENTITLEMENTS };
-    }
+  // Trial access is always time-limited. Missing or expired end dates fail closed to Free.
+  if (
+    isTrialing &&
+    (!subscription.current_period_end ||
+      isAsaasPeriodExpired(subscription.current_period_end))
+  ) {
+    return { entitlements: FREE_ENTITLEMENTS };
+  }
+
+  if (
+    subscription.current_period_end &&
+    isAsaasPeriodExpired(subscription.current_period_end)
+  ) {
+    return { entitlements: FREE_ENTITLEMENTS };
   }
 
   const { data: plan, error: planError } = await admin

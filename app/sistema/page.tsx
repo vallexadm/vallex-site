@@ -303,8 +303,9 @@ export default function SistemaPage() {
             </div>
 
             <p className="text-sm text-slate-500">
-              Sua área começa no plano Free. A Vitrine será criada como não
-              publicada; você decide quando torná-la pública.
+              Sua área começa com 5 dias grátis do plano Basic, sem cobrança.
+              Depois do teste, a conta volta ao Free. A Vitrine será criada
+              como não publicada; você decide quando torná-la pública.
             </p>
 
             {contextError && (

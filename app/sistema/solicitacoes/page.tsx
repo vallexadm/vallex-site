@@ -99,7 +99,10 @@ function formatarValor(valor: number | null) {
 }
 
 function linkWhatsApp(telefone: string) {
-  const numero = telefone.replace(/\D/g, "");
+  const digitado = telefone.replace(/\D/g, "");
+  const numero = digitado.length === 10 || digitado.length === 11
+    ? `55${digitado}`
+    : digitado;
   return `https://wa.me/${numero}`;
 }
 
@@ -139,6 +142,8 @@ export default function SolicitacoesPage() {
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
   const [mensagemStatus, setMensagemStatus] = useState("");
   const [plano, setPlano] = useState<ApiResponse["plan"] | null>(null);
+  const [organizacao, setOrganizacao] = useState<ApiResponse["organization"] | null>(null);
+  const [emailAcesso, setEmailAcesso] = useState("");
   const [exportandoCsv, setExportandoCsv] = useState(false);
 
   const podeGerenciarSolicitacoes = plano?.canManageRequests === true;
@@ -187,6 +192,8 @@ export default function SolicitacoesPage() {
         }
 
         setPlano(resultado.plan ?? null);
+        setOrganizacao(resultado.organization ?? null);
+        setEmailAcesso(data.session.user.email ?? "");
         setSolicitacoes(resultado.solicitacoes ?? []);
       } catch (error) {
         setErro(
@@ -547,21 +554,20 @@ async function criarOrcamento(id: string) {
               ServiçoFácil.
             </p>
             {plano && (
-              <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm">
-                <span>
-                  Plano atual: <strong>{plano.name}</strong>
-                </span>
+              <div className="mt-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm">
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-slate-700">
+                  <span>Prestador: <strong>{organizacao?.name ?? "Sua organização"}</strong></span>
+                  {emailAcesso && <span>Acesso: <strong>{emailAcesso}</strong></span>}
+                  <span>Plano atual: <strong>{plano.name}</strong></span>
+                </div>
                 {plano.code === "free" && (
-                  <span className="text-slate-600">
-                    No Free, as solicitações ficam disponíveis para consulta.
-                  </span>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-slate-600">No Free, você consulta as solicitações em modo somente leitura.</span>
+                    <Link href="/sistema/planos" className="inline-flex rounded-lg bg-purple-700 px-4 py-2 font-semibold text-white hover:bg-purple-800">
+                      Conhecer planos e contratar Basic
+                    </Link>
+                  </div>
                 )}
-                <Link
-                  href="/sistema/planos"
-                  className="font-semibold text-purple-700 hover:underline"
-                >
-                  Consultar planos
-                </Link>
               </div>
             )}
             {mensagemStatus && (
@@ -583,7 +589,7 @@ async function criarOrcamento(id: string) {
             href={plano?.code === "free" ? "/sistema/planos" : "/sistema"}
             className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold transition hover:border-violet-400 hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2"
           >
-            <span aria-hidden="true">←</span> {plano?.code === "free" ? "Consultar planos" : "Voltar ao painel"}
+            <span aria-hidden="true">←</span> {plano?.code === "free" ? "Planos" : "Voltar ao painel"}
           </Link>
         </div>
 

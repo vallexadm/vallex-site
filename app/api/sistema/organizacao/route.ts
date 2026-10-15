@@ -371,27 +371,27 @@ export async function POST(request: Request) {
       });
     }
 
-    const { data: freePlan, error: planError } = await supabaseAdmin
+    const { data: basicPlan, error: planError } = await supabaseAdmin
       .from("plans")
       .select("id, code, name")
-      .eq("code", "free")
+      .eq("code", "basic")
       .eq("is_active", true)
       .maybeSingle();
 
     if (planError) {
-      console.error("Erro ao consultar o plano Free:", planError);
+      console.error("Erro ao consultar o plano Basic:", planError);
       return NextResponse.json(
         { ok: false, message: "Não foi possível consultar os planos." },
         { status: 500 }
       );
     }
 
-    if (!freePlan) {
+    if (!basicPlan) {
       return NextResponse.json(
         {
           ok: false,
           message:
-            "O plano gratuito ainda não está disponível. Tente novamente mais tarde.",
+            "O período de teste Basic ainda não está disponível. Tente novamente mais tarde.",
         },
         { status: 503 }
       );
@@ -488,13 +488,20 @@ export async function POST(request: Request) {
       );
     }
 
+    const trialStartedAt = new Date();
+    const trialEndsAt = new Date(
+      trialStartedAt.getTime() + 5 * 24 * 60 * 60 * 1000
+    );
     const { error: subscriptionError } = await supabaseAdmin
       .from("organization_subscriptions")
       .insert({
         organization_id: organization.id,
-        plan_id: freePlan.id,
+        plan_id: basicPlan.id,
         billing_provider: "manual",
-        status: "active",
+        status: "trialing",
+        started_at: trialStartedAt.toISOString(),
+        current_period_start: trialStartedAt.toISOString(),
+        current_period_end: trialEndsAt.toISOString(),
       });
 
     if (subscriptionError) {
@@ -515,7 +522,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { ok: true, organization, plan: freePlan },
+      { ok: true, organization, plan: basicPlan, trialEndsAt: trialEndsAt.toISOString() },
       { status: 201 }
     );
   } catch (error) {
