@@ -38,7 +38,7 @@
 }
 
 .form {
-  background: #FCFAFD;
+  background: #ffffff;
   padding: 36px;
   border: 1px solid #eee6f4;
   border-radius: 16px;
@@ -66,7 +66,7 @@
   border: 1px solid #ded5e7;
   border-radius: 8px;
   padding: 13px 14px;
-  background: #FCFAFD;
+  background: #ffffff;
   color: #241333;
   font: inherit;
   font-size: 14px;
@@ -199,7 +199,7 @@
 
 .successCard {
   width: min(100%, 600px);
-  background: #FCFAFD;
+  background: #ffffff;
   border: 1px solid #eee6f4;
   border-radius: 16px;
   padding: 48px 36px;
