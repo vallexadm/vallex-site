@@ -23,7 +23,7 @@ export default function PrivacidadePage() {
               ServiçoFácil usam dados pessoais nas páginas públicas e na área
               do prestador.
             </p>
-            <p className="document-meta">Versão inicial · Atualizada em 14/10/2026</p>
+            <p className="document-meta">Versão inicial · Atualizada em 15/10/2026</p>
           </header>
 
           <aside className="document-review-note">
@@ -95,6 +95,13 @@ export default function PrivacidadePage() {
                   não solicita que o usuário envie dados de cartão por
                   formulários próprios.
                 </li>
+                <li>
+                  <strong>Horário e clima local:</strong> a cidade aproximada,
+                  o fuso horário e as coordenadas aproximadas inferidas do
+                  acesso podem ser usados para exibir o horário e as condições
+                  atuais da região. Esses dados não identificam um endereço
+                  exato.
+                </li>
               </ul>
             </section>
 
@@ -123,6 +130,14 @@ export default function PrivacidadePage() {
                 Supabase e Asaas, conforme a função de cada serviço. A região
                 do projeto Supabase ainda será confirmada na configuração da
                 conta. Não vendemos dados pessoais.
+              </p>
+              <p>
+                Para mostrar informações locais, a hospedagem Netlify fornece
+                uma estimativa de cidade e coordenadas com base no acesso. As
+                coordenadas aproximadas são consultadas no serviço Open-Meteo
+                para obter as condições atuais do clima. A estimativa pode não
+                corresponder à cidade real, especialmente quando a conexão usa
+                VPN ou rede corporativa.
               </p>
               <p>
                 Depois de receber uma solicitação, o prestador pode tratar os

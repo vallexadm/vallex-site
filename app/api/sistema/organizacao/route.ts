@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { normalizeMemberPermissions, ownerPermissions } from "@/lib/team-permissions";
+import { getPlanEntitlements } from "@/lib/server/plan-entitlements";
 
 function createSupabaseAdmin() {
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -88,6 +90,18 @@ export async function GET(request: Request) {
 
     // O proprietário tem precedência sobre qualquer associação de membro.
     if (ownedOrganization) {
+      const planResult = await getPlanEntitlements(
+        supabaseAdmin,
+        ownedOrganization.id
+      );
+
+      if (!planResult.entitlements) {
+        return NextResponse.json(
+          { ok: false, message: planResult.error },
+          { status: 503 }
+        );
+      }
+
       return NextResponse.json({
         ok: true,
         organization: {
@@ -95,8 +109,14 @@ export async function GET(request: Request) {
           name: ownedOrganization.name,
           business_type: ownedOrganization.business_type,
         },
+        plan: {
+          code: planResult.entitlements.code,
+          name: planResult.entitlements.name,
+          canAccessPanel: planResult.entitlements.canAccessPanel,
+        },
         role: "owner",
         permissions: {
+          modules: ownerPermissions,
           canManageOrganization: true,
           canManageTeam: true,
           canManageSettings: true,
@@ -115,7 +135,7 @@ export async function GET(request: Request) {
     const { data: memberships, error: membershipError } =
       await supabaseAdmin
         .from("organization_members")
-        .select("organization_id, role")
+        .select("organization_id, role, permissions")
         .eq("user_id", userId);
 
     if (membershipError) {
@@ -193,11 +213,29 @@ export async function GET(request: Request) {
       );
     }
 
+    const planResult = await getPlanEntitlements(
+      supabaseAdmin,
+      organization.id
+    );
+
+    if (!planResult.entitlements) {
+      return NextResponse.json(
+        { ok: false, message: planResult.error },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json({
       ok: true,
       organization,
+      plan: {
+        code: planResult.entitlements.code,
+        name: planResult.entitlements.name,
+        canAccessPanel: planResult.entitlements.canAccessPanel,
+      },
       role: "member",
       permissions: {
+        modules: normalizeMemberPermissions(membership.permissions),
         canManageOrganization: false,
         canManageTeam: false,
         canManageSettings: false,
@@ -484,5 +522,70 @@ export async function POST(request: Request) {
       { ok: false, message: "Ocorreu um erro ao configurar sua conta." },
       { status: 500 }
     );
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const authUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const authorization = request.headers.get("authorization");
+    const token = authorization?.startsWith("Bearer ")
+      ? authorization.slice("Bearer ".length).trim()
+      : "";
+
+    if (!token) {
+      return NextResponse.json({ ok: false, message: "Entre na sua conta para continuar." }, { status: 401 });
+    }
+    if (!authUrl || !anonKey) {
+      return NextResponse.json({ ok: false, message: "Configuração do servidor incompleta." }, { status: 500 });
+    }
+
+    const authClient = createClient(authUrl, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    const { data: { user }, error: authError } = await authClient.auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ ok: false, message: "Sua sessão expirou. Entre novamente." }, { status: 401 });
+    }
+
+    let payload: Record<string, unknown>;
+    try {
+      const body: unknown = await request.json();
+      if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("invalid");
+      payload = body as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ ok: false, message: "Os dados enviados são inválidos." }, { status: 400 });
+    }
+
+    const name = typeof payload.name === "string" ? payload.name.trim() : "";
+    const businessType = typeof payload.business_type === "string" ? payload.business_type.trim() : "";
+    if (name.length < 2 || name.length > 160) {
+      return NextResponse.json({ ok: false, message: "O nome deve ter entre 2 e 160 caracteres." }, { status: 400 });
+    }
+    if (businessType.length < 2 || businessType.length > 100) {
+      return NextResponse.json({ ok: false, message: "Informe a atividade principal (de 2 a 100 caracteres)." }, { status: 400 });
+    }
+
+    const supabaseAdmin = createSupabaseAdmin();
+    const { data, error } = await supabaseAdmin
+      .from("organizations")
+      .update({ name, business_type: businessType, updated_at: new Date().toISOString() })
+      .eq("owner_id", user.id)
+      .select("id,name,business_type")
+      .maybeSingle();
+
+    if (error) {
+      console.error("Erro ao atualizar os dados do negócio:", error);
+      return NextResponse.json({ ok: false, message: "Não foi possível salvar os dados do negócio." }, { status: 500 });
+    }
+    if (!data) {
+      return NextResponse.json({ ok: false, message: "Somente o proprietário pode alterar os dados do negócio." }, { status: 403 });
+    }
+
+    return NextResponse.json({ ok: true, organization: data, message: "Dados do negócio atualizados." });
+  } catch (error) {
+    console.error("Erro ao atualizar organização:", error);
+    return NextResponse.json({ ok: false, message: "Ocorreu um erro ao salvar os dados." }, { status: 500 });
   }
 }

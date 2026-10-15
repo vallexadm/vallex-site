@@ -18,18 +18,19 @@ export default function AceitarConvitePage() {
   const [creatingAccount, setCreatingAccount] = useState(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tokenFromLink = params.get("token") ?? "";
-    const emailFromLink = params.get("email") ?? "";
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      const tokenFromLink = params.get("token") ?? "";
+      const emailFromLink = params.get("email") ?? "";
 
-    if (/^[a-f0-9]{64}$/i.test(tokenFromLink)) {
-      setInvitationToken(tokenFromLink);
-    }
-    if (emailFromLink.includes("@")) setInvitedEmail(emailFromLink);
+      if (/^[a-f0-9]{64}$/i.test(tokenFromLink)) setInvitationToken(tokenFromLink);
+      if (emailFromLink.includes("@")) setInvitedEmail(emailFromLink);
 
-    void supabase.auth.getSession().then(({ data }) => {
-      setAccountEmail(data.session?.user.email ?? "");
-    });
+      void supabase.auth.getSession().then(({ data }) => {
+        setAccountEmail(data.session?.user.email ?? "");
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   function loginUrl() {

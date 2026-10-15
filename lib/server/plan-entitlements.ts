@@ -4,6 +4,7 @@ import { isAsaasPeriodExpired } from "@/lib/server/asaas-billing-dates";
 export type PlanEntitlements = {
   code: "free" | "basic" | "professional" | "enterprise";
   name: string;
+  canAccessPanel: boolean;
   canManageRequests: boolean;
   canFilterRequests: boolean;
   canExportCsv: boolean;
@@ -16,6 +17,7 @@ type EntitlementsResult =
 const FREE_ENTITLEMENTS: PlanEntitlements = {
   code: "free",
   name: "Free",
+  canAccessPanel: false,
   canManageRequests: false,
   canFilterRequests: false,
   canExportCsv: false,
@@ -85,6 +87,7 @@ export async function getPlanEntitlements(
     entitlements: {
       code,
       name: plan.name || code,
+      canAccessPanel: paid,
       canManageRequests: paid,
       canFilterRequests: paid,
       canExportCsv: code === "professional" || code === "enterprise",

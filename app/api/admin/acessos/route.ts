@@ -1,0 +1,89 @@
+import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { requirePlatformPermission, normalizePlatformPermissions } from "@/lib/server/platform-admin";
+
+export const runtime = "nodejs";
+
+async function owner(request: Request) {
+  const auth = await requirePlatformPermission(request, "admin_access", "manage");
+  if (!auth.ok) return auth;
+  if (!auth.context.isOwner) return { ok: false as const, response: NextResponse.json({ ok: false, message: "Somente o administrador proprietário pode gerenciar acessos." }, { status: 403 }) };
+  return auth;
+}
+
+export async function GET(request: Request) {
+  const auth = await owner(request);
+  if (!auth.ok) return auth.response;
+  const { data, error } = await auth.context.supabase.from("platform_admin_members").select("id,user_id,display_name,email,permissions,is_active,created_at,updated_at").order("created_at");
+  if (error) return NextResponse.json({ ok: false, message: "Não foi possível carregar os acessos. Confira se a migração foi aplicada no Supabase de teste." }, { status: 503 });
+  return NextResponse.json({ ok: true, members: data ?? [] }, { headers: { "Cache-Control": "private, no-store" } });
+}
+
+async function findAuthUserId(supabase: SupabaseClient, email: string) {
+  for (let page = 1; page <= 20; page += 1) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 100 });
+    if (error) throw error;
+    const user = data.users.find((item) => item.email?.toLowerCase() === email);
+    if (user) return user.id;
+    if (data.users.length < 100) break;
+  }
+  return null;
+}
+
+export async function POST(request: Request) {
+  const auth = await owner(request);
+  if (!auth.ok) return auth.response;
+  try {
+    const body = await request.json() as Record<string, unknown>;
+    const displayName = String(body.display_name ?? "").trim().slice(0, 120);
+    const email = String(body.email ?? "").trim().toLowerCase() || null;
+    if (displayName.length < 2) return NextResponse.json({ ok: false, message: "Informe o nome da pessoa." }, { status: 400 });
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ ok: false, message: "Informe um e-mail válido." }, { status: 400 });
+    const { count, error: countError } = await auth.context.supabase.from("platform_admin_members").select("id", { count: "exact", head: true });
+    if (countError) throw countError;
+    if ((count ?? 0) >= 2) return NextResponse.json({ ok: false, message: "O limite de duas pessoas já foi atingido." }, { status: 409 });
+    const userId = email ? await findAuthUserId(auth.context.supabase, email) : null;
+    const { data, error } = await auth.context.supabase.from("platform_admin_members").insert({ display_name: displayName, email, user_id: userId, permissions: normalizePlatformPermissions(body.permissions), is_active: userId ? body.is_active === true : false }).select("id,user_id,display_name,email,permissions,is_active").single();
+    if (error) throw error;
+    return NextResponse.json({ ok: true, member: data, pending: !userId }, { status: 201 });
+  } catch (error) {
+    console.error("Falha ao criar acesso administrativo:", error);
+    return NextResponse.json({ ok: false, message: "Não foi possível salvar. Verifique se o e-mail já está cadastrado." }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  const auth = await owner(request);
+  if (!auth.ok) return auth.response;
+  try {
+    const body = await request.json() as Record<string, unknown>;
+    const id = String(body.id ?? "").trim();
+    const displayName = String(body.display_name ?? "").trim().slice(0, 120);
+    const email = String(body.email ?? "").trim().toLowerCase() || null;
+    if (!/^[0-9a-f-]{36}$/i.test(id) || displayName.length < 2) return NextResponse.json({ ok: false, message: "Confira o nome e o cadastro selecionado." }, { status: 400 });
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ ok: false, message: "Informe um e-mail válido." }, { status: 400 });
+    const userId = email ? await findAuthUserId(auth.context.supabase, email) : null;
+    const { data, error } = await auth.context.supabase.from("platform_admin_members").update({ display_name: displayName, email, user_id: userId, permissions: normalizePlatformPermissions(body.permissions), is_active: userId ? body.is_active === true : false, updated_at: new Date().toISOString() }).eq("id", id).select("id,user_id,display_name,email,permissions,is_active").single();
+    if (error) throw error;
+    return NextResponse.json({ ok: true, member: data, pending: !userId });
+  } catch (error) {
+    console.error("Falha ao atualizar acesso administrativo:", error);
+    return NextResponse.json({ ok: false, message: "Não foi possível salvar. O e-mail pode já estar vinculado a outro acesso." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  const auth = await owner(request);
+  if (!auth.ok) return auth.response;
+  try {
+    const body = await request.json() as Record<string, unknown>;
+    const id = String(body.id ?? "").trim();
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ ok: false, message: "Cadastro inválido." }, { status: 400 });
+    const { error } = await auth.context.supabase.from("platform_admin_members").delete().eq("id", id);
+    if (error) throw error;
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Falha ao excluir acesso administrativo:", error);
+    return NextResponse.json({ ok: false, message: "Não foi possível excluir este acesso." }, { status: 500 });
+  }
+}

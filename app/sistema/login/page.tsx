@@ -107,7 +107,7 @@ export default function LoginPage() {
           "Conta criada. Confirme seu e-mail e depois entre para concluir o cadastro do seu negócio."
         );
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { error } = await supabase.auth.signInWithPassword({
           email: email.trim().toLowerCase(),
           password,
         });
@@ -115,22 +115,6 @@ export default function LoginPage() {
         if (error) throw error;
 
         const destination = getSafeDestination();
-        if (destination === "/sistema" && data.session?.access_token) {
-          try {
-            const accessResponse = await fetch("/api/admin/access", {
-              headers: { Authorization: `Bearer ${data.session.access_token}` },
-              cache: "no-store",
-            });
-            const access = accessResponse.ok ? await accessResponse.json() : null;
-            if (access?.isAdmin === true) {
-              window.location.replace("/admin");
-              return;
-            }
-          } catch {
-            // Keep the provider login available if the admin check is unavailable.
-          }
-        }
-
         window.location.replace(destination);
         return;
       }
@@ -327,8 +311,8 @@ export default function LoginPage() {
                 className="mt-1 accent-violet-700"
               />
               <span>
-                Li e aceito os <Link className="font-medium text-violet-700 underline" href="/termos">Termos de Uso</Link> e li a{" "}
-                <Link className="font-medium text-violet-700 underline" href="/privacidade">Política de Privacidade</Link>.
+                Li e aceito os <Link className="font-semibold text-violet-700 underline underline-offset-2 hover:text-violet-900" href="/termos" target="_blank" rel="noopener noreferrer">Termos de Uso</Link> e li a{" "}
+                <Link className="font-semibold text-violet-700 underline underline-offset-2 hover:text-violet-900" href="/privacidade" target="_blank" rel="noopener noreferrer">Política de Privacidade</Link>.
               </span>
             </label>
           )}
@@ -352,6 +336,8 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-xs text-slate-500">
           <Link className="underline hover:text-violet-700" href="/faq">Perguntas frequentes</Link>
+          {" · "}
+          <Link className="underline hover:text-violet-700" href="/termos">Termos de Uso</Link>
           {" · "}
           <Link className="underline hover:text-violet-700" href="/privacidade">Privacidade</Link>
         </p>
@@ -388,5 +374,4 @@ export default function LoginPage() {
     </main>
   );
 }
-
 

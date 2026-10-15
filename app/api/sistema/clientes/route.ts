@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { normalizeMemberPermissions, ownerPermissions } from "@/lib/team-permissions";
 
 export const runtime = "nodejs";
 
@@ -105,6 +106,7 @@ async function getAuthenticatedContext(request: NextRequest) {
       userId,
       organization: ownedOrganization,
       role: "owner" as const,
+      permissions: ownerPermissions,
     };
   }
 
@@ -117,6 +119,7 @@ async function getAuthenticatedContext(request: NextRequest) {
       `
         organization_id,
         role,
+        permissions,
         organizations (
           id,
           name,
@@ -159,6 +162,7 @@ async function getAuthenticatedContext(request: NextRequest) {
     userId,
     organization,
     role: "member" as const,
+    permissions: normalizeMemberPermissions(membership.permissions),
   };
 }
 
@@ -174,11 +178,12 @@ export async function GET(request: NextRequest) {
       supabaseAdmin,
       organization,
       role,
+      permissions,
     } = context;
 
-    if (role !== "owner") {
+    if (!permissions.customers.view) {
       return errorResponse(
-        "O cadastro de clientes está disponível somente para o proprietário.",
+        "O proprietário ainda não liberou a consulta de clientes para sua conta.",
         403
       );
     }
@@ -207,6 +212,7 @@ export async function GET(request: NextRequest) {
         name: organization.name,
       },
       role,
+      permissions,
       customers: customers ?? [],
     });
   } catch (error) {
@@ -231,11 +237,12 @@ export async function POST(request: NextRequest) {
       supabaseAdmin,
       organization,
       role,
+      permissions,
     } = context;
 
-    if (role !== "owner") {
+    if (!permissions.customers.manage) {
       return errorResponse(
-        "Somente o proprietário pode cadastrar clientes.",
+        "O proprietário ainda não liberou o gerenciamento de clientes para sua conta.",
         403
       );
     }
@@ -323,11 +330,12 @@ export async function PATCH(request: NextRequest) {
       supabaseAdmin,
       organization,
       role,
+      permissions,
     } = context;
 
-    if (role !== "owner") {
+    if (!permissions.customers.manage) {
       return errorResponse(
-        "Somente o proprietário pode alterar clientes.",
+        "O proprietário ainda não liberou o gerenciamento de clientes para sua conta.",
         403
       );
     }
@@ -423,11 +431,12 @@ export async function DELETE(request: NextRequest) {
       supabaseAdmin,
       organization,
       role,
+      permissions,
     } = context;
 
-    if (role !== "owner") {
+    if (!permissions.customers.manage) {
       return errorResponse(
-        "Somente o proprietário pode excluir clientes.",
+        "O proprietário ainda não liberou o gerenciamento de clientes para sua conta.",
         403
       );
     }

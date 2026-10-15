@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { normalizeMemberPermissions, ownerPermissions } from "@/lib/team-permissions";
 
 type Role = "owner" | "member";
 
@@ -33,27 +34,28 @@ async function getContext(request: Request) {
   const { data: owned, error: ownerError } = await admin
     .from("organizations").select("id, name, owner_id").eq("owner_id", user.id).maybeSingle();
   if (ownerError) return { error: reply("Não foi possível consultar a organização.", 500) };
-  if (owned) return { admin, user, organization: owned, role: "owner" as Role };
+  if (owned) return { admin, user, organization: owned, role: "owner" as Role, permissions: ownerPermissions };
 
   const { data: membership, error: memberError } = await admin
-    .from("organization_members").select("organization_id, role").eq("user_id", user.id).maybeSingle();
+    .from("organization_members").select("organization_id, role, permissions").eq("user_id", user.id).maybeSingle();
   if (memberError) return { error: reply("Não foi possível consultar sua equipe.", 500) };
   if (!membership || membership.role !== "member") return { error: reply("Organização não encontrada.", 403) };
   const { data: organization, error: organizationError } = await admin
     .from("organizations").select("id, name, owner_id").eq("id", membership.organization_id).maybeSingle();
   if (organizationError || !organization) return { error: reply("Não foi possível carregar a organização.", 500) };
-  return { admin, user, organization, role: "member" as Role };
+  return { admin, user, organization, role: "member" as Role, permissions: normalizeMemberPermissions(membership.permissions) };
 }
 
 export async function GET(request: Request) {
   try {
     const context = await getContext(request);
     if ("error" in context) return context.error;
-    const { admin, user, organization, role } = context;
+    const { admin, user, organization, role, permissions } = context;
+    if (!permissions.agenda.view) return reply("O proprietário ainda não liberou o acesso à Agenda para sua conta.", 403);
     let query = admin.from("organization_appointments").select(
       "id, title, details, starts_at, ends_at, status, assigned_to, created_by, created_at, updated_at, customers(id, name, phone, address)"
     ).eq("organization_id", organization.id).order("starts_at", { ascending: true });
-    if (role === "member") query = query.eq("assigned_to", user.id);
+    if (role === "member" && !permissions.agenda.manage) query = query.eq("assigned_to", user.id);
     const { data: appointments, error } = await query;
     if (error) {
       console.error("Erro ao carregar agenda:", error);
@@ -62,7 +64,7 @@ export async function GET(request: Request) {
 
     let customers: { id: string; name: string; phone: string | null; address: string | null }[] = [];
     let team: { id: string; email: string; name: string; role: Role }[] = [];
-    if (role === "owner") {
+    if (role === "owner" || permissions.agenda.manage) {
       const [{ data: customerRows, error: customerError }, { data: members, error: membersError }, { data: acceptedInvitations, error: invitationError }] = await Promise.all([
         admin.from("customers").select("id, name, phone, address").eq("organization_id", organization.id).eq("status", "ativo").order("name"),
         admin.from("organization_members").select("user_id, role").eq("organization_id", organization.id),
@@ -86,9 +88,9 @@ export async function GET(request: Request) {
     const namesByUser = new Map(team.map((person) => [person.id, person.name]));
     const visibleAppointments = (appointments ?? []).map((appointment) => ({
       ...appointment,
-      assigned_name: role === "owner" ? namesByUser.get(appointment.assigned_to) ?? "Membro da equipe" : null,
+      assigned_name: role === "owner" || permissions.agenda.manage ? namesByUser.get(appointment.assigned_to) ?? "Membro da equipe" : null,
     }));
-    return NextResponse.json({ ok: true, organization, role, appointments: visibleAppointments, customers, team });
+    return NextResponse.json({ ok: true, organization, role, permissions, appointments: visibleAppointments, customers, team });
   } catch (error) {
     console.error("Erro na API GET da agenda:", error);
     return reply("Ocorreu um erro ao carregar a agenda.", 500);
@@ -99,8 +101,8 @@ export async function POST(request: Request) {
   try {
     const context = await getContext(request);
     if ("error" in context) return context.error;
-    const { admin, user, organization, role } = context;
-    if (role !== "owner") return reply("Somente o proprietário pode criar ou atribuir atendimentos.", 403);
+    const { admin, user, organization, role, permissions } = context;
+    if (role !== "owner" && !permissions.agenda.manage) return reply("O proprietário ainda não liberou o gerenciamento da Agenda para sua conta.", 403);
     let body: unknown;
     try { body = await request.json(); } catch { return reply("Corpo da requisição inválido.", 400); }
     if (!body || typeof body !== "object") return reply("Dados do atendimento inválidos.", 400);
@@ -147,7 +149,7 @@ export async function PATCH(request: Request) {
   try {
     const context = await getContext(request);
     if ("error" in context) return context.error;
-    const { admin, user, organization, role } = context;
+    const { admin, user, organization, role, permissions } = context;
     let body: unknown;
     try { body = await request.json(); } catch { return reply("Corpo da requisição inválido.", 400); }
     if (!body || typeof body !== "object") return reply("Dados do atendimento inválidos.", 400);
@@ -156,7 +158,8 @@ export async function PATCH(request: Request) {
     const { data: existing } = await admin.from("organization_appointments").select("id, assigned_to, status").eq("id", id).eq("organization_id", organization.id).maybeSingle();
     if (!existing) return reply("Atendimento não encontrado.", 404);
 
-    if (role === "member") {
+    if (role === "member" && !permissions.agenda.manage) {
+      if (!permissions.agenda.updateAssigned) return reply("O proprietário ainda não liberou a atualização da Agenda para sua conta.", 403);
       if (existing.assigned_to !== user.id || Object.keys(data).some((key) => !["id", "status"].includes(key))) return reply("Você só pode atualizar o andamento dos seus atendimentos.", 403);
       if (!(["in_progress", "completed"] as unknown[]).includes(data.status)) return reply("Status de atendimento inválido.", 400);
       if (existing.status === "completed" || existing.status === "cancelled") return reply("Este atendimento já foi encerrado.", 409);

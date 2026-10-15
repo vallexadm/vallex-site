@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requirePlatformPermission } from "@/lib/server/platform-admin";
 
 function createSupabaseAdmin() {
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -12,55 +13,13 @@ function createSupabaseAdmin() {
   return createClient(supabaseUrl, supabaseSecretKey);
 }
 
-async function validarAdministrador(request: Request) {
-  const authorization = request.headers.get("authorization");
-  const token = authorization?.startsWith("Bearer ")
-    ? authorization.slice(7)
-    : null;
-
-  if (!token) {
-    return {
-      autorizado: false as const,
-      status: 401,
-      message: "Acesso não autorizado.",
-    };
+async function validarAdministrador(request: Request, action: "view" | "edit" = "view") {
+  const access = await requirePlatformPermission(request, "support", action);
+  if (!access.ok) {
+    const body = await access.response.clone().json().catch(() => ({}));
+    return { autorizado: false as const, status: access.response.status, message: body.message ?? "Você não tem permissão para acessar o histórico." };
   }
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const adminUserId = process.env.SUPABASE_ADMIN_USER_ID;
-
-  if (!url || !anonKey || !adminUserId) {
-    return {
-      autorizado: false as const,
-      status: 500,
-      message: "Configuração do sistema incompleta.",
-    };
-  }
-
-  const authClient = createClient(url, anonKey);
-  const { data, error } = await authClient.auth.getUser(token);
-
-  if (error || !data.user) {
-    return {
-      autorizado: false as const,
-      status: 401,
-      message: "Sessão inválida ou expirada.",
-    };
-  }
-
-  if (data.user.id !== adminUserId) {
-    return {
-      autorizado: false as const,
-      status: 403,
-      message: "Você não tem permissão para acessar o histórico.",
-    };
-  }
-
-  return {
-    autorizado: true as const,
-    userId: data.user.id,
-  };
+  return { autorizado: true as const, userId: access.context.userId };
 }
 
 function idValido(id: string) {
@@ -69,7 +28,7 @@ function idValido(id: string) {
 
 export async function GET(request: Request) {
   try {
-    const auth = await validarAdministrador(request);
+    const auth = await validarAdministrador(request, "view");
 
     if (!auth.autorizado) {
       return NextResponse.json(
@@ -125,7 +84,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const auth = await validarAdministrador(request);
+    const auth = await validarAdministrador(request, "edit");
 
     if (!auth.autorizado) {
       return NextResponse.json(

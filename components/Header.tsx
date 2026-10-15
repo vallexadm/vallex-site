@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { siteConfig } from "@/config/site";
+import AccessDock from "@/components/AccessDock";
 
 export default function Header() {
   const pathname = usePathname();
@@ -47,16 +48,8 @@ export default function Header() {
           </ul>
         </nav>
 
-        <div className="header-actions">
-          <Link href="/sistema/login" className="button button-outline">
-            Área do prestador
-          </Link>
-          <Link href="/contato" className="button button-primary">
-            Solicitar orçamento
-          </Link>
-        </div>
-
       </div>
+      <AccessDock />
     </header>
   );
 }

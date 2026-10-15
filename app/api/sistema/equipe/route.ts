@@ -74,7 +74,7 @@ export async function GET(request: Request) {
 
     const { data: members, error: membersError } = await supabaseAdmin
   .from("organization_members")
-  .select("id, user_id, role, created_at")
+  .select("id, user_id, role, permissions, created_at")
   .eq("organization_id", organization.id)
   .order("created_at", { ascending: true });
 

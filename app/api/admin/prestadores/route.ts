@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requirePlatformPermission } from "@/lib/server/platform-admin";
 
 export const runtime = "nodejs";
 
@@ -8,40 +9,17 @@ function unauthorized(message: string, status: number) {
 }
 
 export async function GET(request: Request) {
-  const authorization = request.headers.get("authorization");
-  const token = authorization?.startsWith("Bearer ")
-    ? authorization.slice("Bearer ".length).trim()
-    : "";
-
-  if (!token) return unauthorized("Entre na conta administrativa da VALLEX.", 401);
-
-  const authUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const adminUserId = process.env.SUPABASE_ADMIN_USER_ID;
+  const access = await requirePlatformPermission(request, "providers", "view");
+  if (!access.ok) return access.response;
   const databaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SECRET_KEY;
 
-  if (!authUrl || !anonKey || !adminUserId || !databaseUrl || !serviceKey) {
+  if (!databaseUrl || !serviceKey) {
     const missing = [
-      ["NEXT_PUBLIC_SUPABASE_URL", authUrl],
-      ["NEXT_PUBLIC_SUPABASE_ANON_KEY", anonKey],
-      ["SUPABASE_ADMIN_USER_ID", adminUserId],
       ["SUPABASE_URL", databaseUrl],
       ["SUPABASE_SECRET_KEY", serviceKey],
     ].filter(([, value]) => !value).map(([name]) => name);
     return unauthorized(`Configuração administrativa incompleta no servidor: ${missing.join(", ")}.`, 503);
-  }
-
-  const authClient = createClient(authUrl, anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-  const { data: authData, error: authError } = await authClient.auth.getUser(token);
-
-  if (authError || !authData.user) {
-    return unauthorized("Sua sessão expirou. Entre novamente.", 401);
-  }
-  if (authData.user.id !== adminUserId) {
-    return unauthorized("Esta área é exclusiva da administração VALLEX.", 403);
   }
 
   const admin = createClient(databaseUrl, serviceKey, {
@@ -51,7 +29,7 @@ export async function GET(request: Request) {
     await Promise.all([
       admin.from("organizations").select("id, name, business_type, created_at").order("created_at", { ascending: false }),
       admin.from("organization_public_profiles").select("organization_id, slug, display_name, is_published, service_area, updated_at"),
-      admin.from("organization_subscriptions").select("organization_id, status, current_period_end, plan_id"),
+      admin.from("organization_subscriptions").select("organization_id, status, current_period_end, plan_id, updated_at").order("updated_at", { ascending: false }),
       admin.from("plans").select("id, name, code"),
     ]);
 
@@ -64,9 +42,16 @@ export async function GET(request: Request) {
   const profilesByOrganization = new Map(
     (profilesResult.data ?? []).map((profile) => [profile.organization_id, profile])
   );
-  const subscriptionsByOrganization = new Map(
-    (subscriptionsResult.data ?? []).map((subscription) => [subscription.organization_id, subscription])
-  );
+  const subscriptionsByOrganization = new Map();
+  const sortedSubscriptions = [...(subscriptionsResult.data ?? [])].sort((a, b) => {
+    const currentStatus = (status: string) => ["active", "trialing", "past_due"].includes(status) ? 1 : 0;
+    return currentStatus(b.status) - currentStatus(a.status);
+  });
+  for (const subscription of sortedSubscriptions) {
+    if (!subscriptionsByOrganization.has(subscription.organization_id)) {
+      subscriptionsByOrganization.set(subscription.organization_id, subscription);
+    }
+  }
   const plansById = new Map((plansResult.data ?? []).map((plan) => [plan.id, plan]));
 
   const providers = (organizationsResult.data ?? []).map((organization) => {
@@ -91,6 +76,7 @@ export async function GET(request: Request) {
             status: subscription.status,
             currentPeriodEnd: subscription.current_period_end,
             plan: plansById.get(subscription.plan_id)?.name ?? "Plano não identificado",
+            planCode: plansById.get(subscription.plan_id)?.code ?? "unknown",
           }
         : null,
     };

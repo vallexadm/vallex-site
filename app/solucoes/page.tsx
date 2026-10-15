@@ -41,13 +41,12 @@ const plans = [
     name: "Comece no seu ritmo",
     price: "R$ 0",
     period: "/ mês",
-    users: "1 usuário na equipe",
+    users: "",
     features: [
-      "Acesso inicial ao painel",
-      "Consulta das solicitações recebidas",
-      "Ideal para conhecer o ServiçoFácil",
+      "Sem acesso ao painel de gestão",
+      "Contrate Basic ou Professional para usar o ServiçoFácil",
     ],
-    action: "Criar conta grátis",
+    action: "Criar conta para escolher um plano",
     featured: false,
   },
   {
@@ -57,12 +56,12 @@ const plans = [
     period: "/ mês",
     users: "Até 3 usuários na equipe",
     features: [
-      "Gerenciamento das solicitações",
-      "Filtros para localizar e acompanhar pedidos",
-      "Recursos do plano Free",
+      "Acesso ao painel de gestão do prestador",
+      "Configure a Vitrine e organize serviços, clientes, agenda e financeiro",
+      "Gerencie solicitações, filtros e orçamentos",
     ],
     action: "Conhecer o Basic",
-    featured: true,
+    featured: false,
   },
   {
     code: "PROFESSIONAL",
@@ -71,9 +70,8 @@ const plans = [
     period: "/ mês",
     users: "Até 10 usuários na equipe",
     features: [
-      "Exportação de solicitações em CSV",
-      "Gerenciamento e filtros de solicitações",
-      "Recursos dos planos anteriores",
+      "Painel com todos os recursos do Basic",
+      "Exporte as solicitações em arquivo CSV",
     ],
     action: "Conhecer o Professional",
     featured: false,
@@ -161,9 +159,9 @@ export default function Solucoes() {
               <span className="eyebrow">Planos do ServiçoFácil</span>
               <h2>Escolha o nível de gestão que faz sentido para você</h2>
               <p>
-                Todos começam com acesso ao painel. Os planos pagos ampliam a
-                gestão das solicitações; o Professional também permite exportá-las
-                em CSV. Você pode começar no Free e avançar quando precisar.
+                O painel de gestão está disponível nos planos Basic e
+                Professional. Compare os recursos e escolha o acesso que combina
+                com a rotina do seu negócio.
               </p>
             </div>
 
@@ -173,7 +171,7 @@ export default function Solucoes() {
                   <span className="service-number">{plan.code}</span>
                   <h3 className="plan-name">{plan.name}</h3>
                   <p className="plan-price">{plan.price}<small> {plan.period}</small></p>
-                  <p className="plan-users">{plan.users}</p>
+                  {plan.users && <p className="plan-users">{plan.users}</p>}
                   <ul className="plan-feature-list">
                     {plan.features.map((feature) => <li key={feature}>{feature}</li>)}
                   </ul>
@@ -186,9 +184,20 @@ export default function Solucoes() {
             <p className="plans-note">
               Os valores e recursos exibidos refletem os planos atuais. Basic e
               Professional são contratados dentro da plataforma, após entrar ou
-              criar uma conta. O plano Enterprise não está disponível para
-              contratação neste momento.
+              criar uma conta. O painel de gestão é liberado após a confirmação
+              do pagamento pelo Asaas.
             </p>
+          </div>
+        </section>
+
+        <section className="section solutions-final-cta">
+          <div className="container solutions-final-card">
+            <div>
+              <span className="eyebrow">Divulgue seu negócio</span>
+              <h2>Conheça também a gestão de tráfego pago.</h2>
+              <p>Veja os planos modelo da VALLEX e conte o que você quer alcançar com suas campanhas.</p>
+            </div>
+            <Link href="/trafego-pago" className="button button-primary">Conhecer planos de tráfego</Link>
           </div>
         </section>
 

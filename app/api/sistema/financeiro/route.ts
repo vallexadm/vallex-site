@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
+import { normalizeMemberPermissions, ownerPermissions } from "@/lib/team-permissions";
 
 const sources = ["vallex", "indicacao", "redes_sociais", "busca_web", "recorrente", "outros"] as const;
 const paymentStatuses = ["pago", "pendente"] as const;
@@ -24,7 +25,7 @@ function monthlyDueDate(startDate: string, monthOffset: number) {
   return `${firstOfMonth.getUTCFullYear()}-${String(firstOfMonth.getUTCMonth() + 1).padStart(2, "0")}-${String(Math.min(day, lastDay)).padStart(2, "0")}`;
 }
 
-async function getOwnerContext(request: Request) {
+async function getFinanceContext(request: Request) {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
   const authUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -54,15 +55,27 @@ async function getOwnerContext(request: Request) {
     console.error("Erro ao consultar organização no financeiro:", organizationError);
     return { error: fail("Não foi possível consultar a organização.", 500) };
   }
-  if (!organization) return { error: fail("O financeiro está disponível somente para o proprietário.", 403) };
-  return { admin, user, organization };
+  if (organization) return { admin, user, organization, role: "owner" as const, permissions: ownerPermissions };
+
+  const { data: membership, error: membershipError } = await admin
+    .from("organization_members").select("organization_id, role, permissions").eq("user_id", user.id).maybeSingle();
+  if (membershipError) {
+    console.error("Erro ao consultar permissões financeiras:", membershipError);
+    return { error: fail("Não foi possível consultar as permissões da equipe.", 500) };
+  }
+  if (!membership || membership.role !== "member") return { error: fail("Organização não encontrada.", 403) };
+  const { data: memberOrganization, error: memberOrganizationError } = await admin
+    .from("organizations").select("id, name").eq("id", membership.organization_id).maybeSingle();
+  if (memberOrganizationError || !memberOrganization) return { error: fail("Não foi possível carregar a organização.", 500) };
+  return { admin, user, organization: memberOrganization, role: "member" as const, permissions: normalizeMemberPermissions(membership.permissions) };
 }
 
 export async function GET(request: Request) {
   try {
-    const context = await getOwnerContext(request);
+    const context = await getFinanceContext(request);
     if ("error" in context) return context.error;
-    const { admin, organization } = context;
+    const { admin, organization, permissions } = context;
+    if (!permissions.finance.view) return fail("O proprietário ainda não liberou a consulta do Financeiro para sua conta.", 403);
     const params = new URL(request.url).searchParams;
     if (params.get("receivables") === "all") {
       const { data: outstandingServices, error } = await admin.from("organization_service_records")
@@ -75,7 +88,7 @@ export async function GET(request: Request) {
         return fail("Não foi possível carregar os valores a receber.", 500);
       }
       const receivables = (outstandingServices ?? []).filter((service) => Number(service.amount_charged) > Number(service.amount_received));
-      return NextResponse.json({ ok: true, receivables });
+      return NextResponse.json({ ok: true, permissions, receivables });
     }
     if (params.get("cashflow") === "all") {
       const [servicesResult, expensesResult] = await Promise.all([
@@ -96,7 +109,7 @@ export async function GET(request: Request) {
         return fail("Não foi possível carregar a previsão de caixa.", 500);
       }
       const receivables = (servicesResult.data ?? []).filter((service) => Number(service.amount_charged) > Number(service.amount_received));
-      return NextResponse.json({ ok: true, receivables, pendingExpenses: expensesResult.data ?? [] });
+      return NextResponse.json({ ok: true, permissions, receivables, pendingExpenses: expensesResult.data ?? [] });
     }
     const month = params.get("month") ?? new Date().toISOString().slice(0, 7);
     let fromDate = params.get("from") ?? "";
@@ -168,6 +181,7 @@ export async function GET(request: Request) {
       from: fromDate,
       to: toDate,
       organization_name: organization.name,
+      permissions,
       provider_profile: providerProfileResult.data ?? null,
       services: servicesResult.data ?? [],
       expenses,
@@ -183,9 +197,10 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const context = await getOwnerContext(request);
+    const context = await getFinanceContext(request);
     if ("error" in context) return context.error;
-    const { admin, organization } = context;
+    const { admin, organization, permissions } = context;
+    if (!permissions.finance.manage) return fail("O proprietário ainda não liberou alterações no Financeiro para sua conta.", 403);
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") return fail("Dados da conta inválidos.", 400);
     const data = body as Record<string, unknown>;
@@ -219,9 +234,10 @@ export async function PATCH(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const context = await getOwnerContext(request);
+    const context = await getFinanceContext(request);
     if ("error" in context) return context.error;
-    const { admin, user, organization } = context;
+    const { admin, user, organization, permissions } = context;
+    if (!permissions.finance.manage) return fail("O proprietário ainda não liberou alterações no Financeiro para sua conta.", 403);
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") return fail("Dados financeiros inválidos.", 400);
     const data = body as Record<string, unknown>;
