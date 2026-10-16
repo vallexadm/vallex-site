@@ -28,7 +28,18 @@ export const siteConfig = {
   navigation: [
   { label: "Início", href: "/" },
   { label: "Sobre", href: "/sobre" },
-  { label: "Serviços", href: "/servicos" },
+  {
+    label: "Serviços",
+    href: "/servicos",
+    children: [
+      { label: "Visão geral dos serviços", href: "/servicos" },
+      { label: "Plataforma ServiçoFácil", href: "/solucoes#para-prestadores" },
+      { label: "Planilhas automatizadas", href: "/servicos#planilhas-automatizadas" },
+      { label: "Soluções digitais sob medida", href: "/servicos#solucoes-digitais" },
+      { label: "Gestão de tráfego pago", href: "/trafego-pago" },
+      { label: "Apresentar uma necessidade", href: "/contato#formulario-orcamento" },
+    ],
+  },
   { label: "Soluções", href: "/solucoes" },
   { label: "Experiências", href: "/experiencias" },
   { label: "Contato", href: "/contato" },

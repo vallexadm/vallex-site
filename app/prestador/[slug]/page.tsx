@@ -1,6 +1,9 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { absoluteSiteUrl, isLegalServicesProfile } from "@/lib/seo";
 import SolicitacaoForm from "./SolicitacaoForm";
 
 type PublicProfile = {
@@ -38,7 +41,7 @@ const serviceModeLabels: Record<string, string> = {
   online: "Online",
 };
 
-async function carregarVitrine(
+const carregarVitrine = cache(async function carregarVitrine(
   slug: string
 ): Promise<PublicVitrine> {
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -85,6 +88,57 @@ async function carregarVitrine(
   return {
     profile,
     services: services ?? [],
+  };
+});
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const { profile, services } = await carregarVitrine(slug);
+  const focus = services
+    .slice(0, 2)
+    .map((service) => service.name.trim())
+    .filter(Boolean)
+    .join(" e ") || "Serviços";
+  const serviceArea = profile.service_area?.trim();
+  const title = serviceArea
+    ? `${focus} em ${serviceArea} | ${profile.display_name} | VALLEX`
+    : `${focus} | ${profile.display_name} | VALLEX ServiçoFácil`;
+  const descriptionParts = [
+    profile.description?.trim(),
+    serviceArea ? `Atendimento em ${serviceArea}.` : undefined,
+    services
+      .slice(0, 2)
+      .map((service) => service.description?.trim())
+      .filter(Boolean)
+      .join(" "),
+  ].filter(Boolean);
+  const description = (
+    descriptionParts.join(" ") ||
+    `${profile.display_name}: conheça os serviços, formas de atendimento e contato pela Vitrine Pública do ServiçoFácil da VALLEX.`
+  ).slice(0, 160);
+  const canonical = `/prestador/${encodeURIComponent(profile.slug)}`;
+  const isLegalProfile = isLegalServicesProfile({
+    display_name: profile.display_name,
+    description: profile.description,
+    services,
+  });
+
+  return {
+    title,
+    description,
+    alternates: { canonical },
+    robots: isLegalProfile ? { index: false, follow: true } : undefined,
+    openGraph: {
+      type: "website",
+      url: absoluteSiteUrl(canonical),
+      title,
+      description,
+      siteName: "VALLEX ServiçoFácil",
+    },
   };
 }
 

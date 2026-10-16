@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const organizationName = clean(payload.organizationName, 160);
     const planCode = clean(payload.planCode, 40);
     const needDescription = clean(payload.needDescription, 3000);
-    if (!name || !phone || !needDescription || !["visitante", "prestador"].includes(audience) || payload.consent !== true) {
+    if (!name || !phone || !needDescription || !["visitante", "cliente", "prestador"].includes(audience) || payload.consent !== true) {
       return NextResponse.json({ ok: false, message: "Preencha nome, telefone, necessidade e aceite o contato da VALLEX." }, { status: 400 });
     }
     if (phone.replace(/\D/g, "").length < 10 || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {

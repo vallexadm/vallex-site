@@ -18,13 +18,16 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("redefinir-senha") === "1") {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("redefinir-senha") === "1") {
       void supabase.auth.getSession().then(({ data }) => {
         setMode("reset");
         setMessage(data.session
           ? "Escolha uma nova senha para sua conta."
           : "Abra o link mais recente recebido por e-mail para continuar a redefinição.");
       });
+    } else if (params.get("cadastro") === "1") {
+      setMode("signup");
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {

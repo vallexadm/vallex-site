@@ -6,8 +6,9 @@ import { loadPublicProviders } from "@/lib/public-providers";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Prestadores | VALLEX SERVIÇOFÁCIL",
-  description: "Encontre profissionais e prestadores cadastrados na plataforma ServiçoFácil da VALLEX.",
+  title: "Encontre prestadores em Goiânia | VALLEX ServiçoFácil",
+  description: "Pesquise Vitrines públicas por serviço e região em Goiânia. Conheça profissionais e entre em contato diretamente.",
+  alternates: { canonical: "/catalogo" },
 };
 
 type CatalogSearchParams = Promise<Record<string, string | string[] | undefined>>;

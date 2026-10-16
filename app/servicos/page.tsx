@@ -11,39 +11,53 @@ export const metadata = {
 const vallexServices = [
   {
     number: "01",
+    id: "plataforma-servicofacil",
     title: "Plataforma ServiçoFácil",
     description:
       "Uma vitrine digital para aproximar prestadores de serviços e clientes, com ferramentas para organizar o negócio.",
     examples: ["Divulgação de serviços", "Recebimento de solicitações", "Gestão da rotina do prestador"],
+    href: "/solucoes#para-prestadores",
+    action: "Conhecer o ServiçoFácil",
   },
   {
     number: "02",
+    id: "planilhas-automatizadas",
     title: "Planilhas automatizadas",
     description:
       "Planilhas desenvolvidas conforme a necessidade do cliente, com recursos para simplificar tarefas e acompanhar informações.",
     examples: ["Automação de cálculos e rotinas", "Organização e acompanhamento de dados", "Prazo e valor definidos na proposta"],
+    href: "/contato#formulario-orcamento",
+    action: "Conversar sobre planilhas",
   },
   {
     number: "03",
+    id: "solucoes-digitais",
     title: "Soluções digitais sob medida",
     description:
       "Ferramentas digitais pensadas para apoiar processos de profissionais e pequenos negócios.",
     examples: ["Aplicações web", "Ferramentas para processos", "Projetos dimensionados para cada demanda"],
+    href: "/contato#formulario-orcamento",
+    action: "Conversar sobre uma solução",
   },
   {
     number: "04",
+    id: "conte-sua-necessidade",
     title: "Conte sua necessidade",
     description:
       "Precisa resolver algo com tecnologia ou não encontrou uma solução que combine com o seu caso? A VALLEX quer entender o que você procura.",
     examples: ["Explique seu objetivo", "Avaliamos a viabilidade", "Receba uma proposta com escopo, prazo e valor"],
+    href: "/contato#formulario-orcamento",
+    action: "Apresentar minha necessidade",
   },
   {
     number: "05",
+    id: "gestao-trafego-pago",
     title: "Gestão de tráfego pago",
     description:
       "Planejamento e acompanhamento de campanhas digitais para ajudar seu negócio a alcançar mais pessoas.",
     examples: ["Planos modelo para comparar", "Escopo definido conforme sua meta", "Acompanhamento dos indicadores combinados"],
     href: "/trafego-pago",
+    action: "Conhecer planos de tráfego",
   },
 ];
 
@@ -82,14 +96,14 @@ export default function ServicosVallex() {
 
             <div className="service-grid vallex-service-grid">
               {vallexServices.map((service) => (
-                <article className="service-card vallex-service-card" key={service.number}>
+                <article className="service-card vallex-service-card" id={service.id} key={service.number}>
                   <span className="service-number">{service.number}</span>
                   <h3>{service.title}</h3>
                   <p>{service.description}</p>
                   <ul>
                     {service.examples.map((example) => <li key={example}>{example}</li>)}
                   </ul>
-                  <Link href={"href" in service && typeof service.href === "string" ? service.href : "/contato"} className="service-card-action">{service.number === "04" ? "Apresentar minha necessidade" : service.number === "05" ? "Conhecer planos de tráfego" : "Conversar sobre esta solução"} <span aria-hidden="true">→</span></Link>
+                  <Link href={service.href} className="service-card-action">{service.action} <span aria-hidden="true">→</span></Link>
                 </article>
               ))}
             </div>

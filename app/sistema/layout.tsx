@@ -88,7 +88,13 @@ export default function SistemaLayout({
     };
   }, [pathname, router]);
 
-  if (pathsWithoutPanel.has(pathname)) return children;
+  if (pathsWithoutPanel.has(pathname)) {
+    return pathname === "/sistema/planos" ? (
+      <ProviderLogoutBar>{children}</ProviderLogoutBar>
+    ) : (
+      children
+    );
+  }
 
   if (access?.path !== pathname) {
     return (
@@ -126,5 +132,55 @@ export default function SistemaLayout({
     );
   }
 
-  return children;
+  return pathname === "/sistema" ? (
+    children
+  ) : (
+    <ProviderLogoutBar>{children}</ProviderLogoutBar>
+  );
+}
+
+function ProviderLogoutBar({ children }: Readonly<{ children: React.ReactNode }>) {
+  const [signingOut, setSigningOut] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleLogout() {
+    setSigningOut(true);
+    setError("");
+
+    const { error: signOutError } = await supabase.auth.signOut();
+    if (signOutError) {
+      setSigningOut(false);
+      setError("Não foi possível encerrar a sessão. Tente novamente.");
+      return;
+    }
+
+    window.location.replace("/sistema/login");
+  }
+
+  return (
+    <>
+      <div className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 px-4 py-2 shadow-sm backdrop-blur">
+        <div className="mx-auto flex max-w-7xl justify-end">
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={signingOut}
+            aria-label="Sair da sua conta de prestador"
+            className="rounded-lg border border-purple-300 px-4 py-2 text-sm font-semibold text-purple-800 transition hover:bg-purple-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 disabled:cursor-wait disabled:opacity-60"
+          >
+            {signingOut ? "Saindo…" : "Sair"}
+          </button>
+        </div>
+      </div>
+      {error && (
+        <p
+          role="alert"
+          className="border-b border-red-200 bg-red-50 px-4 py-2 text-right text-sm text-red-700"
+        >
+          {error}
+        </p>
+      )}
+      {children}
+    </>
+  );
 }

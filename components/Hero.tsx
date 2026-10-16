@@ -41,7 +41,10 @@ export default async function Hero() {
             <Link href="#prestadores" className="button button-primary">
               Buscar prestador
             </Link>
-            <Link href="/solucoes#para-prestadores" className="button button-outline">
+            <Link href="/contato#formulario-orcamento" className="button button-outline">
+              Solicitar orçamento
+            </Link>
+            <Link href="/sistema/login?cadastro=1" className="button button-outline">
               Sou prestador
             </Link>
           </div>

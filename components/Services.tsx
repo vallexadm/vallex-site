@@ -166,7 +166,12 @@ export default function Services({
     const term = normalizeSearch(search.trim());
     return providers.filter((provider) => {
       const servesOnline = (provider.service_modes ?? []).includes("online");
-      const matchesLocation = normalizeSearch(provider.service_area || provider.address || "") === selectedLocation;
+      const providerLocation = normalizeSearch(provider.service_area || provider.address || "");
+      const matchesLocation =
+        !selectedLocation ||
+        (Boolean(providerLocation) &&
+          (providerLocation.includes(selectedLocation) ||
+            selectedLocation.includes(providerLocation)));
       if (selectedLocation && !matchesLocation && !servesOnline) {
         return false;
       }
@@ -474,17 +479,36 @@ export default function Services({
       {isHome && (
         <section className="provider-join-section" aria-labelledby="provider-join-heading">
           <div className="container">
-            <div className="provider-join-card">
-              <div>
-                <span className="eyebrow">Para quem presta serviços</span>
-                <h2 id="provider-join-heading">Faça seu trabalho chegar a mais clientes</h2>
-                <p>
-                  Apresente seus serviços na VALLEX, receba pedidos de orçamento e organize seus atendimentos e finanças em um só lugar.
-                </p>
-              </div>
-              <Link href="/solucoes#para-prestadores" className="button button-primary">
-                Quero divulgar meus serviços
-              </Link>
+            <div className="provider-join-heading">
+              <span className="eyebrow">Cresça com a VALLEX</span>
+              <h2 id="provider-join-heading">Escolha como podemos ajudar seu negócio</h2>
+              <p>Você pode divulgar seus serviços, atrair clientes com tráfego pago ou enviar uma proposta para uma necessidade específica.</p>
+            </div>
+            <div className="provider-service-options">
+              <article className="provider-service-option">
+                <span className="provider-service-option-label">ServiçoFácil</span>
+                <h3>Cadastre-se na VALLEX</h3>
+                <p>Tenha ferramentas para divulgar seu trabalho, receber pedidos de orçamento e organizar clientes, atendimentos e finanças.</p>
+                <Link href="/sistema/login?cadastro=1" className="button button-primary">
+                  Criar minha conta
+                </Link>
+              </article>
+              <article className="provider-service-option">
+                <span className="provider-service-option-label">Tráfego pago</span>
+                <h3>Conquiste mais visibilidade</h3>
+                <p>Conheça nossas soluções de campanhas para alcançar novos clientes e divulgar seu negócio.</p>
+                <Link href="/trafego-pago" className="button button-primary">
+                  Conhecer tráfego pago
+                </Link>
+              </article>
+              <article className="provider-service-option">
+                <span className="provider-service-option-label">Solução personalizada</span>
+                <h3>Envie sua proposta</h3>
+                <p>Tem outra necessidade? Conte para nós o que você precisa e envie sua proposta pelo formulário.</p>
+                <Link href="/contato#formulario-orcamento" className="button button-primary">
+                  Enviar minha proposta
+                </Link>
+              </article>
             </div>
           </div>
         </section>

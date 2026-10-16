@@ -1,21 +1,24 @@
 
 import type { Metadata } from "next";
+import { getSiteUrl } from "@/lib/seo";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "VALLEX | SERVIÇOFÁCIL",
+  metadataBase: new URL(getSiteUrl()),
+  title: "VALLEX | ServiçoFácil em Goiânia",
   description:
-    "Soluções em informática, elétrica e tecnologia para pessoas e empresas.",
+    "Encontre prestadores de serviços em Goiânia e região na Vitrine Pública do ServiçoFácil da VALLEX.",
 
   applicationName: "VALLEX | SERVIÇOFÁCIL",
 
   keywords: [
     "Vallex",
     "Serviço Fácil",
-    "Informática",
-    "Elétrica",
-    "Tecnologia",
-    "Soluções digitais",
+    "prestadores de serviços em Goiânia",
+    "eletricista em Goiânia",
+    "barbearia em Goiânia",
+    "assistência para geladeira em Goiânia",
+    "ServiçoFácil VALLEX",
   ],
 };
 

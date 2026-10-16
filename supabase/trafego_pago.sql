@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS public.traffic_leads (
   consent boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT traffic_leads_audience_check CHECK (audience IN ('visitante', 'prestador')),
+  CONSTRAINT traffic_leads_audience_check CHECK (audience IN ('visitante', 'cliente', 'prestador')),
   CONSTRAINT traffic_leads_status_check CHECK (status IN ('novo', 'contato', 'proposta', 'negociacao', 'fechado', 'perdido')),
   CONSTRAINT traffic_leads_values_check CHECK ((service_value IS NULL OR service_value >= 0) AND (media_budget IS NULL OR media_budget >= 0))
 );

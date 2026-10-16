@@ -6,7 +6,6 @@ export default function Footer() {
   return (
     <footer className="site-footer">
       <div className="container footer-content">
-
         <div>
           <h2>VALLEX</h2>
           <p>SERVIÇOFÁCIL</p>
@@ -16,20 +15,18 @@ export default function Footer() {
         </div>
 
         <div>
-          <h3>Institucional e ajuda</h3>
-          <Link href="/sobre">Sobre a Vallex</Link>
-          <Link href="/servicos">Serviços</Link>
+          <h3>Área administrativa</h3>
           <Link href="/trafego-pago">Tráfego pago</Link>
-          <Link href="/faq">Perguntas frequentes</Link>
-          <Link href="/termos">Termos de Uso</Link>
-          <Link href="/privacidade">Política de Privacidade</Link>
           <Link href="/admin">Administração VALLEX</Link>
         </div>
 
         <div>
-          <h3>Contato</h3>
-          <a href={`mailto:${siteConfig.contact.email}`}>{siteConfig.contact.email}</a>
-          <a href={`tel:${siteConfig.contact.phone.replace(/[^+\d]/g, "")}`}>{siteConfig.contact.phone}</a>
+          <h3>Institucional e ajuda</h3>
+          <Link href="/sobre">Sobre a Vallex</Link>
+          <Link href="/servicos">Serviços</Link>
+          <Link href="/faq">Perguntas frequentes</Link>
+          <Link href="/termos">Termos de Uso</Link>
+          <Link href="/privacidade">Política de Privacidade</Link>
         </div>
 
         <div>
@@ -50,6 +47,12 @@ export default function Footer() {
               Instagram
             </a>
           </div>
+        </div>
+
+        <div>
+          <h3>Contato</h3>
+          <a href={`mailto:${siteConfig.contact.email}`}>{siteConfig.contact.email}</a>
+          <a href={`tel:${siteConfig.contact.phone.replace(/[^+\d]/g, "")}`}>{siteConfig.contact.phone}</a>
         </div>
 
       </div>
