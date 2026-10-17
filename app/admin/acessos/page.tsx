@@ -10,7 +10,7 @@ type Draft = Omit<Member, "user_id">;
 const permissionGroups = [
   { module: "traffic", label: "Tráfego pago", actions: [["view", "Consultar dados e indicadores"], ["manage_plans", "Editar os planos da vitrine"], ["manage_leads", "Alterar negociações e registrar contatos"], ["manage_campaigns", "Criar campanhas e editar indicadores"]] },
   { module: "support", label: "Suporte", actions: [["view", "Consultar solicitações"], ["edit", "Atualizar solicitações"]] },
-  { module: "providers", label: "Prestadores", actions: [["view", "Consultar prestadores e vitrines"], ["edit", "Editar cadastro (quando disponível)"], ["delete", "Excluir cadastro (quando disponível)"]] },
+  { module: "providers", label: "Prestadores", actions: [["view", "Consultar prestadores e vitrines"], ["edit", "Editar dados e controlar a visibilidade da vitrine"], ["delete", "Excluir perfil da vitrine (preserva conta e serviços)"]] },
   { module: "finance", label: "Financeiro", actions: [["view", "Consultar dados financeiros"], ["edit", "Editar dados financeiros"], ["delete", "Excluir dados financeiros"]] },
 ] as const;
 
@@ -88,7 +88,7 @@ export default function AdminAcessosPage() {
   return <main className="vallex-admin-page"><div className="vallex-admin-shell">
     <header className="vallex-admin-header"><div><Link href="/admin" className="vallex-admin-brand">VALLEX <span>ADMINISTRAÇÃO</span></Link><h1>Equipe e permissões</h1><p>Cadastre até duas pessoas e defina o que cada uma pode consultar ou alterar.</p></div><div className="vallex-admin-header-actions"><Link href="/admin" className="vallex-admin-back">Voltar ao admin</Link></div></header>
     <div className="vallex-admin-section">
-      <p className="vallex-admin-muted">Os cadastros iniciais são espaços editáveis. Informe o e-mail que a pessoa usará para criar uma conta no sistema; depois, volte aqui para ativar o acesso. Alexandre começa com permissões de tráfego. O Financeiro permanece desligado até você liberar. A edição e a exclusão de prestadores ainda não estão disponíveis neste painel.</p>
+      <p className="vallex-admin-muted">Os cadastros iniciais são espaços editáveis. Informe o e-mail que a pessoa usará para criar uma conta no sistema; depois, volte aqui para ativar o acesso. Alexandre começa com permissões de tráfego. O Financeiro permanece desligado até você liberar. As permissões de prestadores controlam a edição, a visibilidade e a remoção de perfis públicos.</p>
       {error && <p className="vallex-admin-error" role="alert">{error}</p>}{message && <p className="traffic-admin-notice" role="status">{message}</p>}
       {loading ? <p className="vallex-admin-empty">Carregando cadastros…</p> : <div className="space-y-5">{members.map((member) => {
         const draft = drafts[member.id] ?? draftFrom(member);

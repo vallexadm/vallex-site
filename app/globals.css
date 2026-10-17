@@ -2062,6 +2062,11 @@ a {
 .traffic-campaign-metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: end; gap: 10px; margin-top: 15px; }
 .traffic-campaign-card > header p { margin: 4px 0 0; font-size: .85rem; }
 .traffic-campaign-card .vallex-admin-badge { flex: 0 0 auto; }
+.vallex-admin-provider-actions { display: flex; min-width: 190px; flex-wrap: wrap; gap: 8px; }
+.vallex-admin-provider-editor { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; border: 1px solid #343d52; border-radius: 12px; background: #111827; padding: 18px; }
+.vallex-admin-provider-editor label { display: grid; gap: 7px; color: #c2ccda; font-size: .85rem; font-weight: 700; }
+.vallex-admin-provider-editor input { min-height: 44px; border: 1px solid #46536a; border-radius: 8px; background: #0f172a; padding: 9px 12px; color: #f8fafc; font: inherit; font-weight: 400; }
+.vallex-admin-provider-editor-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
 
 @media (max-width: 900px) {
   .traffic-form-layout { grid-template-columns: 1fr; }
@@ -2077,6 +2082,8 @@ a {
   .traffic-admin-heading, .traffic-lead-head, .traffic-campaign-card > header { align-items: stretch; flex-direction: column; }
   .traffic-lead-contact { text-align: left; }
   .traffic-admin-heading > button { width: 100%; }
+  .vallex-admin-provider-editor { grid-template-columns: 1fr; }
+  .vallex-admin-provider-actions { min-width: 0; }
 }
 
 @media (max-width: 900px) {
@@ -2084,4 +2091,95 @@ a {
 }
 @media (max-width: 640px) {
   .traffic-plan-grid { grid-template-columns: 1fr; }
+}
+
+/* Formato padrão das ações em todas as páginas, mantendo fundo e cores de cada botão. */
+button,
+button[class],
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+.button,
+a[class*="button-"],
+a[class*="vallex-admin-primary"],
+a[class*="vallex-admin-secondary"],
+a[class*="vallex-admin-back"],
+a.inline-flex,
+a[role="button"] {
+  min-height: 52px;
+  padding: 0 20px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  transition: transform .18s ease, box-shadow .18s ease, outline-color .18s ease;
+}
+
+button:not(:disabled):hover,
+input[type="button"]:not(:disabled):hover,
+input[type="submit"]:not(:disabled):hover,
+input[type="reset"]:not(:disabled):hover,
+.button:hover,
+a[class*="button-"]:hover,
+a[class*="vallex-admin-primary"]:hover,
+a[class*="vallex-admin-secondary"]:hover,
+a[class*="vallex-admin-back"]:hover,
+a.inline-flex:hover,
+a[role="button"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgb(35 0 64 / 22%);
+}
+
+button:disabled,
+input[type="button"]:disabled,
+input[type="submit"]:disabled,
+input[type="reset"]:disabled {
+  cursor: not-allowed;
+}
+
+button:focus-visible,
+input[type="button"]:focus-visible,
+input[type="submit"]:focus-visible,
+input[type="reset"]:focus-visible,
+.button:focus-visible,
+a[class*="button-"]:focus-visible,
+a[class*="vallex-admin-primary"]:focus-visible,
+a[class*="vallex-admin-secondary"]:focus-visible,
+a[class*="vallex-admin-back"]:focus-visible,
+a.inline-flex:focus-visible,
+a[role="button"]:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  .button,
+  a[class*="button-"],
+  a[class*="vallex-admin-primary"],
+  a[class*="vallex-admin-secondary"],
+  a[class*="vallex-admin-back"],
+  a.inline-flex,
+  a[role="button"] {
+    transition: none;
+  }
+
+  button:hover,
+  input[type="button"]:hover,
+  input[type="submit"]:hover,
+  input[type="reset"]:hover,
+  .button:hover,
+  a[class*="button-"]:hover,
+  a[class*="vallex-admin-primary"]:hover,
+  a[class*="vallex-admin-secondary"]:hover,
+  a[class*="vallex-admin-back"]:hover,
+  a.inline-flex:hover,
+  a[role="button"]:hover {
+    transform: none;
+  }
 }
