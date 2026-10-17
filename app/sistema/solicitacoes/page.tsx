@@ -562,10 +562,12 @@ async function criarOrcamento(id: string) {
                 </div>
                 {plano.code === "free" && (
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-slate-600">No Free, você consulta as solicitações em modo somente leitura.</span>
-                    <Link href="/sistema/planos" className="inline-flex rounded-lg bg-purple-700 px-4 py-2 font-semibold text-white hover:bg-purple-800">
-                      Conhecer planos e contratar Basic
-                    </Link>
+                    <span className="text-slate-600">No Free, você pode publicar 1 serviço na Vitrine e consultar solicitações em modo somente leitura.</span>
+                    <div className="flex flex-wrap gap-2">
+                      <Link href="/sistema/servicos" className="inline-flex rounded-lg bg-purple-700 px-4 py-2 font-semibold text-white hover:bg-purple-800">Cadastrar meu serviço</Link>
+                      <Link href="/sistema/vitrine" className="inline-flex rounded-lg border border-purple-300 bg-white px-4 py-2 font-semibold text-purple-800 hover:bg-purple-50">Configurar Vitrine</Link>
+                      <Link href="/sistema/planos" className="inline-flex rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-800 hover:bg-slate-50">Conhecer planos</Link>
+                    </div>
                   </div>
                 )}
               </div>

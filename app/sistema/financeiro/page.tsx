@@ -1,12 +1,15 @@
 "use client";
 
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import SystemBrand from "@/components/SystemBrand";
+import CurrencyInput from "@/components/CurrencyInput";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { calculateFuelCost, describeFuelCost, type FuelCostDetails } from "@/lib/fuel-cost";
 import { normalizeMemberPermissions, type MemberPermissions } from "@/lib/team-permissions";
+import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
 
 type Customer = { id: string; name: string };
 type ServicePayment = {
@@ -17,11 +20,16 @@ type ServicePayment = {
   amount: number | string;
 };
 type ScheduledInstallment = { id: string; installment_number: number; due_date: string; amount: number | string };
+type ScheduledInstallmentDraft = { installment_number: number; due_date: string; amount: string };
 type ServiceCostItem = { id: string; category: string; description: string; amount: number | string };
+type AuditAction = "created" | "updated" | "deleted" | "payment_registered";
+type FinanceAuditEvent = { id: string; service_record_id: string | null; actor_user_id: string | null; actor_email: string | null; action: AuditAction; details: Record<string, unknown>; created_at: string };
+type ServiceEditDraft = { customer_id: string; service_name: string; service_date: string; source: string; amount_charged: string; notes: string; scheduled_installments: ScheduledInstallmentDraft[] };
 type InstallmentDraft = { amount: string; due_date: string };
 type CostItemDraft = { category: string; description: string; amount: string };
 type ServiceRecord = {
   id: string;
+  charge_code: string;
   customer_id: string;
   service_name: string;
   service_date: string;
@@ -88,6 +96,12 @@ const sourceLabels: Record<string, string> = {
   recorrente: "Cliente recorrente",
   outros: "Outro",
 };
+const auditActionLabels: Record<AuditAction, string> = {
+  created: "Cobrança criada",
+  updated: "Cobrança editada",
+  deleted: "Cobrança excluída",
+  payment_registered: "Recebimento registrado",
+};
 const paymentMethodLabels: Record<string, string> = {
   pix: "Pix",
   transferencia: "Transferência",
@@ -146,6 +160,43 @@ function formatDate(value: string) {
   return new Date(`${value}T00:00:00`).toLocaleDateString("pt-BR");
 }
 
+function auditEventSummary(event: FinanceAuditEvent) {
+  const details = event.details ?? {};
+  const before = typeof details.before === "object" && details.before !== null ? details.before as Record<string, unknown> : {};
+  const after = typeof details.after === "object" && details.after !== null ? details.after as Record<string, unknown> : {};
+  if (event.action === "payment_registered") {
+    const method = typeof details.payment_method === "string" ? paymentMethodLabels[details.payment_method] ?? "Outro" : "";
+    const installment = Number(details.installment_number) === 0 ? "Entrada" : `${Number(details.installment_number)}ª parcela`;
+    return `${formatCurrency(Number(details.amount) || 0)} · ${installment} · ${method} · pagamento em ${typeof details.payment_date === "string" ? formatDate(details.payment_date) : "—"}`;
+  }
+  if (event.action === "updated") {
+    const changes: string[] = [];
+    if (before.service_name !== after.service_name) changes.push(`Serviço: ${String(before.service_name ?? "—")} → ${String(after.service_name ?? "—")}`);
+    if (Number(before.amount_charged) !== Number(after.amount_charged)) changes.push(`Valor: ${formatCurrency(Number(before.amount_charged) || 0)} → ${formatCurrency(Number(after.amount_charged) || 0)}`);
+    if (before.service_date !== after.service_date) changes.push(`Data: ${String(before.service_date ?? "—")} → ${String(after.service_date ?? "—")}`);
+    if (before.customer_name !== after.customer_name) changes.push(`Cliente: ${String(before.customer_name ?? "—")} → ${String(after.customer_name ?? "—")}`);
+    if (JSON.stringify(before.installments ?? []) !== JSON.stringify(after.installments ?? [])) changes.push("Parcelas ou vencimentos atualizados");
+    return changes.join(" · ") || "Dados da cobrança atualizados.";
+  }
+  const serviceName = String(details.service_name ?? after.service_name ?? before.service_name ?? "Cobrança");
+  const amount = Number(details.amount_charged ?? after.amount_charged ?? before.amount_charged);
+  return Number.isFinite(amount) && amount > 0 ? `${serviceName} · ${formatCurrency(amount)}` : serviceName;
+}
+
+function auditEventCustomer(event: FinanceAuditEvent) {
+  const details = event.details ?? {};
+  const before = typeof details.before === "object" && details.before !== null ? details.before as Record<string, unknown> : {};
+  const after = typeof details.after === "object" && details.after !== null ? details.after as Record<string, unknown> : {};
+  return String(details.customer_name ?? after.customer_name ?? before.customer_name ?? "—");
+}
+
+function auditEventService(event: FinanceAuditEvent) {
+  const details = event.details ?? {};
+  const before = typeof details.before === "object" && details.before !== null ? details.before as Record<string, unknown> : {};
+  const after = typeof details.after === "object" && details.after !== null ? details.after as Record<string, unknown> : {};
+  return String(details.service_name ?? after.service_name ?? before.service_name ?? "—");
+}
+
 function csvCell(value: ReportCell) {
   if (typeof value === "number") return Number.isFinite(value) ? value.toFixed(2).replace(".", ",") : "";
   const safeValue = /^[\t\r\n ]*[=+\-@]/.test(value) ? `'${value}` : value;
@@ -183,6 +234,9 @@ export default function FinanceiroPage() {
   const [expenseType, setExpenseType] = useState<"avulsa" | "fixa_mensal">("avulsa");
   const [recurrenceMonths, setRecurrenceMonths] = useState("12");
   const [data, setData] = useState<FinanceData>({ services: [], receivables: [], cashflowExpenses: [], expenses: [], customers: [], payments: [], indicators: null, organizationName: "", providerProfile: null });
+  const [auditEvents, setAuditEvents] = useState<FinanceAuditEvent[]>([]);
+  const [auditAction, setAuditAction] = useState<"all" | AuditAction>("all");
+  const [auditError, setAuditError] = useState("");
   const [canManageFinance, setCanManageFinance] = useState(false);
   const [showReportPreview, setShowReportPreview] = useState(false);
   const [customerId, setCustomerId] = useState("");
@@ -215,6 +269,10 @@ export default function FinanceiroPage() {
   const [savingService, setSavingService] = useState(false);
   const [savingExpense, setSavingExpense] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
+  const [editingServiceId, setEditingServiceId] = useState("");
+  const [serviceEditDraft, setServiceEditDraft] = useState<ServiceEditDraft | null>(null);
+  const [serviceEditSaved, setServiceEditSaved] = useState("");
+  const [savingServiceEdit, setSavingServiceEdit] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -233,21 +291,24 @@ export default function FinanceiroPage() {
       const token = await getToken();
       if (!token) throw new Error("Sessão não encontrada. Faça login novamente.");
       const headers = { Authorization: `Bearer ${token}` };
-      const [response, receivablesResponse] = await Promise.all([
+      const [response, receivablesResponse, auditResponse] = await Promise.all([
         fetch(`/api/sistema/financeiro?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`, { headers, cache: "no-store" }),
         fetch("/api/sistema/financeiro?cashflow=all", { headers, cache: "no-store" }),
+        fetch(`/api/sistema/financeiro?audit=all&from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`, { headers, cache: "no-store" }),
       ]);
-      const [result, receivablesResult] = await Promise.all([response.json(), receivablesResponse.json()]);
-      if (response.status === 401 || receivablesResponse.status === 401) {
+      const [result, receivablesResult, auditResult] = await Promise.all([response.json(), receivablesResponse.json(), auditResponse.json()]);
+      if (response.status === 401 || receivablesResponse.status === 401 || auditResponse.status === 401) {
         router.replace("/sistema/login");
         return;
       }
-      if (response.status === 403 || receivablesResponse.status === 403) {
+      if (response.status === 403 || receivablesResponse.status === 403 || auditResponse.status === 403) {
         router.replace("/sistema");
         return;
       }
       if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível carregar o financeiro.");
       if (!receivablesResponse.ok || !receivablesResult.ok) throw new Error(receivablesResult.message ?? "Não foi possível carregar o fluxo de caixa.");
+      setAuditEvents(auditResponse.ok && auditResult.ok ? auditResult.audit_events ?? [] : []);
+      setAuditError(auditResponse.ok && auditResult.ok ? "" : auditResult.message ?? "Não foi possível carregar o histórico de operações.");
       const permissions = normalizeMemberPermissions(result.permissions ?? receivablesResult.permissions);
       setCanManageFinance(permissions.finance.manage);
       setData({ services: result.services ?? [], receivables: receivablesResult.receivables ?? [], cashflowExpenses: receivablesResult.pendingExpenses ?? [], expenses: result.expenses ?? [], customers: result.customers ?? [], payments: result.payments ?? [], indicators: result.indicators ?? null, organizationName: result.organization_name ?? "", providerProfile: result.provider_profile ?? null });
@@ -387,6 +448,11 @@ export default function FinanceiroPage() {
     return rows;
   }, [reportType, totals, data.services, data.payments, data.expenses, data.receivables, pendingBills, cashflowDisplayEntries, undatedReceivableTotal]);
 
+  const filteredAuditEvents = useMemo(
+    () => auditAction === "all" ? auditEvents : auditEvents.filter((event) => event.action === auditAction),
+    [auditEvents, auditAction],
+  );
+
   function downloadFinancialReport() {
     const definition = financialReportDefinitions[reportType];
     const csv = [definition.headers, ...reportRows].map((row) => row.map(csvCell).join(";")).join("\r\n");
@@ -399,6 +465,26 @@ export default function FinanceiroPage() {
     anchor.click();
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function downloadAuditReport() {
+    const headers = ["Data e hora", "Operação", "Cliente", "Serviço", "Usuário", "Detalhes"];
+    const rows = filteredAuditEvents.map((event) => [
+      new Date(event.created_at).toLocaleString("pt-BR"),
+      auditActionLabels[event.action],
+      auditEventCustomer(event),
+      auditEventService(event),
+      event.actor_email ?? event.actor_user_id ?? "Não identificado",
+      auditEventSummary(event),
+    ]);
+    const csv = [headers, ...rows].map((row) => row.map(csvCell).join(";")).join("\r\n");
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `historico-financeiro-${periodRange.from}-a-${periodRange.to}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   function printFinancialReport() {
@@ -424,8 +510,8 @@ export default function FinanceiroPage() {
     window.setTimeout(() => { printWindow.focus(); printWindow.print(); }, 350);
   }
 
-  const plannedInstallmentTotal = installmentDrafts.reduce((total, item) => total + (Number(item.amount) || 0), 0);
-  const serviceDirectCost = costItemDrafts.reduce((total, item) => total + (Number(item.amount) || 0), 0);
+    const plannedInstallmentTotal = installmentDrafts.reduce((total, item) => total + (parseCurrencyInput(item.amount) || 0), 0);
+    const serviceDirectCost = costItemDrafts.reduce((total, item) => total + (parseCurrencyInput(item.amount) || 0), 0);
   const calculatedExpenseFuelCost = calculateFuelCost(expenseFuel);
 
   async function submitRecord(event: FormEvent<HTMLFormElement>, type: "service" | "expense") {
@@ -501,7 +587,7 @@ export default function FinanceiroPage() {
     const alreadyPaid = (service.payments ?? []).filter((payment) => payment.installment_number === nextNumber).reduce((sum, payment) => sum + Number(payment.amount), 0);
     setPaymentServiceId(service.id);
     setPaymentSource(source);
-    setPaymentAmount(nextSchedule ? Math.max(0, Number(nextSchedule.amount) - alreadyPaid).toFixed(2) : "");
+    setPaymentAmount(nextSchedule ? formatCurrencyInput(Math.max(0, Number(nextSchedule.amount) - alreadyPaid)) : "");
     setPaymentInstallmentsTotal(String(total));
     setPaymentInstallment(String(nextNumber));
     setPaymentMethod("pix");
@@ -545,7 +631,103 @@ export default function FinanceiroPage() {
     }
   }
 
+  function startServiceEdit(service: ServiceRecord) {
+    setServiceEditSaved("");
+    setEditingServiceId(service.id);
+    setServiceEditDraft({
+      customer_id: service.customer_id,
+      service_name: service.service_name,
+      service_date: service.service_date,
+      source: service.source,
+      amount_charged: formatCurrencyInput(service.amount_charged),
+      notes: service.notes ?? "",
+      scheduled_installments: (service.scheduled_installments ?? []).map((installment) => ({
+        installment_number: installment.installment_number,
+        due_date: installment.due_date,
+        amount: formatCurrencyInput(installment.amount),
+      })),
+    });
+    setError("");
+    setMessage("");
+  }
+
+  async function submitServiceEdit(event: FormEvent<HTMLFormElement>, service: ServiceRecord) {
+    event.preventDefault();
+    if (!serviceEditDraft) return;
+    setError("");
+    setMessage("");
+    setServiceEditSaved("");
+    setSavingServiceEdit(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Sessão não encontrada. Faça login novamente.");
+      const response = await fetch("/api/sistema/financeiro", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          type: "service_record",
+          action: "update",
+          service_record_id: service.id,
+          customer_id: serviceEditDraft.customer_id,
+          service_name: serviceEditDraft.service_name,
+          service_date: serviceEditDraft.service_date,
+          source: serviceEditDraft.source,
+          amount_charged: serviceEditDraft.amount_charged,
+          notes: serviceEditDraft.notes,
+          scheduled_installments: serviceEditDraft.scheduled_installments.map((installment) => ({
+            installment_number: installment.installment_number,
+            due_date: installment.due_date,
+            amount: installment.amount,
+          })),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível editar a cobrança.");
+      const successMessage = result.message ?? "Cobrança atualizada com sucesso.";
+      setServiceEditSaved(successMessage);
+      setMessage(successMessage);
+      setSavingServiceEdit(false);
+      await new Promise((resolve) => window.setTimeout(resolve, 2000));
+      setEditingServiceId("");
+      setServiceEditDraft(null);
+      setServiceEditSaved("");
+      await loadData(periodRange.from, periodRange.to);
+    } catch (editError) {
+      setError(editError instanceof Error ? editError.message : "Não foi possível editar a cobrança.");
+    } finally {
+      setSavingServiceEdit(false);
+    }
+  }
+
+  async function deleteServiceRecord(service: ServiceRecord) {
+    if (Number(service.amount_received) > 0) {
+      setError("Esta cobrança já tem recebimentos registrados e não pode ser excluída.");
+      return;
+    }
+    const confirmed = window.confirm(`Excluir a cobrança “${service.service_name}” de ${service.customers?.name ?? "Cliente"}? O registro sairá do financeiro, mas a operação ficará no histórico.`);
+    if (!confirmed) return;
+    setError("");
+    setMessage("");
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Sessão não encontrada. Faça login novamente.");
+      const response = await fetch("/api/sistema/financeiro", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ type: "service_record", action: "delete", service_record_id: service.id }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível excluir a cobrança.");
+      setMessage(result.message ?? "Cobrança excluída do financeiro.");
+      await loadData(periodRange.from, periodRange.to);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Não foi possível excluir a cobrança.");
+    }
+  }
+
   if (loading) return <main className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-700">Carregando financeiro…</main>;
+
+  const editingService = data.services.find((item) => item.id === editingServiceId) ?? null;
 
   return (
     <main className="min-h-screen bg-slate-100">
@@ -662,14 +844,14 @@ export default function FinanceiroPage() {
             </label>
           </div>
           <p className="mt-4 text-sm font-medium text-emerald-950">{filteredReceivables.length} serviço(s) com saldo · {formatCurrency(filteredReceivables.reduce((sum, service) => sum + Math.max(0, Number(service.amount_charged) - Number(service.amount_received)), 0))} a receber</p>
-          {filteredReceivables.length === 0 ? <p className="mt-3 rounded-lg bg-white/80 p-4 text-sm text-slate-600">{receivableSearch ? "Nenhum saldo pendente encontrado para essa busca." : "Não há valores pendentes de clientes."}</p> : <div className="mt-3 overflow-x-auto rounded-lg bg-white"><table className="w-full min-w-[850px] text-left text-sm"><thead className="border-b border-slate-200 text-slate-500"><tr><th className="px-3 py-3 font-medium">Cliente</th><th className="px-3 py-3 font-medium">Serviço</th><th className="px-3 py-3 font-medium">Próximo vencimento</th><th className="px-3 py-3 text-right font-medium">Cobrado</th><th className="px-3 py-3 text-right font-medium">Recebido</th><th className="px-3 py-3 text-right font-medium">Saldo</th><th className="px-3 py-3 text-right font-medium">Ação</th></tr></thead><tbody>{filteredReceivables.map((service) => {
+          {filteredReceivables.length === 0 ? <p className="mt-3 rounded-lg bg-white/80 p-4 text-sm text-slate-600">{receivableSearch ? "Nenhum saldo pendente encontrado para essa busca." : "Não há valores pendentes de clientes."}</p> : <div className="mt-3 overflow-x-auto rounded-lg bg-white"><table className="w-full min-w-[950px] text-left text-sm"><thead className="border-b border-slate-200 text-slate-500"><tr><th className="px-3 py-3 font-medium">Código</th><th className="px-3 py-3 font-medium">Cliente</th><th className="px-3 py-3 font-medium">Serviço</th><th className="px-3 py-3 font-medium">Próximo vencimento</th><th className="px-3 py-3 text-right font-medium">Cobrado</th><th className="px-3 py-3 text-right font-medium">Recebido</th><th className="px-3 py-3 text-right font-medium">Saldo</th><th className="px-3 py-3 text-right font-medium">Ação</th></tr></thead><tbody>{filteredReceivables.map((service) => {
             const nextInstallment = (service.scheduled_installments ?? []).find((installment) => (service.payments ?? []).filter((payment) => payment.installment_number === installment.installment_number).reduce((sum, payment) => sum + Number(payment.amount), 0) < Number(installment.amount));
             const balance = Math.max(0, Number(service.amount_charged) - Number(service.amount_received));
-            return <Fragment key={service.id}><tr className="border-b border-slate-100 align-top"><td className="px-3 py-3 font-medium text-slate-800">{service.customers?.name ?? "Cliente"}</td><td className="px-3 py-3 text-slate-700">{service.service_name}</td><td className="px-3 py-3 text-slate-700">{nextInstallment ? formatDate(nextInstallment.due_date) : "Sem vencimento definido"}</td><td className="px-3 py-3 text-right text-slate-700">{formatCurrency(Number(service.amount_charged))}</td><td className="px-3 py-3 text-right text-slate-700">{formatCurrency(Number(service.amount_received))}</td><td className="px-3 py-3 text-right font-semibold text-amber-800">{formatCurrency(balance)}</td><td className="px-3 py-3 text-right">{canManageFinance && <button type="button" onClick={() => paymentServiceId === service.id && paymentSource === "receivables" ? setPaymentServiceId("") : startPayment(service, "receivables")} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800">{paymentServiceId === service.id && paymentSource === "receivables" ? "Fechar" : "Registrar recebimento"}</button>}</td></tr>
-              {canManageFinance && paymentServiceId === service.id && paymentSource === "receivables" && <tr className="border-b border-slate-100"><td colSpan={7} className="px-3 py-4"><form onSubmit={(event) => void submitPayment(event, service)} className="grid gap-3 rounded-lg bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-5">
+            return <Fragment key={service.id}><tr className="border-b border-slate-100 align-top"><td className="px-3 py-3 font-mono text-xs font-semibold text-purple-800">{service.charge_code}</td><td className="px-3 py-3 font-medium text-slate-800">{service.customers?.name ?? "Cliente"}</td><td className="px-3 py-3 text-slate-700">{service.service_name}</td><td className="px-3 py-3 text-slate-700">{nextInstallment ? formatDate(nextInstallment.due_date) : "Sem vencimento definido"}</td><td className="px-3 py-3 text-right text-slate-700">{formatCurrency(Number(service.amount_charged))}</td><td className="px-3 py-3 text-right text-slate-700">{formatCurrency(Number(service.amount_received))}</td><td className="px-3 py-3 text-right font-semibold text-amber-800">{formatCurrency(balance)}</td><td className="px-3 py-3 text-right">{canManageFinance && <button type="button" onClick={() => paymentServiceId === service.id && paymentSource === "receivables" ? setPaymentServiceId("") : startPayment(service, "receivables")} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800">{paymentServiceId === service.id && paymentSource === "receivables" ? "Fechar" : "Registrar recebimento"}</button>}</td></tr>
+              {canManageFinance && paymentServiceId === service.id && paymentSource === "receivables" && <tr className="border-b border-slate-100"><td colSpan={8} className="px-3 py-4"><form onSubmit={(event) => void submitPayment(event, service)} className="grid gap-3 rounded-lg bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-5">
                 <p className="text-sm font-semibold text-slate-800 sm:col-span-2 lg:col-span-5">Saldo deste serviço: {formatCurrency(balance)}</p>
-                <label className="text-xs font-medium text-slate-700">Valor recebido (R$)<input required type="number" min="0.01" max={balance} step="0.01" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label>
-                <label className="text-xs font-medium text-slate-700">Parcela<select required value={paymentInstallment} onChange={(event) => { const number = Number(event.target.value); setPaymentInstallment(event.target.value); const scheduled = service.scheduled_installments?.find((installment) => installment.installment_number === number); const received = (service.payments ?? []).filter((payment) => payment.installment_number === number).reduce((sum, payment) => sum + Number(payment.amount), 0); setPaymentAmount(scheduled ? Math.max(0, Number(scheduled.amount) - received).toFixed(2) : ""); }} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm">{Array.from({ length: Math.max(1, service.installments_total || 1) }, (_, index) => index + 1).map((number) => { const scheduled = service.scheduled_installments?.find((installment) => installment.installment_number === number); return <option key={number} value={number}>{number}ª parcela{scheduled ? ` · vence ${formatDate(scheduled.due_date)}` : ""}</option>; })}</select></label>
+                <label className="text-xs font-medium text-slate-700">Valor recebido (R$)<CurrencyInput required min={0.01} max={balance} value={paymentAmount} onChange={setPaymentAmount} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label>
+                <label className="text-xs font-medium text-slate-700">Parcela<select required value={paymentInstallment} onChange={(event) => { const number = Number(event.target.value); setPaymentInstallment(event.target.value); const scheduled = service.scheduled_installments?.find((installment) => installment.installment_number === number); const received = (service.payments ?? []).filter((payment) => payment.installment_number === number).reduce((sum, payment) => sum + Number(payment.amount), 0); setPaymentAmount(scheduled ? formatCurrencyInput(Math.max(0, Number(scheduled.amount) - received)) : ""); }} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm">{Array.from({ length: Math.max(1, service.installments_total || 1) }, (_, index) => index + 1).map((number) => { const scheduled = service.scheduled_installments?.find((installment) => installment.installment_number === number); return <option key={number} value={number}>{number}ª parcela{scheduled ? ` · vence ${formatDate(scheduled.due_date)}` : ""}</option>; })}</select></label>
                 <label className="text-xs font-medium text-slate-700">Meio de pagamento<select required value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm">{Object.entries(paymentMethodLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                 <label className="text-xs font-medium text-slate-700">Data do recebimento<input required type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label>
                 <div className="flex items-end"><button disabled={savingPayment} className="w-full rounded-lg bg-purple-700 px-3 py-2 text-sm font-semibold text-white hover:bg-purple-800 disabled:opacity-50">{savingPayment ? "Salvando…" : "Salvar recebimento"}</button></div>
@@ -706,36 +888,36 @@ export default function FinanceiroPage() {
                 <select value={source} onChange={(event) => setSource(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900">{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
               </label>
               <label className="text-sm font-medium text-slate-700">Valor cobrado (R$)
-                <input required type="number" min="0.01" step="0.01" value={amountCharged} onChange={(event) => setAmountCharged(event.target.value)} placeholder="0,00" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900" />
+                <CurrencyInput required min={0.01} value={amountCharged} onChange={setAmountCharged} placeholder="0,00" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900" />
               </label>
               <label className="text-sm font-medium text-slate-700">Entrada recebida (R$)
-                <input required type="number" min="0" step="0.01" value={amountReceived} onChange={(event) => setAmountReceived(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900" />
+                <CurrencyInput required min={0} value={amountReceived} onChange={setAmountReceived} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900" />
               </label>
               <label className="text-sm font-medium text-slate-700">Meio de pagamento da entrada
-                <select required={Number(amountReceived) > 0} disabled={Number(amountReceived) <= 0} value={initialPaymentMethod} onChange={(event) => setInitialPaymentMethod(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 disabled:bg-slate-100 disabled:text-slate-500">
+                <select required={parseCurrencyInput(amountReceived) > 0} disabled={parseCurrencyInput(amountReceived) <= 0} value={initialPaymentMethod} onChange={(event) => setInitialPaymentMethod(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 disabled:bg-slate-100 disabled:text-slate-500">
                   {Object.entries(paymentMethodLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </label>
               <label className="text-sm font-medium text-slate-700">Data em que recebeu a entrada
-                <input required={Number(amountReceived) > 0} disabled={Number(amountReceived) <= 0} type="date" value={initialPaymentDate} onChange={(event) => setInitialPaymentDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 disabled:bg-slate-100 disabled:text-slate-500" />
+                <input required={parseCurrencyInput(amountReceived) > 0} disabled={parseCurrencyInput(amountReceived) <= 0} type="date" value={initialPaymentDate} onChange={(event) => setInitialPaymentDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 disabled:bg-slate-100 disabled:text-slate-500" />
               </label>
               <div className="sm:col-span-2 rounded-lg border border-slate-200 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-semibold text-slate-900">Parcelas a receber</h4><p className="mt-1 text-xs text-slate-600">Informe o valor e o vencimento de cada parcela após a entrada.</p></div><button type="button" disabled={installmentDrafts.length >= 24} onClick={() => setInstallmentDrafts((current) => [...current, { amount: "", due_date: dateAfterDays(30 * (current.length + 1)) }])} className="rounded-lg border border-purple-200 px-3 py-2 text-sm font-medium text-purple-800 hover:bg-purple-50 disabled:opacity-50">Adicionar parcela</button></div>
                 <div className="mt-4 space-y-3">{installmentDrafts.map((installment, index) => <div key={index} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                  <label className="text-sm font-medium text-slate-700">{index + 1}ª parcela · valor (R$)<input type="number" min="0.01" step="0.01" required={installment.due_date !== "" && installment.amount !== ""} value={installment.amount} onChange={(event) => setInstallmentDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, amount: event.target.value } : item))} placeholder="0,00" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900" /></label>
+                  <label className="text-sm font-medium text-slate-700">{index + 1}ª parcela · valor (R$)<CurrencyInput min={0.01} required={installment.due_date !== "" && installment.amount !== ""} value={installment.amount} onChange={(amount) => setInstallmentDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, amount } : item))} placeholder="0,00" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900" /></label>
                   <label className="text-sm font-medium text-slate-700">Data de vencimento<input type="date" required={installment.amount !== ""} value={installment.due_date} onChange={(event) => setInstallmentDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, due_date: event.target.value } : item))} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900" /></label>
                   {installmentDrafts.length > 1 ? <button type="button" onClick={() => setInstallmentDrafts((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="rounded-lg border border-red-200 px-3 py-2.5 text-sm text-red-700 hover:bg-red-50">Remover</button> : <span />}
                 </div>)}</div>
-                <p className="mt-3 text-sm text-slate-700">Entrada + parcelas planejadas: <strong>{formatCurrency((Number(amountReceived) || 0) + plannedInstallmentTotal)}</strong> de <strong>{formatCurrency(Number(amountCharged) || 0)}</strong></p>
-                {(Number(amountReceived) + plannedInstallmentTotal > Number(amountCharged) && Number(amountCharged) > 0) && <p role="alert" className="mt-2 text-sm text-red-700">A soma da entrada e das parcelas ultrapassa o valor do serviço.</p>}
-                {Number(amountReceived) + plannedInstallmentTotal < Number(amountCharged) && Number(amountCharged) > 0 && <p className="mt-1 text-xs text-slate-500">Saldo ainda sem vencimento: {formatCurrency(Number(amountCharged) - Number(amountReceived) - plannedInstallmentTotal)}.</p>}
+                <p className="mt-3 text-sm text-slate-700">Entrada + parcelas planejadas: <strong>{formatCurrency((parseCurrencyInput(amountReceived) || 0) + plannedInstallmentTotal)}</strong> de <strong>{formatCurrency(parseCurrencyInput(amountCharged) || 0)}</strong></p>
+                {(parseCurrencyInput(amountReceived) + plannedInstallmentTotal > parseCurrencyInput(amountCharged) && parseCurrencyInput(amountCharged) > 0) && <p role="alert" className="mt-2 text-sm text-red-700">A soma da entrada e das parcelas ultrapassa o valor do serviço.</p>}
+                {parseCurrencyInput(amountReceived) + plannedInstallmentTotal < parseCurrencyInput(amountCharged) && parseCurrencyInput(amountCharged) > 0 && <p className="mt-1 text-xs text-slate-500">Saldo ainda sem vencimento: {formatCurrency(parseCurrencyInput(amountCharged) - parseCurrencyInput(amountReceived) - plannedInstallmentTotal)}.</p>}
               </div>
               <div className="sm:col-span-2 rounded-lg border border-slate-200 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-semibold text-slate-900">Custos diretos do serviço</h4><p className="mt-1 text-xs text-slate-600">Cadastre cada material, taxa ou outro custo. O total é calculado automaticamente.</p></div><button type="button" disabled={costItemDrafts.length >= 30} onClick={() => setCostItemDrafts((current) => [...current, { category: "materiais_insumos", description: "", amount: "" }])} className="rounded-lg border border-purple-200 px-3 py-2 text-sm font-medium text-purple-800 hover:bg-purple-50 disabled:opacity-50">Adicionar custo</button></div>
                 {costItemDrafts.length > 0 && <div className="mt-4 space-y-3">{costItemDrafts.map((item, index) => <div key={index} className="grid gap-3 sm:grid-cols-[1fr_1.4fr_0.8fr_auto] sm:items-end">
                   <label className="text-sm font-medium text-slate-700">Tipo<select value={item.category} onChange={(event) => setCostItemDrafts((current) => current.map((draft, itemIndex) => itemIndex === index ? { ...draft, category: event.target.value } : draft))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900">{Object.entries(costCategoryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                   <label className="text-sm font-medium text-slate-700">Descrição<input required minLength={2} maxLength={200} value={item.description} onChange={(event) => setCostItemDrafts((current) => current.map((draft, itemIndex) => itemIndex === index ? { ...draft, description: event.target.value } : draft))} placeholder="Ex.: material para instalação da tomada" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900" /></label>
-                  <label className="text-sm font-medium text-slate-700">Valor (R$)<input required type="number" min="0.01" step="0.01" value={item.amount} onChange={(event) => setCostItemDrafts((current) => current.map((draft, itemIndex) => itemIndex === index ? { ...draft, amount: event.target.value } : draft))} placeholder="0,00" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900" /></label>
+                  <label className="text-sm font-medium text-slate-700">Valor (R$)<CurrencyInput required min={0.01} value={item.amount} onChange={(amount) => setCostItemDrafts((current) => current.map((draft, itemIndex) => itemIndex === index ? { ...draft, amount } : draft))} placeholder="0,00" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900" /></label>
                   <button type="button" onClick={() => setCostItemDrafts((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="rounded-lg border border-red-200 px-3 py-2.5 text-sm text-red-700 hover:bg-red-50">Remover</button>
                 </div>)}</div>}
                 <p className="mt-3 text-sm text-slate-700">Total do custo direto: <strong>{formatCurrency(serviceDirectCost)}</strong></p>
@@ -776,7 +958,7 @@ export default function FinanceiroPage() {
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <label className="text-sm font-medium text-slate-700">Distância total (km)<input required type="number" min="0.1" step="0.1" value={expenseFuel.distance_km} onChange={(event) => { const next = { ...expenseFuel, distance_km: event.target.value }; setExpenseFuel(next); setExpenseAmount(String(calculateFuelCost(next))); }} placeholder="Ex.: 24" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900" /></label>
                   <label className="text-sm font-medium text-slate-700">Combustível<select value={expenseFuel.fuel_type} onChange={(event) => { const next = { ...expenseFuel, fuel_type: event.target.value as FuelCostDetails["fuel_type"] }; setExpenseFuel(next); setExpenseAmount(String(calculateFuelCost(next))); }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900"><option value="gasolina">Gasolina</option><option value="etanol">Etanol (álcool)</option></select></label>
-                  <label className="text-sm font-medium text-slate-700">Preço por litro (R$)<input required type="number" min="0.01" step="0.01" value={expenseFuel.price_per_liter} onChange={(event) => { const next = { ...expenseFuel, price_per_liter: event.target.value }; setExpenseFuel(next); setExpenseAmount(String(calculateFuelCost(next))); }} placeholder="Ex.: 5,89" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900" /></label>
+                  <label className="text-sm font-medium text-slate-700">Preço por litro (R$)<CurrencyInput required min={0.01} value={expenseFuel.price_per_liter} onChange={(price_per_liter) => { const next = { ...expenseFuel, price_per_liter }; setExpenseFuel(next); setExpenseAmount(formatCurrencyInput(calculateFuelCost(next))); }} placeholder="Ex.: 5,89" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900" /></label>
                   <label className="text-sm font-medium text-slate-700">Consumo médio (km/L)<input required type="number" min="0.1" step="0.1" value={expenseFuel.efficiency_km_per_liter} onChange={(event) => { const next = { ...expenseFuel, efficiency_km_per_liter: event.target.value }; setExpenseFuel(next); setExpenseAmount(String(calculateFuelCost(next))); }} placeholder="Ex.: 10,5" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900" /></label>
                 </div>
                 <p className="mt-3 text-sm text-slate-700">Combustível estimado: <strong>{formatCurrency(calculatedExpenseFuelCost)}</strong></p>
@@ -785,7 +967,7 @@ export default function FinanceiroPage() {
                 <input required type="date" value={expenseDueDate} onChange={(event) => setExpenseDueDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900" />
               </label>
               <label className="text-sm font-medium text-slate-700">Valor (R$)
-                <input required type="number" min="0.01" step="0.01" readOnly={expenseCategory === "Transporte"} value={expenseAmount} onChange={(event) => setExpenseAmount(event.target.value)} placeholder="0,00" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900 read-only:bg-slate-100" />
+                <CurrencyInput required min={0.01} readOnly={expenseCategory === "Transporte"} value={expenseAmount} onChange={setExpenseAmount} placeholder="0,00" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900 read-only:bg-slate-100" />
               </label>
               <label className="text-sm font-medium text-slate-700">Situação
                 <select value={expenseStatus} onChange={(event) => setExpenseStatus(event.target.value as "pago" | "pendente")} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900"><option value="pago">Pago</option><option value="pendente">Pendente</option></select>
@@ -805,11 +987,14 @@ export default function FinanceiroPage() {
         <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="text-xl font-semibold text-slate-900">Serviços do período</h3><p className="mt-1 text-sm text-slate-600">{data.services.length} registros · a receber destes serviços {formatCurrency(totals.receivable)}</p></div><div className="text-sm sm:text-right"><p className="text-slate-600">Custos diretos: {formatCurrency(totals.direct)}</p><p className={`mt-1 font-semibold ${(totals.charged - totals.direct) >= 0 ? "text-emerald-700" : "text-rose-700"}`}>Resultado direto: {formatCurrency(totals.charged - totals.direct)} · margem {totals.charged > 0 ? (((totals.charged - totals.direct) / totals.charged) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) : "0"}%</p></div></div>
           <p className="mt-2 text-xs text-slate-500">Resultado direto = valor cobrado menos custos diretos registrados. Despesas gerais do negócio não são rateadas por serviço.</p>
-          {data.services.length === 0 ? <p className="mt-5 rounded-lg bg-slate-50 p-6 text-center text-slate-600">Nenhum serviço registrado neste período.</p> : <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[1250px] text-left text-sm"><thead className="border-b border-slate-200 text-slate-500"><tr><th className="px-3 py-3 font-medium">Data</th><th className="px-3 py-3 font-medium">Cliente</th><th className="px-3 py-3 font-medium">Serviço</th><th className="px-3 py-3 font-medium">Origem</th><th className="px-3 py-3 text-right font-medium">Cobrado</th><th className="px-3 py-3 text-right font-medium">Recebido total</th><th className="px-3 py-3 text-right font-medium">Custo direto</th><th className="px-3 py-3 text-right font-medium">Resultado direto</th><th className="px-3 py-3 text-right font-medium">Margem</th><th className="px-3 py-3 font-medium">Plano</th><th className="px-3 py-3 text-right font-medium">Ações</th></tr></thead><tbody>{data.services.map((service) => {
+          {data.services.length === 0 ? <p className="mt-5 rounded-lg bg-slate-50 p-6 text-center text-slate-600">Nenhum serviço registrado neste período.</p> : <>
+          <h4 className="mt-5 text-lg font-semibold text-slate-900">Serviços em aberto <span className="text-sm font-normal text-slate-500">({data.services.filter((service) => Number(service.amount_received) < Number(service.amount_charged)).length})</span></h4>
+          {data.services.filter((service) => Number(service.amount_received) < Number(service.amount_charged)).length === 0 ? <p className="mt-3 rounded-lg bg-slate-50 p-5 text-sm text-slate-600">Nenhuma cobrança em aberto neste período.</p> : <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[1320px] text-left text-sm"><thead className="border-b border-slate-200 text-slate-500"><tr><th className="px-3 py-3 font-medium">Código</th><th className="px-3 py-3 font-medium">Data</th><th className="px-3 py-3 font-medium">Cliente</th><th className="px-3 py-3 font-medium">Serviço</th><th className="px-3 py-3 font-medium">Origem</th><th className="px-3 py-3 text-right font-medium">Cobrado</th><th className="px-3 py-3 text-right font-medium">Recebido total</th><th className="px-3 py-3 text-right font-medium">Custo direto</th><th className="px-3 py-3 text-right font-medium">Resultado direto</th><th className="px-3 py-3 text-right font-medium">Margem</th><th className="px-3 py-3 font-medium">Plano</th><th className="px-3 py-3 text-right font-medium">Ações</th></tr></thead><tbody>{data.services.filter((service) => Number(service.amount_received) < Number(service.amount_charged)).map((service) => {
             const serviceResult = Number(service.amount_charged) - Number(service.direct_cost);
             const serviceMargin = Number(service.amount_charged) > 0 ? (serviceResult / Number(service.amount_charged)) * 100 : 0;
             return <Fragment key={service.id}>
             <tr className="border-b border-slate-100 align-top">
+              <td className="px-3 py-3 font-mono text-xs font-semibold text-purple-800">{service.charge_code}</td>
               <td className="px-3 py-3 text-slate-700">{formatDate(service.service_date)}</td>
               <td className="px-3 py-3 text-slate-700">{service.customers?.name ?? "Cliente"}</td>
               <td className="px-3 py-3 text-slate-700">{service.service_name}{service.scheduled_installments?.length > 0 && <div className="mt-2 space-y-1 text-xs text-slate-500">{service.scheduled_installments.map((installment) => { const received = (service.payments ?? []).filter((payment) => payment.installment_number === installment.installment_number).reduce((sum, payment) => sum + Number(payment.amount), 0); return <p key={installment.id}>{installment.installment_number}ª parcela · vence {formatDate(installment.due_date)} · {formatCurrency(Number(installment.amount))}{received > 0 ? ` · recebido ${formatCurrency(received)}` : " · pendente"}</p>; })}</div>}{service.payments?.length > 0 && <div className="mt-1 space-y-1 text-xs text-slate-500">{service.payments.map((payment) => <p key={payment.id}>{payment.installment_number === 0 ? "Entrada" : `${payment.installment_number}ª parcela`} recebida · {paymentMethodLabels[payment.payment_method] ?? "Outro"} · {formatDate(payment.payment_date)} · {formatCurrency(Number(payment.amount))}</p>)}</div>}</td>
@@ -820,19 +1005,39 @@ export default function FinanceiroPage() {
               <td className={`px-3 py-3 text-right font-semibold ${serviceResult >= 0 ? "text-emerald-700" : "text-rose-700"}`}>{formatCurrency(serviceResult)}</td>
               <td className={`px-3 py-3 text-right font-medium ${serviceMargin >= 0 ? "text-emerald-700" : "text-rose-700"}`}>{serviceMargin.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</td>
               <td className="px-3 py-3 text-slate-700">{service.scheduled_installments?.length ? `${service.scheduled_installments.length} parcela(s)` : "À vista"}</td>
-              <td className="px-3 py-3 text-right">{canManageFinance && Number(service.amount_received) < Number(service.amount_charged) && <button type="button" onClick={() => paymentServiceId === service.id && paymentSource === "services" ? setPaymentServiceId("") : startPayment(service)} className="rounded-lg border border-purple-200 px-3 py-2 text-xs font-medium text-purple-800 hover:bg-purple-50">{paymentServiceId === service.id && paymentSource === "services" ? "Fechar" : "Registrar recebimento"}</button>}</td>
+              <td className="px-3 py-3 text-right">{canManageFinance && <div className="flex min-w-28 flex-col items-end gap-2">
+                <button type="button" onClick={() => editingServiceId === service.id ? (setEditingServiceId(""), setServiceEditDraft(null)) : startServiceEdit(service)} className="rounded-lg border border-purple-200 px-3 py-2 text-xs font-medium text-purple-800 hover:bg-purple-50">{editingServiceId === service.id ? "Fechar edição" : "Editar"}</button>
+                <button type="button" disabled={Number(service.amount_received) > 0} title={Number(service.amount_received) > 0 ? "Uma cobrança com recebimentos não pode ser excluída." : "Excluir cobrança"} onClick={() => void deleteServiceRecord(service)} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-45">Excluir</button>
+                {Number(service.amount_received) < Number(service.amount_charged) && <button type="button" onClick={() => paymentServiceId === service.id && paymentSource === "services" ? setPaymentServiceId("") : startPayment(service)} className="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-medium text-emerald-800 hover:bg-emerald-50">{paymentServiceId === service.id && paymentSource === "services" ? "Fechar baixa" : "Registrar recebimento"}</button>}
+              </div>}</td>
             </tr>
-            {canManageFinance && paymentServiceId === service.id && paymentSource === "services" && <tr key={`${service.id}-payment`} className="border-b border-slate-100"><td colSpan={11} className="px-3 py-4"><form onSubmit={(event) => void submitPayment(event, service)} className="grid gap-3 rounded-lg bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-5">
+            {canManageFinance && paymentServiceId === service.id && paymentSource === "services" && <tr key={`${service.id}-payment`} className="border-b border-slate-100"><td colSpan={12} className="px-3 py-4"><form onSubmit={(event) => void submitPayment(event, service)} className="grid gap-3 rounded-lg bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-5">
               <p className="text-sm font-semibold text-slate-800 sm:col-span-2 lg:col-span-5">Saldo deste serviço: {formatCurrency(Math.max(0, Number(service.amount_charged) - Number(service.amount_received)))}</p>
-              <label className="text-xs font-medium text-slate-700">Valor recebido (R$)<input required type="number" min="0.01" max={Number(service.amount_charged) - Number(service.amount_received)} step="0.01" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label>
-              <label className="text-xs font-medium text-slate-700">Parcela<select required value={paymentInstallment} onChange={(event) => { const number = Number(event.target.value); setPaymentInstallment(event.target.value); const scheduled = service.scheduled_installments?.find((installment) => installment.installment_number === number); const received = (service.payments ?? []).filter((payment) => payment.installment_number === number).reduce((sum, payment) => sum + Number(payment.amount), 0); setPaymentAmount(scheduled ? Math.max(0, Number(scheduled.amount) - received).toFixed(2) : ""); }} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm">{Array.from({ length: Number(paymentInstallmentsTotal) }, (_, index) => index + 1).map((number) => { const scheduled = service.scheduled_installments?.find((installment) => installment.installment_number === number); return <option key={number} value={number}>{number}ª parcela{scheduled ? ` · vence ${formatDate(scheduled.due_date)}` : ""}</option>; })}</select></label>
+              <label className="text-xs font-medium text-slate-700">Valor recebido (R$)<CurrencyInput required min={0.01} max={Number(service.amount_charged) - Number(service.amount_received)} value={paymentAmount} onChange={setPaymentAmount} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label>
+              <label className="text-xs font-medium text-slate-700">Parcela<select required value={paymentInstallment} onChange={(event) => { const number = Number(event.target.value); setPaymentInstallment(event.target.value); const scheduled = service.scheduled_installments?.find((installment) => installment.installment_number === number); const received = (service.payments ?? []).filter((payment) => payment.installment_number === number).reduce((sum, payment) => sum + Number(payment.amount), 0); setPaymentAmount(scheduled ? formatCurrencyInput(Math.max(0, Number(scheduled.amount) - received)) : ""); }} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm">{Array.from({ length: Number(paymentInstallmentsTotal) }, (_, index) => index + 1).map((number) => { const scheduled = service.scheduled_installments?.find((installment) => installment.installment_number === number); return <option key={number} value={number}>{number}ª parcela{scheduled ? ` · vence ${formatDate(scheduled.due_date)}` : ""}</option>; })}</select></label>
               <label className="text-xs font-medium text-slate-700">Meio de pagamento<select required value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm">{Object.entries(paymentMethodLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
               <label className="text-xs font-medium text-slate-700">Data do recebimento<input required type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label>
               <div className="flex items-end"><button disabled={savingPayment} className="w-full rounded-lg bg-purple-700 px-3 py-2 text-sm font-semibold text-white hover:bg-purple-800 disabled:opacity-50">{savingPayment ? "Salvando…" : "Salvar parcela"}</button></div>
             </form></td></tr>}
-          </Fragment>;
+            </Fragment>;
           })}</tbody></table></div>}
+          <h4 className="mt-8 text-lg font-semibold text-slate-900">Serviços quitados <span className="text-sm font-normal text-slate-500">({data.services.filter((service) => Number(service.amount_received) >= Number(service.amount_charged)).length})</span></h4>
+          {data.services.filter((service) => Number(service.amount_received) >= Number(service.amount_charged)).length === 0 ? <p className="mt-3 rounded-lg bg-slate-50 p-5 text-sm text-slate-600">Nenhum serviço quitado neste período.</p> : <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead className="border-b border-slate-200 text-slate-500"><tr><th className="px-3 py-3 font-medium">Código</th><th className="px-3 py-3 font-medium">Data</th><th className="px-3 py-3 font-medium">Cliente</th><th className="px-3 py-3 font-medium">Serviço</th><th className="px-3 py-3 text-right font-medium">Cobrado</th><th className="px-3 py-3 text-right font-medium">Recebido</th></tr></thead><tbody>{data.services.filter((service) => Number(service.amount_received) >= Number(service.amount_charged)).map((service) => <tr key={service.id} className="border-b border-slate-100"><td className="px-3 py-3 font-mono text-xs font-semibold text-purple-800">{service.charge_code}</td><td className="px-3 py-3">{formatDate(service.service_date)}</td><td className="px-3 py-3">{service.customers?.name ?? "Cliente"}</td><td className="px-3 py-3">{service.service_name}</td><td className="px-3 py-3 text-right">{formatCurrency(Number(service.amount_charged))}</td><td className="px-3 py-3 text-right">{formatCurrency(Number(service.amount_received))}</td></tr>)}</tbody></table></div>}
+          </>}
         </section>
+        {canManageFinance && editingService && serviceEditDraft && createPortal(<div style={{ position: "fixed", inset: 0, zIndex: 1000 }} className="flex items-center justify-center bg-slate-950/60 p-3 sm:p-6" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) { setEditingServiceId(""); setServiceEditDraft(null); setServiceEditSaved(""); } }}><section role="dialog" aria-modal="true" aria-labelledby="service-edit-title" className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-7"><div className="mb-5 flex items-start justify-between gap-4"><div><h3 id="service-edit-title" className="text-xl font-semibold text-slate-900">Editar cobrança</h3><p className="mt-1 text-sm text-slate-600">Código {editingService.charge_code}</p></div><button type="button" aria-label="Fechar edição" onClick={() => { setEditingServiceId(""); setServiceEditDraft(null); setServiceEditSaved(""); }} className="rounded-lg border border-slate-300 px-3 py-2 text-slate-700 hover:bg-slate-50">✕</button></div><form onSubmit={(event) => void submitServiceEdit(event, editingService)} className="space-y-4">
+              {serviceEditSaved && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">✓ {serviceEditSaved} A janela será fechada em instantes.</p>}
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <label className="text-xs font-medium text-slate-700">Cliente<select required value={serviceEditDraft.customer_id} onChange={(event) => setServiceEditDraft((draft) => draft ? { ...draft, customer_id: event.target.value } : draft)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm">{!data.customers.some((customer) => customer.id === serviceEditDraft.customer_id) && <option value={serviceEditDraft.customer_id}>{editingService.customers?.name ?? "Cliente atual"}</option>}{data.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>
+                <label className="text-xs font-medium text-slate-700">Serviço / cobrança<input required minLength={2} maxLength={200} value={serviceEditDraft.service_name} onChange={(event) => setServiceEditDraft((draft) => draft ? { ...draft, service_name: event.target.value } : draft)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label>
+                <label className="text-xs font-medium text-slate-700">Data do serviço<input required type="date" value={serviceEditDraft.service_date} onChange={(event) => setServiceEditDraft((draft) => draft ? { ...draft, service_date: event.target.value } : draft)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label>
+                <label className="text-xs font-medium text-slate-700">Origem<select required value={serviceEditDraft.source} onChange={(event) => setServiceEditDraft((draft) => draft ? { ...draft, source: event.target.value } : draft)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm">{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                <label className="text-xs font-medium text-slate-700">Valor cobrado (R$)<CurrencyInput required min={Number(editingService.amount_received)} value={serviceEditDraft.amount_charged} onChange={(amount_charged) => setServiceEditDraft((draft) => draft ? { ...draft, amount_charged } : draft)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label>
+                <label className="text-xs font-medium text-slate-700 sm:col-span-2 lg:col-span-3">Observação<textarea maxLength={2000} rows={2} value={serviceEditDraft.notes} onChange={(event) => setServiceEditDraft((draft) => draft ? { ...draft, notes: event.target.value } : draft)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label>
+              </div>
+              {serviceEditDraft.scheduled_installments.length > 0 && <div><p className="mb-2 text-sm font-semibold text-slate-800">Parcelas e vencimentos</p><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{serviceEditDraft.scheduled_installments.map((installment) => <div key={installment.installment_number} className="grid grid-cols-2 gap-2 rounded border border-purple-100 bg-white p-3"><p className="col-span-2 text-xs font-semibold text-slate-700">{installment.installment_number}ª parcela</p><label className="text-xs text-slate-600">Vencimento<input required type="date" value={installment.due_date} onChange={(event) => setServiceEditDraft((draft) => draft ? { ...draft, scheduled_installments: draft.scheduled_installments.map((item) => item.installment_number === installment.installment_number ? { ...item, due_date: event.target.value } : item) } : draft)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label><label className="text-xs text-slate-600">Valor (R$)<CurrencyInput required min={0.01} value={installment.amount} onChange={(amount) => setServiceEditDraft((draft) => draft ? { ...draft, scheduled_installments: draft.scheduled_installments.map((item) => item.installment_number === installment.installment_number ? { ...item, amount } : item) } : draft)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label></div>)}</div><p className="mt-2 text-xs text-slate-600">A quantidade de parcelas não pode mudar por esta tela. Valores já recebidos em cada parcela precisam ser mantidos.</p></div>}
+              <div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={() => { setEditingServiceId(""); setServiceEditDraft(null); setServiceEditSaved(""); }} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancelar</button><button disabled={savingServiceEdit || Boolean(serviceEditSaved)} className="rounded-lg bg-purple-700 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-800 disabled:opacity-50">{savingServiceEdit ? "Salvando…" : serviceEditSaved ? "Salvo" : "Salvar alterações"}</button></div>
+            </form></section></div>, document.body)}
 
         <section className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h3 className="text-xl font-semibold text-slate-900">Recebimentos no período</h3>
@@ -843,6 +1048,17 @@ export default function FinanceiroPage() {
         <section className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="text-xl font-semibold text-slate-900">Gastos pagos do período</h3><p className="mt-1 text-sm text-slate-600">{paidExpensesInPeriod.length} lançamentos · total {formatCurrency(totals.paidExpenses)}</p></div></div>
           {paidExpensesInPeriod.length === 0 ? <p className="mt-5 rounded-lg bg-slate-50 p-6 text-center text-slate-600">Nenhum gasto pago neste período.</p> : <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead className="border-b border-slate-200 text-slate-500"><tr><th className="px-3 py-3 font-medium">Data do pagamento</th><th className="px-3 py-3 font-medium">Descrição</th><th className="px-3 py-3 font-medium">Tipo</th><th className="px-3 py-3 font-medium">Categoria</th><th className="px-3 py-3 font-medium">Classificação</th><th className="px-3 py-3 font-medium">Imóvel</th><th className="px-3 py-3 text-right font-medium">Valor</th>{canManageFinance && <th className="px-3 py-3 text-right font-medium">Ação</th>}</tr></thead><tbody>{paidExpensesInPeriod.map((expense) => <tr key={expense.id} className="border-b border-slate-100"><td className="px-3 py-3 text-slate-700">{formatDate(expense.expense_date)}</td><td className="px-3 py-3 text-slate-700">{expense.description}</td><td className="px-3 py-3 text-slate-700">{expense.expense_type === "fixa_mensal" ? "Conta fixa" : "Avulsa"}</td><td className="px-3 py-3 text-slate-700">{expense.category}</td><td className="px-3 py-3 text-slate-700">{expenseClassificationLabels[expense.classification] ?? "Despesas variáveis"}</td><td className="px-3 py-3 text-slate-700">{propertyTypeLabels[expense.property_type] ?? "Não se aplica"}</td><td className="px-3 py-3 text-right text-slate-700">{formatCurrency(Number(expense.amount))}</td>{canManageFinance && <td className="px-3 py-3 text-right"><button type="button" onClick={() => void updateExpenseStatus(expense, "pendente")} className="rounded-lg border border-amber-300 px-3 py-2 text-xs font-medium text-amber-800 hover:bg-amber-50">Voltar a pendente</button></td>}</tr>)}</tbody></table></div>}
+        </section>
+
+        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm" aria-labelledby="finance-audit-title">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div><h3 id="finance-audit-title" className="text-xl font-semibold text-slate-900">Histórico de operações</h3><p className="mt-1 text-sm text-slate-600">{filteredAuditEvents.length} operação(ões) entre {formatDate(periodRange.from)} e {formatDate(periodRange.to)}. Altere o período nos filtros do Financeiro.</p></div>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="text-xs font-medium text-slate-700">Operação<select value={auditAction} onChange={(event) => setAuditAction(event.target.value as "all" | AuditAction)} className="mt-1 block min-w-52 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"><option value="all">Todas as operações</option>{Object.entries(auditActionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+              <button type="button" onClick={downloadAuditReport} disabled={!filteredAuditEvents.length} className="rounded-lg bg-purple-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-purple-800 disabled:cursor-not-allowed disabled:opacity-50">Gerar relatório CSV</button>
+            </div>
+          </div>
+          {auditError ? <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{auditError}</p> : filteredAuditEvents.length === 0 ? <p className="mt-5 rounded-lg bg-slate-50 p-6 text-center text-slate-600">Nenhuma operação encontrada neste período e filtro.</p> : <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead className="border-b border-slate-200 text-slate-500"><tr><th className="px-3 py-3 font-medium">Data e hora</th><th className="px-3 py-3 font-medium">Operação</th><th className="px-3 py-3 font-medium">Cliente</th><th className="px-3 py-3 font-medium">Cobrança</th><th className="px-3 py-3 font-medium">Usuário</th><th className="px-3 py-3 font-medium">Detalhes</th></tr></thead><tbody>{filteredAuditEvents.map((event) => <tr key={event.id} className="border-b border-slate-100 align-top"><td className="px-3 py-3 text-slate-700">{new Date(event.created_at).toLocaleString("pt-BR")}</td><td className="px-3 py-3 font-medium text-slate-800">{auditActionLabels[event.action]}</td><td className="px-3 py-3 text-slate-700">{auditEventCustomer(event)}</td><td className="px-3 py-3 text-slate-700">{auditEventService(event)}</td><td className="px-3 py-3 text-xs text-slate-600" title={event.actor_user_id ?? "Usuário não identificado"}>{event.actor_email ?? (event.actor_user_id ? event.actor_user_id.slice(0, 8) : "—")}</td><td className="max-w-lg px-3 py-3 text-slate-600">{auditEventSummary(event)}</td></tr>)}</tbody></table></div>}
         </section>
       </section>
     </main>

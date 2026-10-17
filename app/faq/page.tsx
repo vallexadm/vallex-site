@@ -13,7 +13,7 @@ const customerQuestions = [
   {
     question: "Como encontro um prestador?",
     answer:
-      "Na página Serviços, pesquise pelo nome ou tipo de serviço e refine por cidade, região e forma de atendimento. A busca começa por Goiânia e pode mostrar outras localidades informadas pelos próprios prestadores.",
+      "Na página Serviços, pesquise pelo nome ou tipo de serviço e refine por cidade, região e forma de atendimento. Sem filtros, você vê todos os prestadores com Vitrine pública.",
   },
   {
     question: "O que acontece quando envio uma solicitação?",

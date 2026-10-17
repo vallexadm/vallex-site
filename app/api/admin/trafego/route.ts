@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseCurrencyInput } from "@/lib/currency";
 import { requireTrafficAdmin } from "@/lib/server/traffic-admin";
 
 export const runtime = "nodejs";
@@ -7,7 +8,7 @@ const statuses = ["novo", "contato", "proposta", "negociacao", "fechado", "perdi
 const campaignStatuses = ["planejada", "ativa", "pausada", "concluida"] as const;
 const planCodes = ["local", "crescimento", "estrategico"] as const;
 const str = (value: unknown, max = 2000) => typeof value === "string" ? value.trim().slice(0, max) : "";
-const numberOrNull = (value: unknown) => value === "" || value === null || value === undefined ? null : Number(value);
+const numberOrNull = (value: unknown) => value === "" || value === null || value === undefined ? null : parseCurrencyInput(value as string | number);
 const nonNegative = (value: unknown) => {
   const parsed = numberOrNull(value);
   return parsed === null || (Number.isFinite(parsed) && parsed >= 0) ? parsed : NaN;

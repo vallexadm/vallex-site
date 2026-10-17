@@ -85,12 +85,13 @@ CREATE TABLE IF NOT EXISTS public.traffic_campaigns (
   CONSTRAINT traffic_campaigns_metrics_check CHECK (media_budget >= 0 AND amount_spent >= 0 AND impressions >= 0 AND clicks >= 0 AND leads_generated >= 0 AND conversions >= 0)
 );
 
--- Contas administrativas delegadas. Os dois registros iniciais são apenas
+-- Contas administrativas delegadas. O registro inicial é apenas
 -- espaços editáveis: não criam usuários nem credenciais no Supabase Auth.
 CREATE TABLE IF NOT EXISTS public.platform_admin_members (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   display_name text NOT NULL,
+  role_title text NOT NULL DEFAULT 'Cargo a definir',
   email text,
   permissions jsonb NOT NULL DEFAULT '{}'::jsonb,
   is_active boolean NOT NULL DEFAULT false,
@@ -99,17 +100,17 @@ CREATE TABLE IF NOT EXISTS public.platform_admin_members (
   CONSTRAINT platform_admin_members_email_check CHECK (email IS NULL OR email = lower(email))
 );
 
+ALTER TABLE public.platform_admin_members
+  ADD COLUMN IF NOT EXISTS role_title text NOT NULL DEFAULT 'Cargo a definir';
+
 CREATE UNIQUE INDEX IF NOT EXISTS platform_admin_members_user_id_idx
   ON public.platform_admin_members (user_id) WHERE user_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS platform_admin_members_email_idx
   ON public.platform_admin_members (email) WHERE email IS NOT NULL;
 
-INSERT INTO public.platform_admin_members (display_name, permissions)
-SELECT 'Alexandre', '{"traffic":{"view":true,"manage_plans":true,"manage_leads":true,"manage_campaigns":true},"support":{"view":false,"edit":false,"delete":false},"providers":{"view":false,"edit":false,"delete":false},"finance":{"view":false,"edit":false,"delete":false}}'::jsonb
-WHERE NOT EXISTS (SELECT 1 FROM public.platform_admin_members)
-UNION ALL
-SELECT 'Segunda pessoa (editar)', '{"traffic":{"view":false,"manage_plans":false,"manage_leads":false,"manage_campaigns":false},"support":{"view":false,"edit":false,"delete":false},"providers":{"view":false,"edit":false,"delete":false},"finance":{"view":false,"edit":false,"delete":false}}'::jsonb
-WHERE NOT EXISTS (SELECT 1 FROM public.platform_admin_members LIMIT 1);
+INSERT INTO public.platform_admin_members (display_name, role_title, permissions)
+SELECT 'Alexandre', 'Cargo a definir', '{"traffic":{"view":true,"manage_plans":true,"manage_leads":true,"manage_campaigns":true},"support":{"view":false,"edit":false,"delete":false},"providers":{"view":false,"edit":false,"delete":false},"finance":{"view":false,"edit":false,"delete":false}}'::jsonb
+WHERE NOT EXISTS (SELECT 1 FROM public.platform_admin_members);
 
 CREATE INDEX IF NOT EXISTS traffic_leads_created_at_idx ON public.traffic_leads (created_at DESC);
 CREATE INDEX IF NOT EXISTS traffic_leads_status_idx ON public.traffic_leads (status);

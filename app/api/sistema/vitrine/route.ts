@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 type Organization = {
   id: string;
   name: string;
+  business_type: string | null;
   owner_id: string;
 };
 
@@ -161,7 +162,7 @@ async function getAuthenticatedOwnerContext(
   const { data: organization, error: organizationError } =
     await supabaseAdmin
       .from("organizations")
-      .select("id, name, owner_id")
+      .select("id, name, business_type, owner_id")
       .eq("owner_id", user.id)
       .maybeSingle();
 
@@ -344,6 +345,7 @@ export async function GET(request: Request) {
     organization: {
       id: organization.id,
       name: organization.name,
+      business_type: organization.business_type,
     },
     profile: profile ?? null,
   });

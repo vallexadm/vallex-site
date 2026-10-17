@@ -2299,3 +2299,10 @@ a[role="button"]:focus-visible {
   height: 20px;
   flex: 0 0 20px;
 }
+/* Ajustes responsivos e legibilidade dos campos de vendas. */
+.vallex-sales-form, .vallex-sales-form * { box-sizing: border-box; }
+.vallex-sales-form label, .vallex-sales-filters label { min-width: 0; }
+.vallex-sales-form input, .vallex-sales-form select, .vallex-sales-form textarea,
+.vallex-sales-filters input, .vallex-sales-filters select { width: 100%; min-width: 0; max-width: 100%; }
+.vallex-sales-select { display: block; min-height: 42px; border-color: #384359; border-radius: 9px; background-color: #202a3e; padding: 9px 32px 9px 11px; color: #f3f4f6; color-scheme: light; font: inherit; font-weight: 400; }
+.vallex-admin-page .vallex-sales-select option { background-color: #fff; color: #1f2937; }

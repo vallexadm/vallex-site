@@ -64,6 +64,7 @@ export async function POST(request: Request) {
       data_preferida: dataPreferida,
       horario_preferido: horarioPreferido || null,
       sugestao_futura: sugestaoFutura || null,
+      origem: "site",
     });
 
     if (error) {
@@ -107,7 +108,7 @@ export async function GET(request: Request) {
     const { data: contatos, error: contatosError } = await supabase
       .from("contatos")
       .select(
-        "id, nome, telefone, email, servico, descricao, data_preferida, horario_preferido, sugestao_futura, status, criado_em"
+        "id, nome, telefone, email, servico, descricao, data_preferida, horario_preferido, sugestao_futura, status, criado_em, origem, organization_id, solicitante_id, ferramenta, plano_codigo, plano_nome"
       )
       .order("criado_em", { ascending: false });
 

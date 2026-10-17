@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import CurrencyInput from "@/components/CurrencyInput";
+import { formatCurrencyInput } from "@/lib/currency";
 
 type Plan = { id: string; code: string; name: string; tagline: string; price_label: string; description: string; features: string[]; published: boolean; sort_order: number };
 type Lead = { id: string; name: string; phone: string; email: string | null; audience: string; organization_name: string | null; plan_code: string | null; need_description: string; status: string; service_value: number | null; media_budget: number | null; responsible_name: string | null; source: string; utm_source: string | null; utm_medium: string | null; utm_campaign: string | null; utm_content: string | null; utm_term: string | null; referrer: string | null; landing_path: string | null; created_at: string };
@@ -18,6 +20,7 @@ const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "
 
 function localDate(value: string) { return new Date(value).toLocaleDateString("pt-BR", { dateStyle: "medium" }); }
 function numberInput(value: number | null | undefined) { return value === null || value === undefined ? "" : String(value); }
+function moneyInput(value: number | null | undefined) { return value === null || value === undefined ? "" : formatCurrencyInput(value); }
 
 export default function TrafficAdminPanel() {
   const [data, setData] = useState<Data>({ plans: [], leads: [], campaigns: [], activity: [] });
@@ -49,8 +52,8 @@ export default function TrafficAdminPanel() {
       if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível carregar o módulo de tráfego.");
       const next: Data = { plans: result.plans ?? [], leads: result.leads ?? [], campaigns: result.campaigns ?? [], activity: result.activity ?? [] };
       setData(next);
-      setLeadDrafts(Object.fromEntries(next.leads.map((lead) => [lead.id, { status: lead.status, serviceValue: numberInput(lead.service_value), mediaBudget: numberInput(lead.media_budget), responsibleName: lead.responsible_name ?? "", event: "" }])));
-      setCampaignDrafts(Object.fromEntries(next.campaigns.map((campaign) => [campaign.id, { status: campaign.status, amountSpent: numberInput(campaign.amount_spent), impressions: numberInput(campaign.impressions), clicks: numberInput(campaign.clicks), leadsGenerated: numberInput(campaign.leads_generated), conversions: numberInput(campaign.conversions), notes: campaign.notes ?? "" }])));
+      setLeadDrafts(Object.fromEntries(next.leads.map((lead) => [lead.id, { status: lead.status, serviceValue: moneyInput(lead.service_value), mediaBudget: moneyInput(lead.media_budget), responsibleName: lead.responsible_name ?? "", event: "" }])));
+      setCampaignDrafts(Object.fromEntries(next.campaigns.map((campaign) => [campaign.id, { status: campaign.status, amountSpent: moneyInput(campaign.amount_spent), impressions: numberInput(campaign.impressions), clicks: numberInput(campaign.clicks), leadsGenerated: numberInput(campaign.leads_generated), conversions: numberInput(campaign.conversions), notes: campaign.notes ?? "" }])));
       if (!campaignForm.leadId && next.leads.length) setCampaignForm((current) => ({ ...current, leadId: next.leads[0].id }));
     } catch (loadError) { setError(loadError instanceof Error ? loadError.message : "Falha ao carregar dados."); }
     finally { setLoading(false); }
@@ -116,7 +119,7 @@ export default function TrafficAdminPanel() {
 
     <section className="vallex-admin-section"><div className="vallex-admin-section-heading"><div><span className="vallex-admin-eyebrow">Funil comercial</span><h2>Contatos e negociações</h2><p>Visitantes, clientes e prestadores entram aqui com origem e UTMs quando chegam por campanha.</p></div></div>
       {data.leads.length === 0 ? <p className="vallex-admin-empty">Nenhum contato de tráfego recebido ainda.</p> : <div className="traffic-lead-list">{data.leads.map((lead) => {
-        const draft = leadDrafts[lead.id] ?? { status: lead.status, serviceValue: numberInput(lead.service_value), mediaBudget: numberInput(lead.media_budget), responsibleName: lead.responsible_name ?? "", event: "" };
+        const draft = leadDrafts[lead.id] ?? { status: lead.status, serviceValue: moneyInput(lead.service_value), mediaBudget: moneyInput(lead.media_budget), responsibleName: lead.responsible_name ?? "", event: "" };
         const history = data.activity.filter((item) => item.lead_id === lead.id).slice(0, 5);
         return <article className="traffic-lead-card" key={lead.id}>
           <div className="traffic-lead-head"><div><span className="vallex-admin-eyebrow">{lead.audience === "prestador" ? "Prestador VALLEX" : lead.audience === "cliente" ? "Cliente" : "Visitante"}{lead.plan_code ? ` · ${lead.plan_code}` : ""}</span><h3>{lead.name}</h3><small>{localDate(lead.created_at)}{lead.organization_name ? ` · ${lead.organization_name}` : ""}{lead.responsible_name ? ` · Responsável: ${lead.responsible_name}` : ""}</small></div><div className="traffic-lead-contact"><a href={`tel:${lead.phone.replace(/[^+\d]/g, "")}`}>{lead.phone}</a>{lead.email && <a href={`mailto:${lead.email}`}>{lead.email}</a>}</div></div>
@@ -124,8 +127,8 @@ export default function TrafficAdminPanel() {
           <div className="traffic-attribution">Origem: {lead.utm_source || lead.source || "direta"}{lead.utm_medium ? ` · ${lead.utm_medium}` : ""}{lead.utm_campaign ? ` · campanha ${lead.utm_campaign}` : ""}{lead.utm_content ? ` · conteúdo ${lead.utm_content}` : ""}{lead.utm_term ? ` · termo ${lead.utm_term}` : ""}{lead.referrer ? ` · veio de ${lead.referrer}` : ""}</div>
           <fieldset disabled={!permissions.manage_leads}><div className="traffic-lead-fields">
             <label>Etapa<select value={draft.status} onChange={(event) => setLeadDrafts((current) => ({ ...current, [lead.id]: { ...draft, status: event.target.value } }))}>{pipeline.map((status) => <option key={status} value={status}>{pipelineLabels[status]}</option>)}</select></label>
-            <label>Valor da gestão (R$)<input type="number" min="0" step="0.01" value={draft.serviceValue} onChange={(event) => setLeadDrafts((current) => ({ ...current, [lead.id]: { ...draft, serviceValue: event.target.value } }))} /></label>
-            <label>Orçamento de mídia (R$)<input type="number" min="0" step="0.01" value={draft.mediaBudget} onChange={(event) => setLeadDrafts((current) => ({ ...current, [lead.id]: { ...draft, mediaBudget: event.target.value } }))} /></label>
+            <label>Valor da gestão (R$)<CurrencyInput min={0} value={draft.serviceValue} onChange={(serviceValue) => setLeadDrafts((current) => ({ ...current, [lead.id]: { ...draft, serviceValue } }))} /></label>
+            <label>Orçamento de mídia (R$)<CurrencyInput min={0} value={draft.mediaBudget} onChange={(mediaBudget) => setLeadDrafts((current) => ({ ...current, [lead.id]: { ...draft, mediaBudget } }))} /></label>
             <label>Responsável<input maxLength={160} value={draft.responsibleName} onChange={(event) => setLeadDrafts((current) => ({ ...current, [lead.id]: { ...draft, responsibleName: event.target.value } }))} /></label>
             <label className="traffic-lead-event">Registro da negociação<input maxLength={2000} placeholder="Ex.: reunião marcada, proposta enviada, retorno combinado…" value={draft.event} onChange={(event) => setLeadDrafts((current) => ({ ...current, [lead.id]: { ...draft, event: event.target.value } }))} /></label>
             <button className="vallex-admin-primary" type="button" disabled={saving === `lead-${lead.id}`} onClick={() => void requestApi("PATCH", { kind: "lead", id: lead.id, status: draft.status, serviceValue: draft.serviceValue || null, mediaBudget: draft.mediaBudget || null, responsibleName: draft.responsibleName, event: draft.event }, `lead-${lead.id}`)}>{saving === `lead-${lead.id}` ? "Salvando…" : "Salvar e registrar"}</button>
@@ -140,18 +143,18 @@ export default function TrafficAdminPanel() {
         <label>Cliente<select required value={campaignForm.leadId} onChange={(event) => setCampaignForm({ ...campaignForm, leadId: event.target.value })}><option value="">Selecione</option>{data.leads.map((lead) => <option value={lead.id} key={lead.id}>{lead.name}</option>)}</select></label>
         <label>Campanha<input required maxLength={160} value={campaignForm.name} onChange={(event) => setCampaignForm({ ...campaignForm, name: event.target.value })} /></label>
         <label>Canal<select value={campaignForm.channel} onChange={(event) => setCampaignForm({ ...campaignForm, channel: event.target.value })}><option>Google Ads</option><option>Meta Ads</option><option>Outro</option></select></label>
-        <label>Orçamento de mídia (R$)<input type="number" min="0" step="0.01" value={campaignForm.mediaBudget} onChange={(event) => setCampaignForm({ ...campaignForm, mediaBudget: event.target.value })} /></label>
+        <label>Orçamento de mídia (R$)<CurrencyInput min={0} value={campaignForm.mediaBudget} onChange={(mediaBudget) => setCampaignForm({ ...campaignForm, mediaBudget })} /></label>
         <label>Início<input type="date" value={campaignForm.startDate} onChange={(event) => setCampaignForm({ ...campaignForm, startDate: event.target.value })} /></label>
         <label>Fim previsto<input type="date" value={campaignForm.endDate} onChange={(event) => setCampaignForm({ ...campaignForm, endDate: event.target.value })} /></label>
         <label className="traffic-full">Escopo / observações<textarea rows={2} maxLength={2000} value={campaignForm.notes} onChange={(event) => setCampaignForm({ ...campaignForm, notes: event.target.value })} /></label>
         <button className="vallex-admin-primary" type="submit" disabled={saving === "new-campaign" || data.leads.length === 0}>{saving === "new-campaign" ? "Registrando…" : "Registrar campanha"}</button>
       </fieldset></form>
       {data.campaigns.length === 0 ? <p className="vallex-admin-empty mt-4">As campanhas registradas aparecerão aqui.</p> : <div className="traffic-campaign-list">{data.campaigns.map((campaign) => {
-        const draft = campaignDrafts[campaign.id] ?? { status: campaign.status, amountSpent: numberInput(campaign.amount_spent), impressions: numberInput(campaign.impressions), clicks: numberInput(campaign.clicks), leadsGenerated: numberInput(campaign.leads_generated), conversions: numberInput(campaign.conversions), notes: campaign.notes ?? "" };
+        const draft = campaignDrafts[campaign.id] ?? { status: campaign.status, amountSpent: moneyInput(campaign.amount_spent), impressions: numberInput(campaign.impressions), clicks: numberInput(campaign.clicks), leadsGenerated: numberInput(campaign.leads_generated), conversions: numberInput(campaign.conversions), notes: campaign.notes ?? "" };
         const lead = data.leads.find((item) => item.id === campaign.lead_id);
         return <article className="traffic-campaign-card" key={campaign.id}><header><div><h3>{campaign.name}</h3><p>{lead?.name ?? "Cliente removido"} · {campaign.channel} · mídia prevista {currency.format(campaign.media_budget)}</p></div><span className="vallex-admin-badge">{campaignLabels[draft.status] ?? draft.status}</span></header>
           <fieldset disabled={!permissions.manage_campaigns}><div className="traffic-campaign-metrics"><label>Status<select value={draft.status} onChange={(event) => setCampaignDrafts((current) => ({ ...current, [campaign.id]: { ...draft, status: event.target.value } }))}>{Object.keys(campaignLabels).map((status) => <option key={status} value={status}>{campaignLabels[status]}</option>)}</select></label>
-            {([ ["amountSpent", "Gasto (R$)"], ["impressions", "Impressões"], ["clicks", "Cliques"], ["leadsGenerated", "Leads"], ["conversions", "Conversões"] ] as const).map(([key, label]) => <label key={key}>{label}<input type="number" min="0" step={key === "amountSpent" ? "0.01" : "1"} value={draft[key]} onChange={(event) => setCampaignDrafts((current) => ({ ...current, [campaign.id]: { ...draft, [key]: event.target.value } }))} /></label>)}
+            {([ ["amountSpent", "Gasto (R$)"], ["impressions", "Impressões"], ["clicks", "Cliques"], ["leadsGenerated", "Leads"], ["conversions", "Conversões"] ] as const).map(([key, label]) => <label key={key}>{label}{key === "amountSpent" ? <CurrencyInput min={0} value={draft.amountSpent} onChange={(amountSpent) => setCampaignDrafts((current) => ({ ...current, [campaign.id]: { ...draft, amountSpent } }))} /> : <input type="number" min="0" step="1" value={draft[key]} onChange={(event) => setCampaignDrafts((current) => ({ ...current, [campaign.id]: { ...draft, [key]: event.target.value } }))} />}</label>)}
             <label className="traffic-full">Notas<textarea rows={2} value={draft.notes} onChange={(event) => setCampaignDrafts((current) => ({ ...current, [campaign.id]: { ...draft, notes: event.target.value } }))} /></label>
           </div><button type="button" className="vallex-admin-secondary mt-3" disabled={saving === `campaign-${campaign.id}`} onClick={() => void requestApi("PATCH", { kind: "campaign", id: campaign.id, status: draft.status, amountSpent: draft.amountSpent || 0, impressions: draft.impressions || 0, clicks: draft.clicks || 0, leadsGenerated: draft.leadsGenerated || 0, conversions: draft.conversions || 0, notes: draft.notes }, `campaign-${campaign.id}`)}>{saving === `campaign-${campaign.id}` ? "Salvando…" : "Atualizar indicadores"}</button></fieldset>
         </article>;

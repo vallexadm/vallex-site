@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS public.platform_admin_members (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   display_name text NOT NULL,
+  role_title text NOT NULL DEFAULT 'Cargo a definir',
   email text,
   permissions jsonb NOT NULL DEFAULT '{}'::jsonb,
   is_active boolean NOT NULL DEFAULT false,
@@ -102,6 +103,9 @@ CREATE TABLE IF NOT EXISTS public.platform_admin_members (
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT platform_admin_members_email_check CHECK (email IS NULL OR email = lower(email))
 );
+
+ALTER TABLE public.platform_admin_members
+  ADD COLUMN IF NOT EXISTS role_title text NOT NULL DEFAULT 'Cargo a definir';
 
 CREATE UNIQUE INDEX IF NOT EXISTS platform_admin_members_user_id_idx
   ON public.platform_admin_members (user_id) WHERE user_id IS NOT NULL;

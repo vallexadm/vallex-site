@@ -496,7 +496,15 @@ CREATE TABLE IF NOT EXISTS "public"."contatos" (
     "horario_preferido" "text",
     "sugestao_futura" "text",
     "status" "text" DEFAULT 'novo'::"text" NOT NULL,
-    "criado_em" timestamp with time zone DEFAULT "now"() NOT NULL
+    "criado_em" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "origem" "text" DEFAULT 'site'::"text" NOT NULL,
+    "organization_id" "uuid",
+    "solicitante_id" "uuid",
+    "ferramenta" "text",
+    "plano_codigo" "text",
+    "plano_nome" "text",
+    CONSTRAINT "contatos_origem_check" CHECK (("origem" = ANY (ARRAY['site'::"text", 'acesso_prestador'::"text"]))),
+    CONSTRAINT "contatos_plano_codigo_check" CHECK (("plano_codigo" IS NULL) OR ("plano_codigo" = ANY (ARRAY['free'::"text", 'basic'::"text", 'professional'::"text", 'enterprise'::"text"])))
 );
 
 
@@ -617,6 +625,9 @@ CREATE TABLE IF NOT EXISTS "public"."organization_public_profiles" (
     "publication_revoked_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "admin_removed_at" timestamp with time zone,
+    "admin_removed_by" "uuid",
+    "admin_removal_reason" "text",
     CONSTRAINT "organization_public_profiles_description_length" CHECK ((("description" IS NULL) OR ("char_length"("description") <= 2000))),
     CONSTRAINT "organization_public_profiles_display_name_length" CHECK ((("char_length"(TRIM(BOTH FROM "display_name")) >= 2) AND ("char_length"(TRIM(BOTH FROM "display_name")) <= 160))),
     CONSTRAINT "organization_public_profiles_service_area_length" CHECK (("service_area" IS NULL) OR ("char_length"("service_area") <= 300)),
@@ -955,6 +966,9 @@ CREATE INDEX "organization_invitations_org_status_idx" ON "public"."organization
 CREATE INDEX "organization_public_profiles_published_idx" ON "public"."organization_public_profiles" USING "btree" ("is_published");
 
 
+CREATE INDEX "contatos_support_grouping_idx" ON "public"."contatos" USING "btree" ("origem", "plano_codigo", "ferramenta", "criado_em" DESC);
+
+
 
 CREATE INDEX "organization_publication_history_organization_idx" ON "public"."organization_publication_history" USING "btree" ("organization_id");
 
@@ -1085,6 +1099,18 @@ ALTER TABLE ONLY "public"."organization_publication_history"
 
 ALTER TABLE ONLY "public"."organization_publication_history"
     ADD CONSTRAINT "organization_publication_history_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE CASCADE;
+
+
+ALTER TABLE ONLY "public"."organization_public_profiles"
+    ADD CONSTRAINT "organization_public_profiles_admin_removed_by_fkey" FOREIGN KEY ("admin_removed_by") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
+
+
+ALTER TABLE ONLY "public"."contatos"
+    ADD CONSTRAINT "contatos_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE SET NULL;
+
+
+ALTER TABLE ONLY "public"."contatos"
+    ADD CONSTRAINT "contatos_solicitante_id_fkey" FOREIGN KEY ("solicitante_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
 
 
 

@@ -63,7 +63,12 @@ export default function SistemaLayout({
           result.plan?.code === "free" &&
           result.plan?.canViewRequests === true
         ) {
-          if (pathname === "/sistema/solicitacoes") {
+          if (
+            pathname === "/sistema/solicitacoes" ||
+            pathname === "/sistema/suporte" ||
+            pathname === "/sistema/servicos" ||
+            pathname === "/sistema/vitrine"
+          ) {
             if (!cancelled) setAccess({ path: pathname, status: "allowed" });
           } else {
             router.replace("/sistema/solicitacoes");

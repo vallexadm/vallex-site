@@ -14,20 +14,63 @@ async function owner(request: Request) {
 export async function GET(request: Request) {
   const auth = await owner(request);
   if (!auth.ok) return auth.response;
-  const { data, error } = await auth.context.supabase.from("platform_admin_members").select("id,user_id,display_name,email,permissions,is_active,created_at,updated_at").order("created_at");
+  const { data, error } = await auth.context.supabase.from("platform_admin_members").select("id,user_id,display_name,role_title,email,permissions,is_active,created_at,updated_at").order("created_at");
   if (error) return NextResponse.json({ ok: false, message: "Não foi possível carregar os acessos. Confira se a migração foi aplicada no Supabase de teste." }, { status: 503 });
-  return NextResponse.json({ ok: true, members: data ?? [] }, { headers: { "Cache-Control": "private, no-store" } });
+  try {
+    const members = await linkPendingMembers(auth.context.supabase, data ?? []);
+    return NextResponse.json({ ok: true, members }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (linkError) {
+    console.error("Falha ao conferir vínculos dos acessos administrativos:", linkError);
+    return NextResponse.json({ ok: false, message: "Não foi possível verificar se as contas dos membros já foram criadas." }, { status: 503 });
+  }
 }
 
 async function findAuthUserId(supabase: SupabaseClient, email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
   for (let page = 1; page <= 20; page += 1) {
     const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 100 });
     if (error) throw error;
-    const user = data.users.find((item) => item.email?.toLowerCase() === email);
+    const user = data.users.find((item) => item.email?.trim().toLowerCase() === normalizedEmail);
     if (user) return user.id;
     if (data.users.length < 100) break;
   }
   return null;
+}
+
+async function linkPendingMembers<T extends { id: string; user_id: string | null; email: string | null }>(supabase: SupabaseClient, members: T[]) {
+  const claimedUserIds = new Set(members.flatMap((member) => member.user_id ? [member.user_id] : []));
+  const linkedMembers: T[] = [];
+
+  for (const member of members) {
+    const email = member.email?.trim().toLowerCase();
+    if (member.user_id || !email) {
+      linkedMembers.push(member);
+      continue;
+    }
+
+    const userId = await findAuthUserId(supabase, email);
+    if (!userId || claimedUserIds.has(userId)) {
+      linkedMembers.push(member);
+      continue;
+    }
+
+    const { data, error } = await supabase
+      .from("platform_admin_members")
+      .update({ user_id: userId, updated_at: new Date().toISOString() })
+      .eq("id", member.id)
+      .is("user_id", null)
+      .select("id,user_id,display_name,role_title,email,permissions,is_active,created_at,updated_at")
+      .maybeSingle();
+    if (error) throw error;
+    if (data) {
+      claimedUserIds.add(userId);
+      linkedMembers.push(data as T);
+    } else {
+      linkedMembers.push(member);
+    }
+  }
+
+  return linkedMembers;
 }
 
 export async function POST(request: Request) {
@@ -36,14 +79,13 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const displayName = String(body.display_name ?? "").trim().slice(0, 120);
+    const roleTitle = String(body.role_title ?? "").trim().slice(0, 100);
     const email = String(body.email ?? "").trim().toLowerCase() || null;
     if (displayName.length < 2) return NextResponse.json({ ok: false, message: "Informe o nome da pessoa." }, { status: 400 });
+    if (roleTitle.length < 2) return NextResponse.json({ ok: false, message: "Informe o cargo ou a função da pessoa na VALLEX." }, { status: 400 });
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ ok: false, message: "Informe um e-mail válido." }, { status: 400 });
-    const { count, error: countError } = await auth.context.supabase.from("platform_admin_members").select("id", { count: "exact", head: true });
-    if (countError) throw countError;
-    if ((count ?? 0) >= 2) return NextResponse.json({ ok: false, message: "O limite de duas pessoas já foi atingido." }, { status: 409 });
     const userId = email ? await findAuthUserId(auth.context.supabase, email) : null;
-    const { data, error } = await auth.context.supabase.from("platform_admin_members").insert({ display_name: displayName, email, user_id: userId, permissions: normalizePlatformPermissions(body.permissions), is_active: userId ? body.is_active === true : false }).select("id,user_id,display_name,email,permissions,is_active").single();
+    const { data, error } = await auth.context.supabase.from("platform_admin_members").insert({ display_name: displayName, role_title: roleTitle, email, user_id: userId, permissions: normalizePlatformPermissions(body.permissions), is_active: userId ? body.is_active === true : false }).select("id,user_id,display_name,role_title,email,permissions,is_active").single();
     if (error) throw error;
     return NextResponse.json({ ok: true, member: data, pending: !userId }, { status: 201 });
   } catch (error) {
@@ -59,11 +101,12 @@ export async function PATCH(request: Request) {
     const body = await request.json() as Record<string, unknown>;
     const id = String(body.id ?? "").trim();
     const displayName = String(body.display_name ?? "").trim().slice(0, 120);
+    const roleTitle = String(body.role_title ?? "").trim().slice(0, 100);
     const email = String(body.email ?? "").trim().toLowerCase() || null;
-    if (!/^[0-9a-f-]{36}$/i.test(id) || displayName.length < 2) return NextResponse.json({ ok: false, message: "Confira o nome e o cadastro selecionado." }, { status: 400 });
+    if (!/^[0-9a-f-]{36}$/i.test(id) || displayName.length < 2 || roleTitle.length < 2) return NextResponse.json({ ok: false, message: "Confira o nome, o cargo e o cadastro selecionado." }, { status: 400 });
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ ok: false, message: "Informe um e-mail válido." }, { status: 400 });
     const userId = email ? await findAuthUserId(auth.context.supabase, email) : null;
-    const { data, error } = await auth.context.supabase.from("platform_admin_members").update({ display_name: displayName, email, user_id: userId, permissions: normalizePlatformPermissions(body.permissions), is_active: userId ? body.is_active === true : false, updated_at: new Date().toISOString() }).eq("id", id).select("id,user_id,display_name,email,permissions,is_active").single();
+    const { data, error } = await auth.context.supabase.from("platform_admin_members").update({ display_name: displayName, role_title: roleTitle, email, user_id: userId, permissions: normalizePlatformPermissions(body.permissions), is_active: userId ? body.is_active === true : false, updated_at: new Date().toISOString() }).eq("id", id).select("id,user_id,display_name,role_title,email,permissions,is_active").single();
     if (error) throw error;
     return NextResponse.json({ ok: true, member: data, pending: !userId });
   } catch (error) {

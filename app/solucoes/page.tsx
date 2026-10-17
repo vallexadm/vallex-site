@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { providerPlanCopy } from "@/lib/provider-plan-copy";
 
 export const metadata = {
   title: "Soluções para prestadores | VALLEX SERVIÇOFÁCIL",
@@ -38,41 +39,34 @@ const providerBenefits = [
 const plans = [
   {
     code: "FREE",
-    name: "Comece no seu ritmo",
+    name: providerPlanCopy.free.title,
+    description: providerPlanCopy.free.description,
     price: "R$ 0",
     period: "/ mês",
     users: "1 usuário na equipe",
-    features: [
-      "Consulte solicitações recebidas em modo somente leitura",
-      "Gestão e filtros disponíveis no Basic; exportação CSV no Professional",
-    ],
-    action: "Criar conta para escolher um plano",
+    features: [...providerPlanCopy.free.features],
+    action: "Criar conta e testar",
     featured: false,
   },
   {
     code: "BASIC",
-    name: "Organize a rotina",
+    name: providerPlanCopy.basic.title,
+    description: providerPlanCopy.basic.description,
     price: "R$ 49,70",
     period: "/ mês",
     users: "Até 3 usuários na equipe",
-    features: [
-      "Acesso ao painel de gestão do prestador",
-      "Configure a Vitrine e organize serviços, clientes, agenda e financeiro",
-      "Gerencie solicitações, filtros e orçamentos",
-    ],
-    action: "Conhecer o Basic",
+    features: [...providerPlanCopy.basic.features],
+    action: "Começar teste de 5 dias",
     featured: false,
   },
   {
     code: "PROFESSIONAL",
-    name: "Acompanhe mais de perto",
+    name: providerPlanCopy.professional.title,
+    description: providerPlanCopy.professional.description,
     price: "R$ 79,00",
     period: "/ mês",
     users: "Até 10 usuários na equipe",
-    features: [
-      "Painel com todos os recursos do Basic",
-      "Exporte as solicitações em arquivo CSV",
-    ],
+    features: [...providerPlanCopy.professional.features],
     action: "Conhecer o Professional",
     featured: false,
   },
@@ -159,9 +153,8 @@ export default function Solucoes() {
               <span className="eyebrow">Planos do ServiçoFácil</span>
               <h2>Escolha o nível de gestão que faz sentido para você</h2>
               <p>
-                O painel de gestão está disponível nos planos Basic e
-                Professional. Compare os recursos e escolha o acesso que combina
-                com a rotina do seu negócio.
+                Comece acompanhando os pedidos, organize a operação no Basic e
+                amplie o acompanhamento da equipe com o Professional.
               </p>
             </div>
 
@@ -170,6 +163,7 @@ export default function Solucoes() {
                 <article className={`service-card plan-card${plan.featured ? " plan-card-featured" : ""}`} key={plan.code}>
                   <span className="service-number">{plan.code}</span>
                   <h3 className="plan-name">{plan.name}</h3>
+                  <p className="plan-description mt-2">{plan.description}</p>
                   <p className="plan-price">{plan.price}<small> {plan.period}</small></p>
                   {plan.users && <p className="plan-users">{plan.users}</p>}
                   <ul className="plan-feature-list">
@@ -182,10 +176,9 @@ export default function Solucoes() {
               ))}
             </div>
             <p className="plans-note">
-              Os valores e recursos exibidos refletem os planos atuais. Basic e
-              Professional são contratados dentro da plataforma, após entrar ou
-              criar uma conta. O painel de gestão é liberado após a confirmação
-              do pagamento pelo Asaas.
+              Novos cadastros começam com 5 dias de teste do Basic. Sem uma
+              assinatura confirmada ao fim do teste, o acesso passa para o
+              Free. A contratação dos planos pagos é confirmada pelo Asaas.
             </p>
           </div>
         </section>

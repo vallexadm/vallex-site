@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { getPlanEntitlements } from "@/lib/server/plan-entitlements";
 import { absoluteSiteUrl, isLegalServicesProfile } from "@/lib/seo";
 import SolicitacaoForm from "./SolicitacaoForm";
 
@@ -85,9 +86,15 @@ const carregarVitrine = cache(async function carregarVitrine(
     throw new Error("Não foi possível carregar os serviços da Vitrine.");
   }
 
+  const planResult = await getPlanEntitlements(admin, profile.organization_id);
+  if (!planResult.entitlements) throw new Error(planResult.error);
+  const visibleServices = planResult.entitlements.maxServices === null
+    ? services ?? []
+    : (services ?? []).slice(0, planResult.entitlements.maxServices);
+
   return {
     profile,
-    services: services ?? [],
+    services: visibleServices,
   };
 });
 

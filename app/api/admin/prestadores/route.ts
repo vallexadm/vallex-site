@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   const [organizationsResult, profilesResult, subscriptionsResult, plansResult] =
     await Promise.all([
       admin.from("organizations").select("id, name, business_type, created_at").order("created_at", { ascending: false }),
-      admin.from("organization_public_profiles").select("organization_id, slug, display_name, is_published, service_area, updated_at"),
+      admin.from("organization_public_profiles").select("organization_id, slug, display_name, is_published, service_area, updated_at, admin_removed_at, admin_removed_by, admin_removal_reason"),
       admin.from("organization_subscriptions").select("organization_id, status, current_period_end, plan_id, updated_at").order("updated_at", { ascending: false }),
       admin.from("plans").select("id, name, code"),
     ]);
@@ -85,9 +85,12 @@ export async function GET(request: Request) {
             slug: profile.slug,
             displayName: profile.display_name,
             published: profile.is_published,
-            canRepublish: !profile.is_published && latestPublication?.action === "revoked" && latestMetadata?.source === "admin_panel",
+            canRepublish: !profile.is_published && !profile.admin_removed_at && latestPublication?.action === "revoked" && latestMetadata?.source === "admin_panel",
             serviceArea: profile.service_area,
             updatedAt: profile.updated_at,
+            removedAt: profile.admin_removed_at,
+            removedBy: profile.admin_removed_by,
+            removalReason: profile.admin_removal_reason,
           }
         : null,
       subscription: subscription
@@ -125,6 +128,57 @@ export async function PATCH(request: Request) {
   const organizationId = typeof body.organizationId === "string" ? body.organizationId.trim() : "";
   if (!organizationId) return unauthorized("Informe o prestador que será atualizado.", 400);
 
+  if (body.action === "restore") {
+    const admin = access.context.supabase;
+    const { data: current, error: currentError } = await admin
+      .from("organization_public_profiles")
+      .select("organization_id, is_published, publication_revoked_at, updated_at, admin_removed_at, admin_removed_by, admin_removal_reason")
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    if (currentError) {
+      console.error("Erro ao consultar perfil excluído da vitrine:", currentError);
+      return unauthorized("Não foi possível consultar o perfil excluído.", 500);
+    }
+    if (!current?.admin_removed_at) return unauthorized("Este perfil não está na lista de excluídos.", 409);
+
+    const now = new Date().toISOString();
+    const { error: restoreError } = await admin
+      .from("organization_public_profiles")
+      .update({
+        admin_removed_at: null,
+        admin_removed_by: null,
+        admin_removal_reason: null,
+        is_published: false,
+        publication_revoked_at: current.publication_revoked_at ?? now,
+        updated_at: now,
+      })
+      .eq("organization_id", organizationId);
+    if (restoreError) {
+      console.error("Erro ao restaurar perfil na lista de prestadores:", restoreError);
+      return unauthorized("Não foi possível restaurar o perfil.", 500);
+    }
+
+    const { error: auditError } = await admin.from("organization_publication_history").insert({
+      organization_id: organizationId,
+      action: "revoked",
+      actor_user_id: access.context.userId,
+      metadata: { source: "admin_panel", restoredFromAdminRemoval: true },
+    });
+    if (auditError) {
+      console.error("O perfil foi restaurado, mas o histórico não foi registrado:", auditError);
+      await admin.from("organization_public_profiles").update({
+        admin_removed_at: current.admin_removed_at,
+        admin_removed_by: current.admin_removed_by,
+        admin_removal_reason: current.admin_removal_reason,
+        is_published: current.is_published,
+        publication_revoked_at: current.publication_revoked_at,
+        updated_at: current.updated_at,
+      }).eq("organization_id", organizationId);
+      return unauthorized("O perfil não foi restaurado porque não foi possível registrar o histórico.", 500);
+    }
+    return NextResponse.json({ ok: true, message: "Prestador restaurado para a lista de ativos. A vitrine permanece oculta." }, { headers: { "Cache-Control": "private, no-store" } });
+  }
+
   if (body.action === "edit") {
     const displayName = typeof body.displayName === "string" ? body.displayName.trim() : "";
     const serviceArea = typeof body.serviceArea === "string" ? body.serviceArea.trim() : "";
@@ -152,7 +206,7 @@ export async function PATCH(request: Request) {
     const admin = access.context.supabase;
     const { data: current, error: currentError } = await admin
       .from("organization_public_profiles")
-      .select("organization_id, is_published, publication_authorized_at, publication_revoked_at, updated_at")
+      .select("organization_id, is_published, publication_authorized_at, publication_revoked_at, updated_at, admin_removed_at")
       .eq("organization_id", organizationId)
       .maybeSingle();
     if (currentError) {
@@ -161,6 +215,7 @@ export async function PATCH(request: Request) {
     }
     if (!current) return unauthorized("Este prestador ainda não tem um perfil de vitrine.", 404);
     if (current.is_published === body.published) return NextResponse.json({ ok: true, published: current.is_published });
+    if (body.published && current.admin_removed_at) return unauthorized("Restaure o prestador para a lista de ativos antes de reexibir a vitrine.", 409);
 
     const now = new Date().toISOString();
     if (body.published) {
@@ -234,22 +289,61 @@ export async function DELETE(request: Request) {
     return unauthorized("Não foi possível ler os dados enviados.", 400);
   }
   const organizationId = typeof body.organizationId === "string" ? body.organizationId.trim() : "";
+  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
   if (!organizationId) return unauthorized("Informe o prestador cuja vitrine será removida.", 400);
+  if (reason.length < 3 || reason.length > 1000) return unauthorized("Informe um motivo de exclusão entre 3 e 1000 caracteres.", 400);
 
-  const { data, error } = await access.context.supabase
+  const admin = access.context.supabase;
+  const { data: current, error: lookupError } = await admin
     .from("organization_public_profiles")
-    .delete()
+    .select("organization_id, is_published, publication_revoked_at, updated_at, admin_removed_at, admin_removed_by, admin_removal_reason")
     .eq("organization_id", organizationId)
-    .select("organization_id")
     .maybeSingle();
-  if (error) {
-    console.error("Erro ao remover a vitrine do prestador:", error);
-    return unauthorized("Não foi possível remover a vitrine deste prestador.", 500);
+  if (lookupError) {
+    console.error("Erro ao consultar a vitrine antes da exclusão:", lookupError);
+    return unauthorized("Não foi possível consultar a vitrine deste prestador.", 500);
   }
-  if (!data) return unauthorized("Este prestador não tem um perfil de vitrine para remover.", 404);
+  if (!current) return unauthorized("Este prestador não tem um perfil de vitrine para excluir.", 404);
+  if (current.admin_removed_at) return unauthorized("Este prestador já está na lista de excluídos.", 409);
+
+  const now = new Date().toISOString();
+  const { error: updateError } = await admin
+    .from("organization_public_profiles")
+    .update({
+      is_published: false,
+      publication_revoked_at: now,
+      admin_removed_at: now,
+      admin_removed_by: access.context.userId,
+      admin_removal_reason: reason,
+      updated_at: now,
+    })
+    .eq("organization_id", organizationId);
+  if (updateError) {
+    console.error("Erro ao marcar o perfil como excluído da vitrine:", updateError);
+    return unauthorized("Não foi possível excluir o perfil da vitrine.", 500);
+  }
+
+  const { error: auditError } = await admin.from("organization_publication_history").insert({
+    organization_id: organizationId,
+    action: "revoked",
+    actor_user_id: access.context.userId,
+    metadata: { source: "admin_panel", adminRemoved: true, reason },
+  });
+  if (auditError) {
+    console.error("O perfil foi excluído, mas o histórico não foi registrado:", auditError);
+    await admin.from("organization_public_profiles").update({
+      is_published: current.is_published,
+      publication_revoked_at: current.publication_revoked_at,
+      admin_removed_at: current.admin_removed_at,
+      admin_removed_by: current.admin_removed_by,
+      admin_removal_reason: current.admin_removal_reason,
+      updated_at: current.updated_at,
+    }).eq("organization_id", organizationId);
+    return unauthorized("A exclusão foi cancelada porque não foi possível registrar o histórico.", 500);
+  }
 
   return NextResponse.json(
-    { ok: true, message: "Perfil removido da vitrine. A conta, os serviços e os demais dados do prestador foram preservados." },
+    { ok: true, removedAt: now, reason, message: "Perfil movido para a lista de excluídos. A conta e os serviços do prestador foram preservados." },
     { headers: { "Cache-Control": "private, no-store" } }
   );
 }

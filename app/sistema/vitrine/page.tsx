@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import CurrencyInput from "@/components/CurrencyInput";
+import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
 
 type PublicProfile = {
   id: string;
@@ -26,14 +28,15 @@ type PublicProfile = {
 };
 
 const serviceModeOptions = [
-  { value: "presencial", label: "Presencial", description: "No meu estabelecimento, salão ou escritório" },
-  { value: "domicilio", label: "Em domicílio", description: "Vou até o endereço do cliente dentro da região informada" },
-  { value: "online", label: "Online", description: "Atendimento remoto, por chamada ou internet" },
+  { value: "presencial", label: "No estabelecimento", icon: "🏬", description: "O cliente vai até meu estabelecimento, salão ou escritório" },
+  { value: "domicilio", label: "A domicílio", icon: "🏠", description: "Vou até o endereço do cliente dentro da região informada" },
+  { value: "online", label: "Online", icon: "🌐", description: "Atendimento remoto, por chamada ou internet" },
 ] as const;
 
 type Organization = {
   id: string;
   name: string;
+  business_type?: string | null;
 };
 
 type ApiResponse = {
@@ -203,7 +206,7 @@ function prepararEdicaoServico(service: VitrineService) {
   setServicePrice(
     service.price === null || service.price === undefined
       ? ""
-      : String(service.price)
+      : formatCurrencyInput(service.price)
   );
   setServiceDisplayOrder(String(service.display_order));
   setServicePublished(service.is_published);
@@ -231,7 +234,7 @@ async function salvarServico(event: FormEvent) {
     const price =
       servicePrice.trim() === ""
         ? null
-        : Number(servicePrice.replace(",", "."));
+        : parseCurrencyInput(servicePrice);
 
     if (price !== null && (!Number.isFinite(price) || price < 0)) {
       throw new Error("Informe um preço válido.");
@@ -797,9 +800,14 @@ async function excluirServico(service: VitrineService) {
               </h2>
 
               <p className="mt-1 text-sm text-gray-500">
-                Essas informações serão utilizadas na apresentação
-                pública do prestador.
+                A Vitrine destaca o serviço e apresenta o profissional responsável pelo atendimento.
               </p>
+            </div>
+
+            <div className="mb-5 rounded-lg border border-purple-200 bg-purple-50 p-4">
+              <span className="block text-xs font-semibold uppercase tracking-wide text-purple-700">Serviço em destaque</span>
+              <strong className="mt-1 block text-lg text-slate-900">{organization?.business_type || "Atividade principal não informada"}</strong>
+              <p className="mt-1 text-sm text-slate-600">Esse título aparece na Vitrine. Para alterar a atividade principal, acesse as <Link className="font-semibold text-purple-800 underline" href="/sistema/configuracoes">Configurações do negócio</Link>.</p>
             </div>
 
             <div className="grid gap-5 md:grid-cols-2">
@@ -808,7 +816,7 @@ async function excluirServico(service: VitrineService) {
                   htmlFor="display_name"
                   className="mb-2 block text-sm font-medium text-gray-700"
                 >
-                  Nome exibido
+                  Responsável pelo atendimento
                 </label>
 
                 <input
@@ -820,8 +828,9 @@ async function excluirServico(service: VitrineService) {
                   maxLength={160}
                   required
                   className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
-                  placeholder="VALLEX | SERVIÇOFÁCIL"
+                  placeholder="Ex.: Divino"
                 />
+                <p className="mt-1 text-xs text-gray-500">Será exibido abaixo do serviço em destaque na Vitrine.</p>
               </div>
 
               <div>
@@ -865,7 +874,7 @@ async function excluirServico(service: VitrineService) {
                 htmlFor="description"
                 className="mb-2 block text-sm font-medium text-gray-700"
               >
-                Descrição
+                Apresentação técnica do profissional
               </label>
 
               <textarea
@@ -877,7 +886,7 @@ async function excluirServico(service: VitrineService) {
                 maxLength={2000}
                 rows={5}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
-                placeholder="Descreva brevemente os serviços oferecidos."
+                placeholder="Apresente suas especialidades, experiência, qualificações e forma de trabalho."
               />
 
               <p className="mt-1 text-right text-xs text-gray-500">
@@ -1051,7 +1060,7 @@ async function excluirServico(service: VitrineService) {
                         className="mt-1 accent-purple-700"
                       />
                       <span>
-                        <span className="block text-sm font-semibold text-gray-800">{option.label}</span>
+                        <span className="block text-sm font-semibold text-gray-800"><span aria-hidden="true" className="mr-1">{option.icon}</span>{option.label}</span>
                         <span className="mt-1 block text-xs leading-5 text-gray-500">{option.description}</span>
                       </span>
                     </label>
@@ -1219,14 +1228,12 @@ async function excluirServico(service: VitrineService) {
           Preço
         </label>
 
-        <input
+        <CurrencyInput
           id="service_price"
-          type="number"
-          min="0"
-          max="9999999999.99"
-          step="0.01"
+          min={0}
+          max={9999999999.99}
           value={servicePrice}
-          onChange={(event) => setServicePrice(event.target.value)}
+          onChange={setServicePrice}
           className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
           placeholder="Ex.: 120,00"
         />

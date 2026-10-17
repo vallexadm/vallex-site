@@ -9,12 +9,13 @@ export type PlatformAdminContext = {
   supabase: SupabaseClient;
 };
 
-const modules = ["traffic", "support", "providers", "finance"] as const;
+const modules = ["traffic", "support", "providers", "finance", "sales"] as const;
 const actions: Record<(typeof modules)[number], readonly string[]> = {
   traffic: ["view", "manage_plans", "manage_leads", "manage_campaigns"],
   support: ["view", "edit", "delete"],
   providers: ["view", "edit", "delete"],
   finance: ["view", "edit", "delete"],
+  sales: ["view", "create", "edit", "delete"],
 };
 
 export function ownerPermissions(): PlatformPermissions {
@@ -23,10 +24,12 @@ export function ownerPermissions(): PlatformPermissions {
 
 export function normalizePlatformPermissions(value: unknown): PlatformPermissions {
   const source = value && typeof value === "object" ? value as Record<string, unknown> : {};
-  return Object.fromEntries(modules.map((module) => {
+  const normalized = Object.fromEntries(modules.map((module) => {
     const moduleValue = source[module] && typeof source[module] === "object" ? source[module] as Record<string, unknown> : {};
     return [module, Object.fromEntries(actions[module].map((action) => [action, moduleValue[action] === true]))];
-  }));
+  })) as PlatformPermissions;
+  normalized.sales.view ||= normalized.sales.create || normalized.sales.edit || normalized.sales.delete;
+  return normalized;
 }
 
 export async function resolvePlatformAdmin(request: Request): Promise<
