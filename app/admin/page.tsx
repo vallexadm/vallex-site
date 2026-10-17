@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import MetricsDashboard, { type MetricData } from "./metrics-dashboard";
 
@@ -24,9 +24,10 @@ type Provider = {
   name: string;
   businessType: string | null;
   createdAt: string;
-  profile: null | { slug: string; displayName: string; published: boolean; serviceArea: string | null; updatedAt: string };
+  profile: null | { slug: string; displayName: string; published: boolean; canRepublish: boolean; serviceArea: string | null; updatedAt: string };
   subscription: null | { status: string; currentPeriodEnd: string | null; plan: string; planCode: string };
 };
+type ProviderDraft = { displayName: string; serviceArea: string };
 type TrafficSummary = { leads: number; pendingLeads: number; activeCampaigns: number; spend: number };
 type AdminPermissions = Record<string, Record<string, boolean>>;
 
@@ -47,6 +48,9 @@ export default function VallexAdminPage() {
   const [tab, setTab] = useState<"overview" | "providers" | "support">("overview");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [editingProviderId, setEditingProviderId] = useState("");
+  const [providerDraft, setProviderDraft] = useState<ProviderDraft>({ displayName: "", serviceArea: "" });
+  const [providerMessage, setProviderMessage] = useState("");
   const [trafficSummary, setTrafficSummary] = useState<TrafficSummary | null>(null);
   const [metricData, setMetricData] = useState<MetricData | null>(null);
   const [metricsRefreshing, setMetricsRefreshing] = useState(false);
@@ -177,6 +181,96 @@ export default function VallexAdminPage() {
     }
   }
 
+  function beginProviderEdit(provider: Provider) {
+    if (!provider.profile) return;
+    setProviderDraft({ displayName: provider.profile.displayName, serviceArea: provider.profile.serviceArea ?? "" });
+    setEditingProviderId(provider.id);
+    setProviderMessage("");
+    setError("");
+  }
+
+  async function updateProvider(provider: Provider) {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return setError("Sua sessão expirou. Entre novamente.");
+    setBusyId(provider.id);
+    setError("");
+    setProviderMessage("");
+    try {
+      const response = await fetch("/api/admin/prestadores", {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: provider.id, action: "edit", ...providerDraft }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível atualizar a vitrine.");
+      setProviders((current) => current.map((item) => item.id === provider.id && item.profile
+        ? { ...item, profile: { ...item.profile, displayName: providerDraft.displayName.trim(), serviceArea: providerDraft.serviceArea.trim() || null, updatedAt: new Date().toISOString() } }
+        : item));
+      setEditingProviderId("");
+      setProviderMessage(`Vitrine de ${providerDraft.displayName.trim()} atualizada.`);
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "Falha ao atualizar a vitrine.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function setProviderVisibility(provider: Provider, published: boolean) {
+    if (!provider.profile) return;
+    if (!published && !window.confirm(`Ocultar a vitrine de ${provider.profile.displayName}? Ela poderá ser reexibida pelo painel.`)) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return setError("Sua sessão expirou. Entre novamente.");
+    setBusyId(provider.id);
+    setError("");
+    setProviderMessage("");
+    try {
+      const response = await fetch("/api/admin/prestadores", {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: provider.id, action: "visibility", published }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível alterar a visibilidade da vitrine.");
+      setProviders((current) => current.map((item) => item.id === provider.id && item.profile
+        ? { ...item, profile: { ...item.profile, published, canRepublish: !published } }
+        : item));
+      setProviderMessage(published ? "Vitrine reexibida." : "Vitrine ocultada do público.");
+    } catch (visibilityError) {
+      setError(visibilityError instanceof Error ? visibilityError.message : "Falha ao alterar a visibilidade da vitrine.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function removeProviderVitrine(provider: Provider) {
+    if (!provider.profile) return;
+    const confirmed = window.confirm(`Excluir o perfil de ${provider.profile.displayName} da vitrine pública? A conta, os serviços cadastrados e os demais dados do prestador serão preservados. Essa remoção não pode ser desfeita pelo painel.`);
+    if (!confirmed) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return setError("Sua sessão expirou. Entre novamente.");
+    setBusyId(provider.id);
+    setError("");
+    setProviderMessage("");
+    try {
+      const response = await fetch("/api/admin/prestadores", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: provider.id }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível remover a vitrine.");
+      setProviders((current) => current.map((item) => item.id === provider.id ? { ...item, profile: null } : item));
+      setProviderMessage(result.message ?? "Perfil removido da vitrine. A conta e os serviços foram preservados.");
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Falha ao remover a vitrine.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   const pendingSupport = contacts.filter((item) => !["concluido", "cancelado"].includes(item.status)).length;
   const publishedProviders = providers.filter((provider) => provider.profile?.published).length;
   const activePaidSubscriptions = providers.filter((provider) =>
@@ -265,8 +359,9 @@ export default function VallexAdminPage() {
         </>}
 
         {tab === "providers" && <section className="vallex-admin-section">
-          <div className="vallex-admin-section-heading"><div><span className="vallex-admin-eyebrow">Base ServiçoFácil</span><h2>Prestadores da VALLEX</h2><p>Visão operacional de contas e vitrines. Esta primeira versão não altera planos, publicação ou acesso.</p></div></div>
-          {providers.length === 0 ? <p className="vallex-admin-empty">Nenhum prestador cadastrado ainda.</p> : <div className="vallex-admin-table-wrap"><table className="vallex-admin-table"><thead><tr><th>Prestador</th><th>Vitrine</th><th>Plano</th><th>Cadastro</th></tr></thead><tbody>{providers.map((provider) => <tr key={provider.id}><td><strong>{provider.profile?.displayName ?? provider.name}</strong><small>{provider.businessType ?? "Tipo de serviço não informado"}</small></td><td><span className={provider.profile?.published ? "vallex-admin-badge is-good" : "vallex-admin-badge"}>{provider.profile?.published ? "Publicada" : provider.profile ? "Não publicada" : "Sem perfil"}</span><small>{provider.profile?.serviceArea ?? "Região não informada"}</small>{provider.profile?.published && <a href={`/prestador/${provider.profile.slug}`} target="_blank" rel="noreferrer">Abrir vitrine ↗</a>}</td><td>{provider.subscription?.plan ?? "Sem assinatura"}<small>{provider.subscription?.status ?? "Conta sem plano ativo"}</small></td><td>{formattedDate(provider.createdAt)}</td></tr>)}</tbody></table></div>}
+          <div className="vallex-admin-section-heading"><div><span className="vallex-admin-eyebrow">Base ServiçoFácil</span><h2>Prestadores da VALLEX</h2><p>Edite as informações públicas, oculte temporariamente uma vitrine ou remova somente o perfil público. A conta e os serviços do prestador são preservados.</p></div></div>
+          {providerMessage && <p className="traffic-admin-notice" role="status">{providerMessage}</p>}
+          {providers.length === 0 ? <p className="vallex-admin-empty">Nenhum prestador cadastrado ainda.</p> : <div className="vallex-admin-table-wrap"><table className="vallex-admin-table"><thead><tr><th>Prestador</th><th>Vitrine</th><th>Plano</th><th>Cadastro</th><th>Ações</th></tr></thead><tbody>{providers.map((provider) => <Fragment key={provider.id}><tr><td><strong>{provider.profile?.displayName ?? provider.name}</strong><small>{provider.businessType ?? "Tipo de serviço não informado"}</small></td><td><span className={provider.profile?.published ? "vallex-admin-badge is-good" : "vallex-admin-badge"}>{provider.profile?.published ? "Publicada" : provider.profile ? "Oculta" : "Sem perfil"}</span><small>{provider.profile?.serviceArea ?? "Região não informada"}</small>{provider.profile?.published && <a href={`/prestador/${provider.profile.slug}`} target="_blank" rel="noreferrer">Abrir vitrine ↗</a>}</td><td>{provider.subscription?.plan ?? "Sem assinatura"}<small>{provider.subscription?.status ?? "Conta sem plano ativo"}</small></td><td>{formattedDate(provider.createdAt)}</td><td><div className="vallex-admin-provider-actions">{provider.profile && (isOwner || permissions.providers?.edit === true) && <><button type="button" className="vallex-admin-secondary" disabled={busyId === provider.id} onClick={() => editingProviderId === provider.id ? setEditingProviderId("") : beginProviderEdit(provider)}>{editingProviderId === provider.id ? "Cancelar" : "Editar"}</button><button type="button" className="vallex-admin-secondary" disabled={busyId === provider.id || (!provider.profile.published && !provider.profile.canRepublish)} onClick={() => void setProviderVisibility(provider, !provider.profile!.published)}>{busyId === provider.id ? "Atualizando…" : provider.profile.published ? "Ocultar" : provider.profile.canRepublish ? "Reexibir" : "Aguardando o prestador"}</button></>}{provider.profile && (isOwner || permissions.providers?.delete === true) && <button type="button" className="vallex-admin-back" disabled={busyId === provider.id} onClick={() => void removeProviderVitrine(provider)}>Excluir da vitrine</button>}</div></td></tr>{editingProviderId === provider.id && provider.profile && <tr><td colSpan={5}><form className="vallex-admin-provider-editor" onSubmit={(event) => { event.preventDefault(); void updateProvider(provider); }}><label>Nome exibido na vitrine<input required minLength={2} maxLength={160} value={providerDraft.displayName} onChange={(event) => setProviderDraft((draft) => ({ ...draft, displayName: event.target.value }))} /></label><label>Região de atendimento<input maxLength={300} value={providerDraft.serviceArea} onChange={(event) => setProviderDraft((draft) => ({ ...draft, serviceArea: event.target.value }))} placeholder="Ex.: Goiânia e região" /></label><div className="vallex-admin-provider-editor-actions"><button type="submit" className="vallex-admin-primary" disabled={busyId === provider.id}>{busyId === provider.id ? "Atualizando…" : "Atualizar vitrine"}</button><button type="button" className="vallex-admin-back" disabled={busyId === provider.id} onClick={() => setEditingProviderId("")}>Cancelar</button></div></form></td></tr>}</Fragment>)}</tbody></table></div>}
         </section>}
 
         {tab === "support" && <section className="vallex-admin-section">
