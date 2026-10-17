@@ -12,7 +12,9 @@ export type PublicProvider = {
   id: string;
   slug: string;
   display_name: string;
+  business_type: string | null;
   description: string | null;
+  whatsapp: string | null;
   address: string | null;
   service_area: string | null;
   service_modes: string[];
@@ -36,7 +38,7 @@ export async function loadPublicProviders(): Promise<PublicProvider[]> {
 
   const { data: profiles, error: profilesError } = await admin
     .from("organization_public_profiles")
-    .select("id,organization_id,slug,display_name,description,address,service_area,service_modes,logo_url,is_published")
+    .select("id,organization_id,slug,display_name,description,whatsapp,address,service_area,service_modes,logo_url,is_published")
     .eq("is_published", true)
     .order("display_name", { ascending: true });
 
@@ -47,13 +49,20 @@ export async function loadPublicProviders(): Promise<PublicProvider[]> {
   if (!profiles?.length) return [];
 
   const organizationIds = profiles.map((profile) => profile.organization_id);
-  const { data: services, error: servicesError } = await admin
-    .from("vitrine_services")
-    .select("id,organization_id,name,description,price,display_order,is_published")
-    .in("organization_id", organizationIds)
-    .eq("is_published", true)
-    .order("display_order", { ascending: true })
-    .order("created_at", { ascending: true });
+  const [{ data: organizations, error: organizationsError }, { data: services, error: servicesError }] = await Promise.all([
+    admin.from("organizations").select("id,business_type").in("id", organizationIds),
+    admin
+      .from("vitrine_services")
+      .select("id,organization_id,name,description,price,display_order,is_published")
+      .in("organization_id", organizationIds)
+      .eq("is_published", true)
+      .order("display_order", { ascending: true })
+      .order("created_at", { ascending: true }),
+  ]);
+
+  if (organizationsError) {
+    console.error("Erro ao carregar atividades dos prestadores:", organizationsError);
+  }
 
   if (servicesError) {
     console.error("Erro ao carregar serviços para a página:", servicesError);
@@ -62,6 +71,7 @@ export async function loadPublicProviders(): Promise<PublicProvider[]> {
 
   return profiles.map((profile) => ({
     ...profile,
+    business_type: (organizations ?? []).find((organization) => organization.id === profile.organization_id)?.business_type ?? null,
     is_preview: false,
     services: (services ?? []).filter((service) => service.organization_id === profile.organization_id),
   }));
