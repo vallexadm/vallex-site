@@ -1,6 +1,6 @@
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
-import Services, { type DirectoryFilters } from "@/components/Services";
+import Services from "@/components/Services";
 import Footer from "@/components/Footer";
 import { loadPublicProviders } from "@/lib/public-providers";
 import { absoluteSiteUrl } from "@/lib/seo";
@@ -16,25 +16,8 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
-type HomeSearchParams = Promise<Record<string, string | string[] | undefined>>;
-
-function readDirectoryFilters(params: Record<string, string | string[] | undefined>): DirectoryFilters | undefined {
-  const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] ?? "" : value ?? "";
-  const hasFilters = ["buscar", "servico", "atendimento", "localidade"].some((key) => params[key] !== undefined);
-  if (!hasFilters) return undefined;
-  const location = first(params.localidade);
-  return {
-    search: first(params.buscar),
-    service: first(params.servico),
-    mode: first(params.atendimento),
-    location: location === "todas" ? "" : location,
-    allLocations: location === "todas",
-  };
-}
-
-export default async function Home({ searchParams }: { searchParams: HomeSearchParams }) {
+export default async function Home() {
   const providers = await loadPublicProviders();
-  const filters = readDirectoryFilters(await searchParams);
 
   return (
     <>
@@ -58,7 +41,7 @@ export default async function Home({ searchParams }: { searchParams: HomeSearchP
 
       <main>
         <Hero />
-        <Services initialProviders={providers} isHome initialFilters={filters} />
+        <Services initialProviders={providers} isHome />
       </main>
 
       <Footer />

@@ -68,7 +68,7 @@ export default function TrafficPageClient() {
       <div className="service-grid traffic-plan-grid">{plans.map((plan) => <article className="service-card traffic-plan-card" key={plan.code}>
         <span className="service-number">0{plan.sort_order}</span><h3>{plan.name}</h3><p className="traffic-plan-tagline">{plan.tagline}</p><p>{plan.description}</p><strong className="traffic-price">{plan.price_label}</strong>
         <ul>{(plan.features ?? []).map((feature) => <li key={feature}>{feature}</li>)}</ul>
-        <button className="button button-outline" type="button" onClick={() => selectPlan(plan.code)}>Tenho interesse</button>
+        <button className="button traffic-plan-cta" type="button" onClick={() => selectPlan(plan.code)}>Solicitar proposta</button>
       </article>)}</div>
       {plans.length === 0 && <p className="traffic-budget-note">Os planos estão sendo atualizados. Fale com a VALLEX para conversar sobre sua campanha.</p>}
       <p className="traffic-budget-note">O valor da gestão e o investimento em anúncios são informados separadamente. O orçamento de mídia é pago pelo cliente diretamente à plataforma de anúncios.</p>

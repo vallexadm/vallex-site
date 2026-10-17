@@ -9,7 +9,15 @@ export type PlanEntitlements = {
   canManageRequests: boolean;
   canFilterRequests: boolean;
   canExportCsv: boolean;
+  maxServices: number | null;
 };
+
+export const PROVIDER_PLAN_SERVICE_LIMITS = {
+  free: 1,
+  basic: 5,
+  professional: 10,
+  enterprise: null,
+} as const;
 
 type EntitlementsResult =
   | { entitlements: PlanEntitlements; error?: never }
@@ -23,6 +31,7 @@ const FREE_ENTITLEMENTS: PlanEntitlements = {
   canManageRequests: false,
   canFilterRequests: false,
   canExportCsv: false,
+  maxServices: PROVIDER_PLAN_SERVICE_LIMITS.free,
 };
 
 export async function getPlanEntitlements(
@@ -108,6 +117,7 @@ export async function getPlanEntitlements(
       canManageRequests: paid,
       canFilterRequests: paid,
       canExportCsv: code === "professional" || code === "enterprise",
+      maxServices: PROVIDER_PLAN_SERVICE_LIMITS[code as keyof typeof PROVIDER_PLAN_SERVICE_LIMITS],
     },
   };
 }

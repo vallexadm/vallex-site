@@ -139,7 +139,7 @@ export default function LoginPage() {
           href="/"
           aria-label="Voltar à página inicial da VALLEX"
           title="Página inicial da VALLEX"
-          className="mb-6 inline-flex size-11 items-center justify-center rounded-lg border border-violet-200 text-violet-700 shadow-sm transition hover:border-violet-400 hover:bg-violet-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600"
+          className="login-home-link mb-6 inline-flex size-11 items-center justify-center rounded-lg border border-violet-200 text-violet-700 shadow-sm transition hover:border-violet-400 hover:bg-violet-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600"
         >
           <svg
             aria-hidden="true"
