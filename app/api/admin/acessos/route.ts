@@ -16,18 +16,61 @@ export async function GET(request: Request) {
   if (!auth.ok) return auth.response;
   const { data, error } = await auth.context.supabase.from("platform_admin_members").select("id,user_id,display_name,email,permissions,is_active,created_at,updated_at").order("created_at");
   if (error) return NextResponse.json({ ok: false, message: "Não foi possível carregar os acessos. Confira se a migração foi aplicada no Supabase de teste." }, { status: 503 });
-  return NextResponse.json({ ok: true, members: data ?? [] }, { headers: { "Cache-Control": "private, no-store" } });
+  try {
+    const members = await linkPendingMembers(auth.context.supabase, data ?? []);
+    return NextResponse.json({ ok: true, members }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (linkError) {
+    console.error("Falha ao conferir vínculos dos acessos administrativos:", linkError);
+    return NextResponse.json({ ok: false, message: "Não foi possível verificar se as contas dos membros já foram criadas." }, { status: 503 });
+  }
 }
 
 async function findAuthUserId(supabase: SupabaseClient, email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
   for (let page = 1; page <= 20; page += 1) {
     const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 100 });
     if (error) throw error;
-    const user = data.users.find((item) => item.email?.toLowerCase() === email);
+    const user = data.users.find((item) => item.email?.trim().toLowerCase() === normalizedEmail);
     if (user) return user.id;
     if (data.users.length < 100) break;
   }
   return null;
+}
+
+async function linkPendingMembers<T extends { id: string; user_id: string | null; email: string | null }>(supabase: SupabaseClient, members: T[]) {
+  const claimedUserIds = new Set(members.flatMap((member) => member.user_id ? [member.user_id] : []));
+  const linkedMembers: T[] = [];
+
+  for (const member of members) {
+    const email = member.email?.trim().toLowerCase();
+    if (member.user_id || !email) {
+      linkedMembers.push(member);
+      continue;
+    }
+
+    const userId = await findAuthUserId(supabase, email);
+    if (!userId || claimedUserIds.has(userId)) {
+      linkedMembers.push(member);
+      continue;
+    }
+
+    const { data, error } = await supabase
+      .from("platform_admin_members")
+      .update({ user_id: userId, updated_at: new Date().toISOString() })
+      .eq("id", member.id)
+      .is("user_id", null)
+      .select("id,user_id,display_name,email,permissions,is_active,created_at,updated_at")
+      .maybeSingle();
+    if (error) throw error;
+    if (data) {
+      claimedUserIds.add(userId);
+      linkedMembers.push(data as T);
+    } else {
+      linkedMembers.push(member);
+    }
+  }
+
+  return linkedMembers;
 }
 
 export async function POST(request: Request) {
@@ -87,3 +130,4 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ ok: false, message: "Não foi possível excluir este acesso." }, { status: 500 });
   }
 }
+
