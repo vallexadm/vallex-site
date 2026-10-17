@@ -28,7 +28,7 @@ export default function AdminAcessosPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<Member[] | null> => {
     setLoading(true); setError("");
     try {
       const { data } = await supabase.auth.getSession();
@@ -41,7 +41,8 @@ export default function AdminAcessosPage() {
       setMembers(next);
       setDrafts(Object.fromEntries(next.map((item) => [item.id, draftFrom(item)])));
       setEditing({});
-    } catch (loadError) { setError(loadError instanceof Error ? loadError.message : "Falha ao carregar os acessos."); }
+      return next;
+    } catch (loadError) { setError(loadError instanceof Error ? loadError.message : "Falha ao carregar os acessos."); return null; }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
@@ -72,6 +73,15 @@ export default function AdminAcessosPage() {
     } catch (saveError) { setError(saveError instanceof Error ? saveError.message : "Falha ao salvar."); }
     finally { setSaving(""); }
   }
+  async function verifyMember(member: Member) {
+    setMessage("");
+    const refreshedMembers = await load();
+    if (!refreshedMembers) return;
+    const refreshedMember = refreshedMembers.find((item) => item.id === member.id);
+    setMessage(refreshedMember?.user_id
+      ? "Conta vinculada. Clique em Editar, marque Ativar acesso e salve as alterações."
+      : `Ainda não encontramos uma conta para ${member.email || "o e-mail cadastrado"}. A pessoa precisa criar a conta usando esse mesmo e-mail.`);
+  }
   async function remove(member: Member) {
     if (member.id.startsWith("new-")) { setMembers((items) => items.filter((item) => item.id !== member.id)); setDrafts((items) => { const copy = { ...items }; delete copy[member.id]; return copy; }); return; }
     setSaving(member.id); setError(""); setMessage("");
@@ -88,13 +98,13 @@ export default function AdminAcessosPage() {
   return <main className="vallex-admin-page"><div className="vallex-admin-shell">
     <header className="vallex-admin-header"><div><Link href="/admin" className="vallex-admin-brand">VALLEX <span>ADMINISTRAÇÃO</span></Link><h1>Equipe e permissões</h1><p>Cadastre até duas pessoas e defina o que cada uma pode consultar ou alterar.</p></div><div className="vallex-admin-header-actions"><Link href="/admin" className="vallex-admin-back">Voltar ao admin</Link></div></header>
     <div className="vallex-admin-section">
-      <p className="vallex-admin-muted">Os cadastros iniciais são espaços editáveis. Informe o e-mail que a pessoa usará para criar uma conta no sistema; depois, volte aqui para ativar o acesso. Alexandre começa com permissões de tráfego. O Financeiro permanece desligado até você liberar. As permissões de prestadores controlam a edição, a visibilidade e a remoção de perfis públicos.</p>
+      <p className="vallex-admin-muted">Informe o e-mail que a pessoa usará para criar a conta no sistema. A VALLEX confere o vínculo automaticamente ao abrir a página; se a conta ainda não existir, use Verificar conta depois que a pessoa se cadastrar. Quando aparecer como vinculada, clique em Editar, marque Ativar acesso e salve. Alexandre começa com permissões de tráfego. O Financeiro permanece desligado até você liberar. As permissões de prestadores controlam a edição, a visibilidade e a remoção de perfis públicos.</p>
       {error && <p className="vallex-admin-error" role="alert">{error}</p>}{message && <p className="traffic-admin-notice" role="status">{message}</p>}
       {loading ? <p className="vallex-admin-empty">Carregando cadastros…</p> : <div className="space-y-5">{members.map((member) => {
         const draft = drafts[member.id] ?? draftFrom(member);
         const canEdit = editing[member.id] === true;
         return <article key={member.id} className="rounded-2xl border border-violet-100 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold text-slate-900">{draft.display_name || "Novo acesso"}</h2><p className="text-sm text-slate-600">{member.user_id ? "Conta vinculada ao Supabase Auth" : "Pendente: conta ainda não vinculada"}</p></div><label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={draft.is_active} disabled={!canEdit || !member.user_id} onChange={(event) => edit(member.id, (item) => ({ ...item, is_active: event.target.checked }))} /> Ativar acesso</label></div>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold text-slate-900">{draft.display_name || "Novo acesso"}</h2><p className="text-sm text-slate-600">{member.user_id ? "Conta vinculada ao Supabase Auth" : "Pendente: a pessoa ainda não criou uma conta com este e-mail"}</p>{!member.user_id && <button className="vallex-admin-secondary mt-2" type="button" disabled={loading} onClick={() => void verifyMember(member)}>{loading ? "Verificando…" : "Verificar conta"}</button>}</div><label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={draft.is_active} disabled={!canEdit || !member.user_id} onChange={(event) => edit(member.id, (item) => ({ ...item, is_active: event.target.checked }))} /> Ativar acesso</label></div>
           <div className="grid gap-4 md:grid-cols-2"><label className="grid gap-1 text-sm font-medium">Nome<input disabled={!canEdit} className="rounded-lg border border-slate-300 px-3 py-2 disabled:bg-slate-100" value={draft.display_name} onChange={(event) => edit(member.id, (item) => ({ ...item, display_name: event.target.value }))} placeholder="Nome da pessoa" /></label><label className="grid gap-1 text-sm font-medium">E-mail da conta<input disabled={!canEdit} className="rounded-lg border border-slate-300 px-3 py-2 disabled:bg-slate-100" type="email" value={draft.email ?? ""} onChange={(event) => edit(member.id, (item) => ({ ...item, email: event.target.value || null, is_active: false }))} placeholder="pessoa@exemplo.com" /></label></div>
           <div className="mt-5 grid gap-4 md:grid-cols-2">{permissionGroups.map(({ module, label, actions }) => <section key={module} className="rounded-xl bg-slate-50 p-4"><h3 className="mb-2 font-semibold text-slate-900">{label}</h3>{actions.map(([action, text]) => <label key={action} className="mb-2 flex items-start gap-2 text-sm text-slate-700"><input disabled={!canEdit} type="checkbox" className="mt-1 accent-violet-700" checked={draft.permissions[module]?.[action] === true} onChange={(event) => edit(member.id, (item) => ({ ...item, permissions: { ...item.permissions, [module]: { ...item.permissions[module], [action]: event.target.checked } } }))} /><span>{text}</span></label>)}</section>)}</div>
           <div className="mt-5 flex flex-wrap gap-3">{!canEdit && !member.id.startsWith("new-") && <button className="vallex-admin-secondary" type="button" onClick={() => setEditing((current) => ({ ...current, [member.id]: true }))}>Editar</button>}<button className="vallex-admin-primary" type="button" disabled={!canEdit || saving === member.id} onClick={() => void save(member)}>{saving === member.id ? "Salvando…" : "Salvar alterações"}</button><button className="vallex-admin-back" type="button" disabled={saving === member.id} onClick={() => void remove(member)}>Excluir acesso</button></div>
