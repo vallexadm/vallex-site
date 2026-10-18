@@ -31,13 +31,13 @@ export default function ServicosPage() {
   const [publishedServiceCount, setPublishedServiceCount] = useState(0);
   const canManageServices = permissions.services.manage;
   const serviceLimitReached = serviceLimit !== null && publishedServiceCount >= serviceLimit;
+  const [editingId, setEditingId] = useState<string | null>(null);
   const editingService = services.find((service) => service.id === editingId);
   const canPublishCurrentService = !serviceLimitReached || editingService?.is_published === true;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
