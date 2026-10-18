@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 const statuses = ["novo", "contato", "proposta", "negociacao", "fechado", "perdido"] as const;
 const campaignStatuses = ["planejada", "ativa", "pausada", "concluida"] as const;
 const planCodes = ["local", "crescimento", "estrategico"] as const;
+const contractBucket = "traffic-signed-contracts";
 const str = (value: unknown, max = 2000) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const numberOrNull = (value: unknown) => value === "" || value === null || value === undefined ? null : parseCurrencyInput(value as string | number);
 const nonNegative = (value: unknown) => {
@@ -185,6 +186,33 @@ export async function PATCH(request: Request) {
   } catch (error) {
     console.error("Falha ao atualizar módulo de tráfego:", error);
     return NextResponse.json({ ok: false, message: "Não foi possível salvar. Confira se a migração do módulo já foi aplicada." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  const auth = await requireTrafficAdmin(request, "manage_leads");
+  if (!auth.ok) return auth.response;
+  const { supabase } = auth.context;
+  try {
+    const body = await request.json() as Record<string, unknown>;
+    const leadId = str(body.leadId, 50);
+    if (!/^[0-9a-f-]{36}$/i.test(leadId)) return NextResponse.json({ ok: false, message: "Identificador de cliente inválido." }, { status: 400 });
+    const { data: lead, error: lookupError } = await supabase.from("traffic_leads").select("id,archived_at,signed_contract_path").eq("id", leadId).maybeSingle();
+    if (lookupError) throw lookupError;
+    if (!lead) return NextResponse.json({ ok: false, message: "O cliente não foi encontrado." }, { status: 404 });
+    if (!lead.archived_at) return NextResponse.json({ ok: false, message: "Encerre o cliente antes de excluí-lo definitivamente." }, { status: 409 });
+
+    if (lead.signed_contract_path) {
+      const { error: storageError } = await supabase.storage.from(contractBucket).remove([lead.signed_contract_path]);
+      if (storageError) throw storageError;
+    }
+    const { data: deleted, error: deleteError } = await supabase.from("traffic_leads").delete().eq("id", leadId).select("id").maybeSingle();
+    if (deleteError) throw deleteError;
+    if (!deleted) return NextResponse.json({ ok: false, message: "O cliente não foi excluído. Atualize a lista e tente novamente." }, { status: 409 });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Falha ao excluir cliente encerrado do módulo de tráfego:", error);
+    return NextResponse.json({ ok: false, message: "Não foi possível excluir o cliente encerrado e seus documentos." }, { status: 500 });
   }
 }
 
