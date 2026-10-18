@@ -7,10 +7,10 @@ import CurrencyInput from "@/components/CurrencyInput";
 import { formatCurrencyInput } from "@/lib/currency";
 
 type Plan = { id: string; code: string; name: string; tagline: string; price_label: string; description: string; features: string[]; published: boolean; sort_order: number };
-type Lead = { id: string; name: string; phone: string; email: string | null; audience: string; organization_name: string | null; plan_code: string | null; need_description: string; status: string; service_value: number | null; media_budget: number | null; responsible_name: string | null; source: string; utm_source: string | null; utm_medium: string | null; utm_campaign: string | null; utm_content: string | null; utm_term: string | null; referrer: string | null; landing_path: string | null; facebook_url: string | null; instagram_url: string | null; signed_contract_path: string | null; signed_contract_name: string | null; signed_contract_at: string | null; created_at: string };
+type Lead = { id: string; name: string; phone: string; email: string | null; audience: string; organization_name: string | null; plan_code: string | null; need_description: string; status: string; service_value: number | null; media_budget: number | null; responsible_name: string | null; source: string; utm_source: string | null; utm_medium: string | null; utm_campaign: string | null; utm_content: string | null; utm_term: string | null; referrer: string | null; landing_path: string | null; facebook_url: string | null; instagram_url: string | null; signed_contract_path: string | null; signed_contract_name: string | null; signed_contract_at: string | null; archived_at: string | null; archived_by: string | null; created_at: string };
 type Campaign = { id: string; lead_id: string; name: string; channel: string; status: string; start_date: string | null; end_date: string | null; media_budget: number; amount_spent: number; impressions: number; clicks: number; leads_generated: number; conversions: number; notes: string | null };
 type Activity = { id: string; lead_id: string; event_type: string; description: string; created_at: string };
-type Data = { plans: Plan[]; leads: Lead[]; campaigns: Campaign[]; activity: Activity[] };
+type Data = { plans: Plan[]; leads: Lead[]; archivedLeads: Lead[]; campaigns: Campaign[]; activity: Activity[] };
 type TrafficPermissions = { view: boolean; manage_plans: boolean; manage_leads: boolean; manage_campaigns: boolean };
 
 const pipeline = ["novo", "contato", "proposta", "negociacao", "fechado", "perdido"];
@@ -29,7 +29,7 @@ function whatsappHref(phone: string, message: string) {
 }
 
 export default function TrafficAdminPanel() {
-  const [data, setData] = useState<Data>({ plans: [], leads: [], campaigns: [], activity: [] });
+  const [data, setData] = useState<Data>({ plans: [], leads: [], archivedLeads: [], campaigns: [], activity: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [migrationRequired, setMigrationRequired] = useState(false);
@@ -60,7 +60,7 @@ export default function TrafficAdminPanel() {
       setMigrationRequired(result.code === "TRAFFIC_SCHEMA_REQUIRED");
       if ([401, 403].includes(response.status)) throw new Error(result.message ?? "Entre com uma conta autorizada para administrar o tráfego.");
       if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível carregar o módulo de tráfego.");
-      const next: Data = { plans: result.plans ?? [], leads: result.leads ?? [], campaigns: result.campaigns ?? [], activity: result.activity ?? [] };
+      const next: Data = { plans: result.plans ?? [], leads: result.leads ?? [], archivedLeads: result.archivedLeads ?? [], campaigns: result.campaigns ?? [], activity: result.activity ?? [] };
       setData(next);
       setLeadDrafts(Object.fromEntries(next.leads.map((lead) => [lead.id, { status: lead.status, serviceValue: moneyInput(lead.service_value), mediaBudget: moneyInput(lead.media_budget), responsibleName: lead.responsible_name ?? "", facebookUrl: lead.facebook_url ?? "", instagramUrl: lead.instagram_url ?? "", event: "" }])));
       setCampaignDrafts(Object.fromEntries(next.campaigns.map((campaign) => [campaign.id, { status: campaign.status, amountSpent: moneyInput(campaign.amount_spent), impressions: numberInput(campaign.impressions), clicks: numberInput(campaign.clicks), leadsGenerated: numberInput(campaign.leads_generated), conversions: numberInput(campaign.conversions), notes: campaign.notes ?? "" }])));
@@ -71,7 +71,7 @@ export default function TrafficAdminPanel() {
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
   useEffect(() => { if (!campaignForm.leadId && data.leads.length) setCampaignForm((current) => current.leadId ? current : { ...current, leadId: data.leads[0].id }); }, [campaignForm.leadId, data.leads]);
 
-  async function requestApi(method: "PATCH" | "POST", payload: Record<string, unknown>, busyKey: string): Promise<boolean> {
+  async function requestApi(method: "PATCH" | "POST" | "DELETE", payload: Record<string, unknown>, busyKey: string): Promise<boolean> {
     setSaving(busyKey); setError(""); setNotice("");
     try {
       const { data: session } = await supabase.auth.getSession();
@@ -84,6 +84,19 @@ export default function TrafficAdminPanel() {
       return true;
     } catch (saveError) { setError(saveError instanceof Error ? saveError.message : "Falha ao salvar."); return false; }
     finally { setSaving(""); }
+  }
+
+  async function archiveLead(lead: Lead, archived: boolean) {
+    const displayName = lead.organization_name || lead.name;
+    if (archived && !window.confirm(`Encerrar o contrato de ${displayName} e arquivar o cadastro? Ele sairá do funil ativo, mas campanhas, indicadores, documentos e histórico continuarão guardados e poderão ser consultados ou reativados.`)) return;
+    await requestApi("PATCH", { kind: "archive_lead", id: lead.id, archived }, `archive-${lead.id}`);
+  }
+
+  async function deleteLeadPermanently(lead: Lead) {
+    const displayName = lead.organization_name || lead.name;
+    if (!lead.archived_at) return;
+    if (!window.confirm(`Excluir definitivamente ${displayName}? O cadastro, campanhas, indicadores, documentos e histórico vinculados serão apagados e não poderão ser recuperados.`)) return;
+    await requestApi("DELETE", { leadId: lead.id }, `delete-${lead.id}`);
   }
 
   async function uploadSignedContract(leadId: string, file: File) {
@@ -215,18 +228,21 @@ export default function TrafficAdminPanel() {
     await requestApi("PATCH", { kind: "plan", id: plan.id, code: plan.code, name: form.get("name"), tagline: form.get("tagline"), priceLabel: form.get("priceLabel"), description: form.get("description"), features: String(form.get("features") ?? "").split("\n"), published: form.get("published") === "on", sortOrder: plan.sort_order }, `plan-${plan.id}`);
   }
 
-  const activeCampaigns = data.campaigns.filter((campaign) => campaign.status === "ativa").length;
+  const activeLeadIds = new Set(data.leads.map((lead) => lead.id));
+  const activeLeadCampaigns = data.campaigns.filter((campaign) => activeLeadIds.has(campaign.lead_id));
+  const allLeads = [...data.leads, ...data.archivedLeads].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const activeCampaigns = activeLeadCampaigns.filter((campaign) => campaign.status === "ativa").length;
   const pendingLeads = data.leads.filter((lead) => !["fechado", "perdido"].includes(lead.status)).length;
   const closedValue = data.leads.filter((lead) => lead.status === "fechado").reduce((total, lead) => total + Number(lead.service_value ?? 0), 0);
   const latestSiteLeadId = data.leads.find((lead) => lead.source === "pagina_trafego" || lead.source === "site" || lead.landing_path?.includes("/trafego-pago"))?.id;
   const selectedClientCampaigns = data.campaigns.filter((campaign) => campaign.lead_id === campaignForm.leadId);
-  const selectedClient = data.leads.find((lead) => lead.id === campaignForm.leadId);
-  const campaignTotals = useMemo(() => data.campaigns.reduce((sum, campaign) => ({
+  const selectedClient = allLeads.find((lead) => lead.id === campaignForm.leadId);
+  const campaignTotals = useMemo(() => activeLeadCampaigns.reduce((sum, campaign) => ({
     spend: sum.spend + Number(campaign.amount_spent || 0), impressions: sum.impressions + Number(campaign.impressions || 0), clicks: sum.clicks + Number(campaign.clicks || 0), leads: sum.leads + Number(campaign.leads_generated || 0), conversions: sum.conversions + Number(campaign.conversions || 0),
-  }), { spend: 0, impressions: 0, clicks: 0, leads: 0, conversions: 0 }), [data.campaigns]);
+  }), { spend: 0, impressions: 0, clicks: 0, leads: 0, conversions: 0 }), [data.campaigns, data.leads]);
 
   if (loading) return <p className="vallex-admin-empty">Carregando módulo de tráfego…</p>;
-  if (error && !data.plans.length && !data.leads.length) return <div className="vallex-admin-error" role="alert">{error}{migrationRequired && <p className="mt-2">Após revisar, aplique a estrutura <code>supabase/trafego_pago.sql</code> no projeto Supabase para ativar este módulo.</p>}<div className="mt-3 flex flex-wrap gap-2"><button className="vallex-admin-secondary" type="button" onClick={() => void load()}>Tentar novamente</button><Link className="vallex-admin-secondary" href="/sistema/login?next=%2Fadmin%2Ftrafego">Entrar com conta autorizada</Link></div></div>;
+  if (error && !data.plans.length && !data.leads.length) return <div className="vallex-admin-error" role="alert">{error}{migrationRequired && <p className="mt-2">Após revisar, aplique as estruturas de tráfego pago, contratos assinados e clientes arquivados no projeto Supabase de teste.</p>}<div className="mt-3 flex flex-wrap gap-2"><button className="vallex-admin-secondary" type="button" onClick={() => void load()}>Tentar novamente</button><Link className="vallex-admin-secondary" href="/sistema/login?next=%2Fadmin%2Ftrafego">Entrar com conta autorizada</Link></div></div>;
 
   return <div className="traffic-admin">
     <div className="traffic-admin-heading"><div><span className="vallex-admin-eyebrow">Operação VALLEX</span><h2>Tráfego pago</h2><p>Planos públicos, contatos interessados, negociações e resultados de campanhas.</p></div><button className="vallex-admin-secondary" type="button" onClick={() => void load()}>Atualizar dados</button></div>
@@ -255,8 +271,8 @@ export default function TrafficAdminPanel() {
     </section>
 
     <section className="vallex-admin-section"><div className="vallex-admin-section-heading"><div><span className="vallex-admin-eyebrow">Funil comercial</span><h2>Contatos e negociações</h2><p>Visitantes, clientes e prestadores entram aqui com origem e UTMs quando chegam por campanha.</p></div></div>
-      <details className="traffic-client-history"><summary>Histórico de clientes cadastrados ({data.leads.length})</summary>{data.leads.length === 0 ? <p className="vallex-admin-empty">Nenhum cliente cadastrado.</p> : <div className="traffic-client-history-scroll"><table><thead><tr><th>Cliente / empresa</th><th>Contato</th><th>Serviço / nicho</th><th>Produto / plano</th><th>Etapa</th><th>Responsável</th><th>Gestão mensal</th><th>Orçamento de mídia</th><th>Cadastro</th><th>Redes sociais</th></tr></thead><tbody>{data.leads.map((lead) => <tr key={lead.id}><td><strong>{lead.organization_name || lead.name}</strong>{lead.organization_name && <small>{lead.name}</small>}</td><td><a href={`tel:${lead.phone.replace(/[^+\d]/g, "")}`}>{lead.phone}</a>{lead.email && <a href={`mailto:${lead.email}`}>{lead.email}</a>}</td><td>{lead.need_description || lead.audience}</td><td>{lead.plan_code || "—"}</td><td>{pipelineLabels[lead.status] ?? lead.status}</td><td>{lead.responsible_name || "—"}</td><td>{lead.service_value === null ? "—" : currency.format(lead.service_value)}</td><td>{lead.media_budget === null ? "—" : currency.format(lead.media_budget)}</td><td>{localDate(lead.created_at)}</td><td><div className="traffic-social-links">{lead.facebook_url && <a href={lead.facebook_url} target="_blank" rel="noreferrer">Facebook</a>}{lead.instagram_url && <a href={lead.instagram_url} target="_blank" rel="noreferrer">Instagram</a>}{!lead.facebook_url && !lead.instagram_url && <span>—</span>}</div></td></tr>)}</tbody></table></div>}</details>
-      {data.leads.length === 0 ? <p className="vallex-admin-empty">Nenhum contato de tráfego recebido ainda.</p> : <div className="traffic-lead-list">{data.leads.map((lead) => {
+      <details className="traffic-client-history"><summary>Histórico de clientes cadastrados ({allLeads.length})</summary>{allLeads.length === 0 ? <p className="vallex-admin-empty">Nenhum cliente cadastrado.</p> : <div className="traffic-client-history-scroll"><table><thead><tr><th>Cliente / empresa</th><th>Contato</th><th>Serviço / nicho</th><th>Produto / plano</th><th>Etapa</th><th>Situação</th><th>Responsável</th><th>Gestão mensal</th><th>Orçamento de mídia</th><th>Cadastro</th><th>Redes sociais</th><th>Ação</th></tr></thead><tbody>{allLeads.map((lead) => <tr key={lead.id}><td><strong>{lead.organization_name || lead.name}</strong>{lead.organization_name && <small>{lead.name}</small>}</td><td><a href={`tel:${lead.phone.replace(/[^+\d]/g, "")}`}>{lead.phone}</a>{lead.email && <a href={`mailto:${lead.email}`}>{lead.email}</a>}</td><td>{lead.need_description || lead.audience}</td><td>{lead.plan_code || "—"}</td><td>{pipelineLabels[lead.status] ?? lead.status}</td><td>{lead.archived_at ? `Encerrado · ${localDate(lead.archived_at)}` : "Ativo"}</td><td>{lead.responsible_name || "—"}</td><td>{lead.service_value === null ? "—" : currency.format(lead.service_value)}</td><td>{lead.media_budget === null ? "—" : currency.format(lead.media_budget)}</td><td>{localDate(lead.created_at)}</td><td><div className="traffic-social-links">{lead.facebook_url && <a href={lead.facebook_url} target="_blank" rel="noreferrer">Facebook</a>}{lead.instagram_url && <a href={lead.instagram_url} target="_blank" rel="noreferrer">Instagram</a>}{!lead.facebook_url && !lead.instagram_url && <span>—</span>}</div></td><td><div className="traffic-history-actions"><button className="vallex-admin-secondary traffic-archive-action" type="button" disabled={!permissions.manage_leads || saving === `archive-${lead.id}`} onClick={() => void archiveLead(lead, !lead.archived_at)}>{saving === `archive-${lead.id}` ? "Salvando…" : lead.archived_at ? "Reativar" : "Encerrar"}</button>{lead.archived_at && <button className="vallex-admin-secondary traffic-delete-lead" type="button" disabled={!permissions.manage_leads || saving === `delete-${lead.id}`} onClick={() => void deleteLeadPermanently(lead)}>{saving === `delete-${lead.id}` ? "Excluindo…" : "Excluir definitivamente"}</button>}</div></td></tr>)}</tbody></table></div>}</details>
+      {data.leads.length === 0 ? <p className="vallex-admin-empty">Nenhum contato ativo no funil. Consulte o histórico de clientes cadastrados acima.</p> : <div className="traffic-lead-list">{data.leads.map((lead) => {
         const draft = leadDrafts[lead.id] ?? { status: lead.status, serviceValue: moneyInput(lead.service_value), mediaBudget: moneyInput(lead.media_budget), responsibleName: lead.responsible_name ?? "", facebookUrl: lead.facebook_url ?? "", instagramUrl: lead.instagram_url ?? "", event: "" };
         const history = data.activity.filter((item) => item.lead_id === lead.id).slice(0, 5);
         const contractHistory = data.activity.filter((item) => item.lead_id === lead.id && item.event_type === "contrato_enviado").slice(0, 5);
@@ -294,18 +310,19 @@ export default function TrafficAdminPanel() {
 
     <section className="vallex-admin-section"><div className="vallex-admin-section-heading"><div><span className="vallex-admin-eyebrow">Acompanhamento</span><h2>Campanhas e indicadores</h2><p>Registre o escopo e atualize os números consultados nas plataformas de anúncios. Estes dados não são sincronizados automaticamente.</p></div></div>
       <form className="traffic-campaign-form" onSubmit={async (event) => { event.preventDefault(); const saved = await requestApi("POST", { kind: "campaign", ...campaignForm }, "new-campaign"); if (saved) setCampaignForm((current) => ({ ...current, name: "", channel: "Google Ads", startDate: "", endDate: "", mediaBudget: "", notes: "" })); }}><fieldset disabled={!permissions.manage_campaigns}>
-        <label>Cliente<select required value={campaignForm.leadId} onChange={(event) => setCampaignForm((current) => ({ ...current, leadId: event.target.value, name: "", channel: "Google Ads", startDate: "", endDate: "", mediaBudget: "", notes: "" }))}><option value="">Selecione</option>{data.leads.map((lead) => <option value={lead.id} key={lead.id}>{lead.organization_name || lead.name}</option>)}</select></label>
+        <label>Cliente<select required value={campaignForm.leadId} onChange={(event) => setCampaignForm((current) => ({ ...current, leadId: event.target.value, name: "", channel: "Google Ads", startDate: "", endDate: "", mediaBudget: "", notes: "" }))}><option value="">Selecione</option>{data.leads.map((lead) => <option value={lead.id} key={lead.id}>{lead.organization_name || lead.name}</option>)}{data.archivedLeads.map((lead) => <option value={lead.id} key={lead.id}>Encerrado · {lead.organization_name || lead.name}</option>)}</select></label>
         <label>Campanha<input required maxLength={160} value={campaignForm.name} onChange={(event) => setCampaignForm({ ...campaignForm, name: event.target.value })} /></label>
         <label>Canal<select value={campaignForm.channel} onChange={(event) => setCampaignForm({ ...campaignForm, channel: event.target.value })}><option>Google Ads</option><option>Meta Ads</option><option>Outro</option></select></label>
         <label>Orçamento de mídia (R$)<CurrencyInput min={0} value={campaignForm.mediaBudget} onChange={(mediaBudget) => setCampaignForm({ ...campaignForm, mediaBudget })} /></label>
         <label>Início<input type="date" value={campaignForm.startDate} onChange={(event) => setCampaignForm({ ...campaignForm, startDate: event.target.value })} /></label>
         <label>Fim previsto<input type="date" value={campaignForm.endDate} onChange={(event) => setCampaignForm({ ...campaignForm, endDate: event.target.value })} /></label>
         <label className="traffic-full">Escopo / observações<textarea rows={2} maxLength={2000} value={campaignForm.notes} onChange={(event) => setCampaignForm({ ...campaignForm, notes: event.target.value })} /></label>
-        <button className="vallex-admin-primary" type="submit" disabled={saving === "new-campaign" || data.leads.length === 0}>{saving === "new-campaign" ? "Registrando…" : "Registrar campanha"}</button>
+        <button className="vallex-admin-primary" type="submit" disabled={saving === "new-campaign" || data.leads.length === 0 || Boolean(selectedClient?.archived_at)}>{saving === "new-campaign" ? "Registrando…" : "Registrar campanha"}</button>
       </fieldset></form>
+      {selectedClient?.archived_at && <p className="vallex-admin-empty mt-3">Este cliente está encerrado. O histórico permanece disponível; reative o cadastro para registrar novas campanhas.</p>}
       {!campaignForm.leadId ? <p className="vallex-admin-empty mt-4">Selecione um cliente para ver o histórico das campanhas.</p> : selectedClientCampaigns.length === 0 ? <p className="vallex-admin-empty mt-4">Ainda não há campanhas cadastradas para {selectedClient?.organization_name || selectedClient?.name || "este cliente"}.</p> : <section className="traffic-client-campaign-history"><h3>Histórico de campanhas · {selectedClient?.organization_name || selectedClient?.name}</h3><div className="traffic-campaign-list">{selectedClientCampaigns.map((campaign) => {
         const draft = campaignDrafts[campaign.id] ?? { status: campaign.status, amountSpent: moneyInput(campaign.amount_spent), impressions: numberInput(campaign.impressions), clicks: numberInput(campaign.clicks), leadsGenerated: numberInput(campaign.leads_generated), conversions: numberInput(campaign.conversions), notes: campaign.notes ?? "" };
-        const lead = data.leads.find((item) => item.id === campaign.lead_id);
+        const lead = allLeads.find((item) => item.id === campaign.lead_id);
         return <details className="traffic-campaign-card" key={campaign.id}><summary className="traffic-campaign-summary"><header><div><h3>{campaign.name}</h3><p>{lead?.organization_name || lead?.name || "Cliente removido"} · {campaign.channel} · mídia prevista {currency.format(campaign.media_budget)}</p></div><span className="vallex-admin-badge">{campaignLabels[draft.status] ?? draft.status}</span></header><small>{campaign.start_date ? localCalendarDate(campaign.start_date) : "Início não definido"}{campaign.end_date ? ` · até ${localCalendarDate(campaign.end_date)}` : " · sem fim previsto"} · Gasto {currency.format(campaign.amount_spent)} · {campaign.impressions} impressões · {campaign.clicks} cliques · {campaign.leads_generated} leads · {campaign.conversions} conversões</small><b>Editar indicadores</b></summary>
           <fieldset disabled={!permissions.manage_campaigns}><div className="traffic-campaign-metrics"><label>Status<select value={draft.status} onChange={(event) => setCampaignDrafts((current) => ({ ...current, [campaign.id]: { ...draft, status: event.target.value } }))}>{Object.keys(campaignLabels).map((status) => <option key={status} value={status}>{campaignLabels[status]}</option>)}</select></label>
             {([ ["amountSpent", "Gasto (R$)"], ["impressions", "Impressões"], ["clicks", "Cliques"], ["leadsGenerated", "Leads"], ["conversions", "Conversões"] ] as const).map(([key, label]) => <label key={key}>{label}{key === "amountSpent" ? <CurrencyInput min={0} value={draft.amountSpent} onChange={(amountSpent) => setCampaignDrafts((current) => ({ ...current, [campaign.id]: { ...draft, amountSpent } }))} /> : <input type="number" min="0" step="1" value={draft[key]} onChange={(event) => setCampaignDrafts((current) => ({ ...current, [campaign.id]: { ...draft, [key]: event.target.value } }))} />}</label>)}
