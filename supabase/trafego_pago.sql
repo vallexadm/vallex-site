@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS public.traffic_lead_activity (
 );
 
 ALTER TABLE public.traffic_leads ADD COLUMN IF NOT EXISTS responsible_name text;
+ALTER TABLE public.traffic_leads ADD COLUMN IF NOT EXISTS facebook_url text;
+ALTER TABLE public.traffic_leads ADD COLUMN IF NOT EXISTS instagram_url text;
 
 CREATE TABLE IF NOT EXISTS public.traffic_campaigns (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -84,6 +86,24 @@ CREATE TABLE IF NOT EXISTS public.traffic_campaigns (
   CONSTRAINT traffic_campaigns_status_check CHECK (status IN ('planejada', 'ativa', 'pausada', 'concluida')),
   CONSTRAINT traffic_campaigns_metrics_check CHECK (media_budget >= 0 AND amount_spent >= 0 AND impressions >= 0 AND clicks >= 0 AND leads_generated >= 0 AND conversions >= 0)
 );
+
+CREATE TABLE IF NOT EXISTS public.traffic_campaign_snapshots (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id uuid NOT NULL REFERENCES public.traffic_campaigns(id) ON DELETE CASCADE,
+  recorded_at timestamptz NOT NULL DEFAULT now(),
+  amount_spent numeric(12,2) NOT NULL DEFAULT 0,
+  impressions bigint NOT NULL DEFAULT 0,
+  clicks bigint NOT NULL DEFAULT 0,
+  leads_generated integer NOT NULL DEFAULT 0,
+  conversions integer NOT NULL DEFAULT 0,
+  status text NOT NULL DEFAULT 'planejada',
+  CONSTRAINT traffic_campaign_snapshots_metrics_check CHECK (amount_spent >= 0 AND impressions >= 0 AND clicks >= 0 AND leads_generated >= 0 AND conversions >= 0)
+);
+
+INSERT INTO public.traffic_campaign_snapshots (campaign_id, recorded_at, amount_spent, impressions, clicks, leads_generated, conversions, status)
+SELECT c.id, c.updated_at, c.amount_spent, c.impressions, c.clicks, c.leads_generated, c.conversions, c.status
+FROM public.traffic_campaigns c
+WHERE NOT EXISTS (SELECT 1 FROM public.traffic_campaign_snapshots s WHERE s.campaign_id = c.id);
 
 -- Contas administrativas delegadas. O registro inicial é apenas
 -- espaços editáveis: não criam usuários nem credenciais no Supabase Auth.
@@ -115,16 +135,18 @@ WHERE NOT EXISTS (SELECT 1 FROM public.platform_admin_members);
 CREATE INDEX IF NOT EXISTS traffic_leads_created_at_idx ON public.traffic_leads (created_at DESC);
 CREATE INDEX IF NOT EXISTS traffic_leads_status_idx ON public.traffic_leads (status);
 CREATE INDEX IF NOT EXISTS traffic_campaigns_lead_id_idx ON public.traffic_campaigns (lead_id);
+CREATE INDEX IF NOT EXISTS traffic_campaign_snapshots_campaign_recorded_idx ON public.traffic_campaign_snapshots (campaign_id, recorded_at);
 
 ALTER TABLE public.traffic_service_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.traffic_leads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.traffic_lead_activity ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.traffic_campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.traffic_campaign_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.platform_admin_members ENABLE ROW LEVEL SECURITY;
 
 -- Acesso mediado por Route Handlers: público consulta apenas planos publicados;
 -- gravações e dados comerciais usam a chave secreta exclusivamente no servidor.
-REVOKE ALL ON public.traffic_leads, public.traffic_lead_activity, public.traffic_campaigns FROM anon, authenticated;
+REVOKE ALL ON public.traffic_leads, public.traffic_lead_activity, public.traffic_campaigns, public.traffic_campaign_snapshots FROM anon, authenticated;
 REVOKE ALL ON public.traffic_service_plans FROM anon, authenticated;
 REVOKE ALL ON public.platform_admin_members FROM anon, authenticated;
-GRANT ALL ON public.traffic_service_plans, public.traffic_leads, public.traffic_lead_activity, public.traffic_campaigns, public.platform_admin_members TO service_role;
+GRANT ALL ON public.traffic_service_plans, public.traffic_leads, public.traffic_lead_activity, public.traffic_campaigns, public.traffic_campaign_snapshots, public.platform_admin_members TO service_role;

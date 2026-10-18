@@ -13,15 +13,17 @@ type DirectoryResponse = {
 };
 
 const serviceModeLabels: Record<string, string> = {
-  presencial: "No estabelecimento",
-  domicilio: "A domicílio",
+  presencial: "Presencial",
+  domicilio: "Em domicílio",
   online: "Online",
 };
 
-const serviceModeIcons: Record<string, string> = {
-  presencial: "🏬",
-  domicilio: "🏠",
-  online: "🌐",
+export type DirectoryFilters = {
+  search: string;
+  service: string;
+  mode: string;
+  location: string;
+  allLocations: boolean;
 };
 
 function formatPrice(price: number | string | null) {
@@ -43,28 +45,28 @@ function normalizeSearch(value: string) {
     .toLocaleLowerCase("pt-BR");
 }
 
-function createWhatsAppLink(phone: string | null, service: string) {
-  const digits = (phone ?? "").replace(/\D/g, "");
-  if (digits.length < 10) return null;
-  const number = digits.startsWith("55") || digits.length > 11 ? digits : `55${digits}`;
-  const message = encodeURIComponent(
-    `Olá! Encontrei sua Vitrine na VALLEX e gostaria de solicitar um serviço de ${service}.`
-  );
-  return `https://wa.me/${number}?text=${message}`;
-}
-
 export default function Services({
   initialProviders = [],
   isHome = false,
+  initialFilters,
 }: {
   initialProviders?: PublicProvider[];
   isHome?: boolean;
+  initialFilters?: DirectoryFilters;
 }) {
   const [providers, setProviders] = useState<PublicProvider[]>(initialProviders);
-  const [selectedService, setSelectedService] = useState("");
-  const [selectedMode, setSelectedMode] = useState("");
-  const [selectedLocation, setSelectedLocation] = useState("");
-  const [search, setSearch] = useState("");
+  const [selectedService, setSelectedService] = useState(initialFilters?.service ?? "");
+  const [selectedMode, setSelectedMode] = useState(initialFilters?.mode ?? "");
+  const [allLocations, setAllLocations] = useState(initialFilters?.allLocations ?? false);
+  const [selectedLocation, setSelectedLocation] = useState(() => {
+    if (initialFilters?.allLocations) return "";
+    if (initialFilters?.location) return initialFilters.location;
+    const goiania = initialProviders.find((provider) =>
+      normalizeSearch(provider.service_area || provider.address || "").includes("goiania")
+    );
+    return goiania ? normalizeSearch(goiania.service_area || goiania.address || "") : "";
+  });
+  const [search, setSearch] = useState(initialFilters?.search ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [previewMode, setPreviewMode] = useState(false);
@@ -156,6 +158,10 @@ export default function Services({
       .sort((a, b) => serviceModeLabels[a].localeCompare(serviceModeLabels[b], "pt-BR"));
   }, [providers]);
 
+  const goianiaLocationKey = locationOptions.find(({ label }) =>
+    normalizeSearch(label).includes("goiania")
+  )?.key;
+
   const filteredProviders = useMemo(() => {
     const term = normalizeSearch(search.trim());
     return providers.filter((provider) => {
@@ -186,7 +192,6 @@ export default function Services({
       if (!term) return true;
       const searchable = [
         provider.display_name,
-        provider.business_type,
         provider.description,
         provider.address,
         provider.service_area,
@@ -202,11 +207,38 @@ export default function Services({
 
   const hasActiveFilters = Boolean(search || selectedService || selectedMode || selectedLocation);
 
+  function syncFilters(next: Partial<DirectoryFilters>) {
+    const url = new URL(window.location.href);
+    const current: DirectoryFilters = {
+      search,
+      service: selectedService,
+      mode: selectedMode,
+      location: selectedLocation,
+      allLocations,
+      ...next,
+    };
+    const params: [string, string][] = [
+      ["buscar", current.search],
+      ["servico", current.service],
+      ["atendimento", current.mode],
+    ];
+    params.forEach(([key, value]) => {
+      if (value) url.searchParams.set(key, value);
+      else url.searchParams.delete(key);
+    });
+    if (current.allLocations) url.searchParams.set("localidade", "todas");
+    else if (current.location) url.searchParams.set("localidade", current.location);
+    else url.searchParams.delete("localidade");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }
+
   function clearFilters() {
     setSearch("");
     setSelectedService("");
     setSelectedMode("");
     setSelectedLocation("");
+    setAllLocations(true);
+    syncFilters({ search: "", service: "", mode: "", location: "", allLocations: true });
   }
 
   return (
@@ -214,12 +246,17 @@ export default function Services({
       <section id="prestadores" className={`provider-directory section${isHome ? " provider-directory-home" : ""}`} aria-labelledby="providers-heading">
         <div className="container">
           <div className="section-heading">
-            <span className="eyebrow provider-directory-eyebrow">Prestadores de serviços</span>
+            <span className="eyebrow">Prestadores | ServiçoFácil</span>
             {isHome ? (
               <h2 id="providers-heading">Prestadores perto de você</h2>
             ) : (
               <h1 id="providers-heading">Encontre o serviço ideal</h1>
             )}
+            <p>
+              Pesquise por nome ou serviço e refine por especialidade e
+              localidade. Começamos por Goiânia e ampliamos a busca conforme
+              novos prestadores chegam à plataforma.
+            </p>
           </div>
 
           {previewMode && (
@@ -242,6 +279,7 @@ export default function Services({
                 onChange={(event) => {
                   const value = event.target.value;
                   setSearch(value);
+                  syncFilters({ search: value });
                 }}
                 placeholder="Ex.: advogada, barbearia, geladeira"
               />
@@ -258,6 +296,7 @@ export default function Services({
                 onChange={(event) => {
                   const value = event.target.value;
                   setSelectedService(value);
+                  syncFilters({ service: value });
                 }}
               >
                 <option value="">Todos os serviços</option>
@@ -277,7 +316,10 @@ export default function Services({
                 value={selectedLocation}
                 onChange={(event) => {
                   const value = event.target.value;
+                  const nextAllLocations = !value;
                   setSelectedLocation(value);
+                  setAllLocations(nextAllLocations);
+                  syncFilters({ location: value, allLocations: nextAllLocations });
                 }}
               >
                 <option value="">Todas as localidades</option>
@@ -298,6 +340,7 @@ export default function Services({
                 onChange={(event) => {
                   const value = event.target.value;
                   setSelectedMode(value);
+                  syncFilters({ mode: value });
                 }}
               >
                 <option value="">Todas as formas</option>
@@ -314,6 +357,10 @@ export default function Services({
             )}
           </div>
 
+          <p className="directory-filter-note">
+            Os prestadores informam as regiões e formas de atendimento.
+            {goianiaLocationKey ? " A busca começa por Goiânia; prestadores online também podem aparecer. Selecione outra localidade ou limpe os filtros para ver todos." : " Goiânia é o ponto de partida; novas cidades poderão ser incluídas pelos prestadores."}
+          </p>
 
           {!loading && !error && (
             <p className="directory-result-count" aria-live="polite">
@@ -347,10 +394,7 @@ export default function Services({
             </div>
           ) : (
             <div className="provider-grid">
-              {filteredProviders.map((provider) => {
-                const serviceCategory = provider.business_type?.trim() || provider.services[0]?.name || "Serviços profissionais";
-                const whatsappLink = createWhatsAppLink(provider.whatsapp, serviceCategory);
-                return (
+              {filteredProviders.map((provider) => (
                 <article className="provider-card" key={provider.id}>
                   <div className="provider-card-heading">
                     {provider.logo_url ? (
@@ -358,29 +402,24 @@ export default function Services({
                       <img src={provider.logo_url} alt="" className="provider-logo" />
                     ) : (
                       <span className="provider-logo provider-logo-fallback" aria-hidden="true">
-                        {serviceCategory.charAt(0).toLocaleUpperCase("pt-BR")}
+                        {provider.display_name.charAt(0).toLocaleUpperCase("pt-BR")}
                       </span>
                     )}
                     <div>
-                      <span className="provider-card-label">Serviço</span>
-                      <h3>{serviceCategory}</h3>
-                      <p className="provider-responsible">Responsável: {provider.display_name}</p>
+                      <h3>{provider.display_name}</h3>
                       {(provider.service_area || provider.address) && <p className="provider-location">{provider.service_area || provider.address}</p>}
                     </div>
                     {provider.is_preview && <span className="provider-preview-badge">Prévia privada</span>}
                   </div>
 
                   {provider.description && (
-                    <div className="provider-technical-presentation">
-                      <span className="provider-card-label">Apresentação técnica</span>
-                      <p className="provider-description">{provider.description}</p>
-                    </div>
+                    <p className="provider-description">{provider.description}</p>
                   )}
 
                   {(provider.service_modes ?? []).length > 0 && (
                     <ul className="provider-mode-list" aria-label="Formas de atendimento">
                       {(provider.service_modes ?? []).map((mode) => (
-                        <li key={mode}><span aria-hidden="true">{serviceModeIcons[mode] ?? "📍"}</span> {serviceModeLabels[mode] ?? mode}</li>
+                        <li key={mode}>{serviceModeLabels[mode] ?? mode}</li>
                       ))}
                     </ul>
                   )}
@@ -408,20 +447,9 @@ export default function Services({
                   </div>
 
                   {provider.is_published ? (
-                    <div className="provider-card-actions">
-                      <Link className="button provider-vitrine-button" href={`/prestador/${encodeURIComponent(provider.slug)}`}>
-                        Ver vitrine
-                      </Link>
-                      {whatsappLink ? (
-                        <a className="button button-primary" href={whatsappLink} target="_blank" rel="noreferrer">
-                          Solicitar serviço
-                        </a>
-                      ) : (
-                        <Link className="button button-primary" href={`/prestador/${encodeURIComponent(provider.slug)}#servicos`}>
-                          Solicitar serviço
-                        </Link>
-                      )}
-                    </div>
+                    <Link className="button button-primary provider-open-button" href={`/prestador/${encodeURIComponent(provider.slug)}`}>
+                      Ver Vitrine e solicitar orçamento
+                    </Link>
                   ) : (
                     <>
                       <p className="provider-private-hint">
@@ -442,10 +470,10 @@ export default function Services({
                     </>
                   )}
                 </article>
-                );
-              })}
+              ))}
             </div>
           )}
+
           <aside className="directory-referral-callout" aria-labelledby="directory-referral-title">
             <div className="directory-referral-copy">
               <span className="eyebrow">Ajude a ampliar a rede</span>

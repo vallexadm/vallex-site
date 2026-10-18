@@ -390,6 +390,21 @@ export default function VallexAdminPage() {
           </div>
         </header>
 
+        {tab === "overview" && <section className="vallex-admin-section vallex-admin-quick-access" aria-label="Atalhos administrativos">
+          <div className="vallex-admin-section-heading"><div><span className="vallex-admin-eyebrow">Atalhos</span><h2>O que precisa de atenção?</h2></div></div>
+          <div className="vallex-admin-shortcuts">
+            {(isOwner || permissions.support?.view) && <button type="button" onClick={() => setTab("support")}><strong>Fila de suporte</strong><span>{pendingSupport} solicitação(ões) em andamento →</span></button>}
+            {(isOwner || permissions.providers?.view) && <button type="button" onClick={() => setTab("providers")}><strong>Acompanhar prestadores</strong><span>Planos, cadastro e situação das vitrines →</span></button>}
+            {(isOwner || permissions.traffic?.view) && <Link href="/admin/trafego"><strong>Gestão de tráfego pago</strong><span>Planos, negociações e campanhas →</span></Link>}
+            {(isOwner || permissions.traffic?.view) && <Link href="/admin/trafego/resultados"><strong>Painel gráfico de campanhas</strong><span>Ver evolução por cliente, campanha e período →</span></Link>}
+            {(isOwner || permissions.sales?.view) && <Link href="/admin/vendas"><strong>Vendas VALLEX</strong><span>Clientes, produtos e acompanhamento comercial →</span></Link>}
+            {(isOwner || permissions.finance?.view) && <Link href="/admin/financeiro"><strong>Financeiro VALLEX</strong><span>Saldo Asaas, movimentações e despesas da empresa →</span></Link>}
+            {isOwner && <Link href="/admin/acessos"><strong>Equipe e permissões</strong><span>Gerencie os cargos e acessos da equipe VALLEX →</span></Link>}
+            <Link href="/contato"><strong>Ver página de contato</strong><span>Confira o formulário e os canais públicos →</span></Link>
+            <Link href="/sistema/login"><strong>Acessar área do prestador</strong><span>Conferir a experiência do ServiçoFácil →</span></Link>
+          </div>
+        </section>}
+
         <nav className="vallex-admin-tabs" aria-label="Seções administrativas">
           {([ ["overview", "Visão geral", true], ["providers", "Prestadores", isOwner || permissions.providers?.view === true], ["support", "Suporte", isOwner || permissions.support?.view === true] ] as const).filter(([, , allowed]) => allowed).map(([value, label]) => (
             <button key={value} type="button" className={tab === value ? "is-active" : ""} onClick={() => setTab(value)}>{label}</button>
@@ -407,18 +422,6 @@ export default function VallexAdminPage() {
           </section>
           {(isOwner || permissions.sales?.view) && <section className="vallex-admin-section"><div className="vallex-admin-section-heading"><div><span className="vallex-admin-eyebrow">Comercial</span><h2>Contratos por produto</h2><p>Vendas fechadas, clientes aguardando decisão, contratos em vigência e recorrência mensal.</p></div><Link href="/admin/vendas" className="vallex-admin-secondary">Abrir área de vendas</Link></div>{salesSummary ? salesSummary.byProduct.length ? <div className="vallex-admin-table-wrap"><table className="vallex-admin-table"><thead><tr><th>Produto VALLEX</th><th>Fechados</th><th>Em negociação</th><th>Contratos ativos</th><th>Recorrência mensal</th></tr></thead><tbody>{salesSummary.byProduct.map((item) => <tr key={item.product}><td><strong>{item.label}</strong></td><td>{item.closed}</td><td>{item.waiting}</td><td>{item.activeContracts}</td><td>{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(item.monthlyRevenue)}</td></tr>)}</tbody></table></div> : <p className="vallex-admin-empty">Ainda não há vendas registradas.</p> : <p className="vallex-admin-empty">Aplique <code>supabase/vendas_vallex.sql</code> no Supabase de teste para habilitar o painel comercial.</p>}</section>}
           <MetricsDashboard data={metricData} refreshing={metricsRefreshing} onRefresh={() => void refreshMetrics()} />
-          <section className="vallex-admin-section">
-            <div className="vallex-admin-section-heading"><div><span className="vallex-admin-eyebrow">Atalhos</span><h2>O que precisa de atenção?</h2></div></div>
-            <div className="vallex-admin-shortcuts">
-              {(isOwner || permissions.support?.view) && <button type="button" onClick={() => setTab("support")}><strong>Fila de suporte</strong><span>{pendingSupport} solicitação(ões) em andamento →</span></button>}
-              {(isOwner || permissions.providers?.view) && <button type="button" onClick={() => setTab("providers")}><strong>Acompanhar prestadores</strong><span>Planos, cadastro e situação das vitrines →</span></button>}
-              {(isOwner || permissions.traffic?.view) && <Link href="/admin/trafego"><strong>Gestão de tráfego pago</strong><span>Planos, negociações e indicadores de campanhas →</span></Link>}
-              {(isOwner || permissions.sales?.view) && <Link href="/admin/vendas"><strong>Vendas VALLEX</strong><span>Clientes, produtos, propostas e acompanhamento comercial →</span></Link>}
-              {isOwner && <Link href="/admin/acessos"><strong>Equipe e permissões</strong><span>Gerencie os cargos e acessos da equipe VALLEX →</span></Link>}
-              <Link href="/contato"><strong>Ver página de contato</strong><span>Confira o formulário e os canais públicos →</span></Link>
-              <Link href="/sistema/login"><strong>Acessar área do prestador</strong><span>Conferir a experiência do ServiçoFácil →</span></Link>
-            </div>
-          </section>
           <section className="vallex-admin-section vallex-admin-roadmap">
             <span className="vallex-admin-eyebrow">Próximos módulos administrativos</span>
             <div className="vallex-admin-roadmap-grid">

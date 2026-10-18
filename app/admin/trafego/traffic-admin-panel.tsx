@@ -7,7 +7,7 @@ import CurrencyInput from "@/components/CurrencyInput";
 import { formatCurrencyInput } from "@/lib/currency";
 
 type Plan = { id: string; code: string; name: string; tagline: string; price_label: string; description: string; features: string[]; published: boolean; sort_order: number };
-type Lead = { id: string; name: string; phone: string; email: string | null; audience: string; organization_name: string | null; plan_code: string | null; need_description: string; status: string; service_value: number | null; media_budget: number | null; responsible_name: string | null; source: string; utm_source: string | null; utm_medium: string | null; utm_campaign: string | null; utm_content: string | null; utm_term: string | null; referrer: string | null; landing_path: string | null; created_at: string };
+type Lead = { id: string; name: string; phone: string; email: string | null; audience: string; organization_name: string | null; plan_code: string | null; need_description: string; status: string; service_value: number | null; media_budget: number | null; responsible_name: string | null; facebook_url: string | null; instagram_url: string | null; source: string; utm_source: string | null; utm_medium: string | null; utm_campaign: string | null; utm_content: string | null; utm_term: string | null; referrer: string | null; landing_path: string | null; created_at: string };
 type Campaign = { id: string; lead_id: string; name: string; channel: string; status: string; start_date: string | null; end_date: string | null; media_budget: number; amount_spent: number; impressions: number; clicks: number; leads_generated: number; conversions: number; notes: string | null };
 type Activity = { id: string; lead_id: string; event_type: string; description: string; created_at: string };
 type Data = { plans: Plan[]; leads: Lead[]; campaigns: Campaign[]; activity: Activity[] };
@@ -30,7 +30,7 @@ export default function TrafficAdminPanel() {
   const [saving, setSaving] = useState("");
   const [notice, setNotice] = useState("");
   const [permissions, setPermissions] = useState<TrafficPermissions>({ view: false, manage_plans: false, manage_leads: false, manage_campaigns: false });
-  const [leadDrafts, setLeadDrafts] = useState<Record<string, { status: string; serviceValue: string; mediaBudget: string; responsibleName: string; event: string }>>({});
+  const [leadDrafts, setLeadDrafts] = useState<Record<string, { status: string; serviceValue: string; mediaBudget: string; responsibleName: string; facebookUrl: string; instagramUrl: string; event: string }>>({});
   const [campaignDrafts, setCampaignDrafts] = useState<Record<string, { status: string; amountSpent: string; impressions: string; clicks: string; leadsGenerated: string; conversions: string; notes: string }>>({});
   const [campaignForm, setCampaignForm] = useState({ leadId: "", name: "", channel: "Google Ads", startDate: "", endDate: "", mediaBudget: "", notes: "" });
 
@@ -52,7 +52,7 @@ export default function TrafficAdminPanel() {
       if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível carregar o módulo de tráfego.");
       const next: Data = { plans: result.plans ?? [], leads: result.leads ?? [], campaigns: result.campaigns ?? [], activity: result.activity ?? [] };
       setData(next);
-      setLeadDrafts(Object.fromEntries(next.leads.map((lead) => [lead.id, { status: lead.status, serviceValue: moneyInput(lead.service_value), mediaBudget: moneyInput(lead.media_budget), responsibleName: lead.responsible_name ?? "", event: "" }])));
+      setLeadDrafts(Object.fromEntries(next.leads.map((lead) => [lead.id, { status: lead.status, serviceValue: moneyInput(lead.service_value), mediaBudget: moneyInput(lead.media_budget), responsibleName: lead.responsible_name ?? "", facebookUrl: lead.facebook_url ?? "", instagramUrl: lead.instagram_url ?? "", event: "" }])));
       setCampaignDrafts(Object.fromEntries(next.campaigns.map((campaign) => [campaign.id, { status: campaign.status, amountSpent: moneyInput(campaign.amount_spent), impressions: numberInput(campaign.impressions), clicks: numberInput(campaign.clicks), leadsGenerated: numberInput(campaign.leads_generated), conversions: numberInput(campaign.conversions), notes: campaign.notes ?? "" }])));
       if (!campaignForm.leadId && next.leads.length) setCampaignForm((current) => ({ ...current, leadId: next.leads[0].id }));
     } catch (loadError) { setError(loadError instanceof Error ? loadError.message : "Falha ao carregar dados."); }
@@ -119,19 +119,22 @@ export default function TrafficAdminPanel() {
 
     <section className="vallex-admin-section"><div className="vallex-admin-section-heading"><div><span className="vallex-admin-eyebrow">Funil comercial</span><h2>Contatos e negociações</h2><p>Visitantes, clientes e prestadores entram aqui com origem e UTMs quando chegam por campanha.</p></div></div>
       {data.leads.length === 0 ? <p className="vallex-admin-empty">Nenhum contato de tráfego recebido ainda.</p> : <div className="traffic-lead-list">{data.leads.map((lead) => {
-        const draft = leadDrafts[lead.id] ?? { status: lead.status, serviceValue: moneyInput(lead.service_value), mediaBudget: moneyInput(lead.media_budget), responsibleName: lead.responsible_name ?? "", event: "" };
+        const draft = leadDrafts[lead.id] ?? { status: lead.status, serviceValue: moneyInput(lead.service_value), mediaBudget: moneyInput(lead.media_budget), responsibleName: lead.responsible_name ?? "", facebookUrl: lead.facebook_url ?? "", instagramUrl: lead.instagram_url ?? "", event: "" };
         const history = data.activity.filter((item) => item.lead_id === lead.id).slice(0, 5);
         return <article className="traffic-lead-card" key={lead.id}>
           <div className="traffic-lead-head"><div><span className="vallex-admin-eyebrow">{lead.audience === "prestador" ? "Prestador VALLEX" : lead.audience === "cliente" ? "Cliente" : "Visitante"}{lead.plan_code ? ` · ${lead.plan_code}` : ""}</span><h3>{lead.name}</h3><small>{localDate(lead.created_at)}{lead.organization_name ? ` · ${lead.organization_name}` : ""}{lead.responsible_name ? ` · Responsável: ${lead.responsible_name}` : ""}</small></div><div className="traffic-lead-contact"><a href={`tel:${lead.phone.replace(/[^+\d]/g, "")}`}>{lead.phone}</a>{lead.email && <a href={`mailto:${lead.email}`}>{lead.email}</a>}</div></div>
           <p className="traffic-lead-need">{lead.need_description}</p>
           <div className="traffic-attribution">Origem: {lead.utm_source || lead.source || "direta"}{lead.utm_medium ? ` · ${lead.utm_medium}` : ""}{lead.utm_campaign ? ` · campanha ${lead.utm_campaign}` : ""}{lead.utm_content ? ` · conteúdo ${lead.utm_content}` : ""}{lead.utm_term ? ` · termo ${lead.utm_term}` : ""}{lead.referrer ? ` · veio de ${lead.referrer}` : ""}</div>
+          {(lead.facebook_url || lead.instagram_url) && <div className="traffic-social-links" aria-label="Perfis sociais do cliente">{lead.facebook_url && <a href={lead.facebook_url} target="_blank" rel="noopener noreferrer">Facebook ↗</a>}{lead.instagram_url && <a href={lead.instagram_url} target="_blank" rel="noopener noreferrer">Instagram ↗</a>}</div>}
           <fieldset disabled={!permissions.manage_leads}><div className="traffic-lead-fields">
             <label>Etapa<select value={draft.status} onChange={(event) => setLeadDrafts((current) => ({ ...current, [lead.id]: { ...draft, status: event.target.value } }))}>{pipeline.map((status) => <option key={status} value={status}>{pipelineLabels[status]}</option>)}</select></label>
             <label>Valor da gestão (R$)<CurrencyInput min={0} value={draft.serviceValue} onChange={(serviceValue) => setLeadDrafts((current) => ({ ...current, [lead.id]: { ...draft, serviceValue } }))} /></label>
             <label>Orçamento de mídia (R$)<CurrencyInput min={0} value={draft.mediaBudget} onChange={(mediaBudget) => setLeadDrafts((current) => ({ ...current, [lead.id]: { ...draft, mediaBudget } }))} /></label>
             <label>Responsável<input maxLength={160} value={draft.responsibleName} onChange={(event) => setLeadDrafts((current) => ({ ...current, [lead.id]: { ...draft, responsibleName: event.target.value } }))} /></label>
+            <label>Link do Facebook<input type="url" maxLength={500} placeholder="https://facebook.com/..." value={draft.facebookUrl} onChange={(event) => setLeadDrafts((current) => ({ ...current, [lead.id]: { ...draft, facebookUrl: event.target.value } }))} /></label>
+            <label>Link do Instagram<input type="url" maxLength={500} placeholder="https://instagram.com/..." value={draft.instagramUrl} onChange={(event) => setLeadDrafts((current) => ({ ...current, [lead.id]: { ...draft, instagramUrl: event.target.value } }))} /></label>
             <label className="traffic-lead-event">Registro da negociação<input maxLength={2000} placeholder="Ex.: reunião marcada, proposta enviada, retorno combinado…" value={draft.event} onChange={(event) => setLeadDrafts((current) => ({ ...current, [lead.id]: { ...draft, event: event.target.value } }))} /></label>
-            <button className="vallex-admin-primary" type="button" disabled={saving === `lead-${lead.id}`} onClick={() => void requestApi("PATCH", { kind: "lead", id: lead.id, status: draft.status, serviceValue: draft.serviceValue || null, mediaBudget: draft.mediaBudget || null, responsibleName: draft.responsibleName, event: draft.event }, `lead-${lead.id}`)}>{saving === `lead-${lead.id}` ? "Salvando…" : "Salvar e registrar"}</button>
+            <button className="vallex-admin-primary" type="button" disabled={saving === `lead-${lead.id}`} onClick={() => void requestApi("PATCH", { kind: "lead", id: lead.id, status: draft.status, serviceValue: draft.serviceValue || null, mediaBudget: draft.mediaBudget || null, responsibleName: draft.responsibleName, facebookUrl: draft.facebookUrl, instagramUrl: draft.instagramUrl, event: draft.event }, `lead-${lead.id}`)}>{saving === `lead-${lead.id}` ? "Salvando…" : "Salvar e registrar"}</button>
           </div></fieldset>
           {history.length > 0 && <details className="traffic-history"><summary>Histórico ({history.length} registros recentes)</summary><ul>{history.map((item) => <li key={item.id}><time>{localDate(item.created_at)}</time> {item.description}</li>)}</ul></details>}
         </article>;
