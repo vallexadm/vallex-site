@@ -118,11 +118,6 @@ export default function FaqPage() {
                 do prestador, quando aconteceu e o que precisa de análise. Não
                 envie senhas ou dados sensíveis.
               </p>
-              <p>
-                A VALLEX ainda não está divulgando um perfil oficial próprio no
-                Reclame Aqui. Links para prestadores também devem apontar apenas
-                para perfis oficiais informados por eles.
-              </p>
             </div>
             <div className="faq-support-actions">
               <Link href="/contato" className="button button-primary">

@@ -270,7 +270,23 @@ a {
 
 .button-outline {
   border: 1px solid #C084FC;
+  color: var(--color-primary);
+  background: transparent;
+}
+
+.button-outline:hover {
+  border-color: var(--color-primary);
+  background: #F5EBFF;
+  box-shadow: 0 6px 16px #7000B826;
+}
+
+.hero .button-outline {
   color: white;
+}
+
+.hero .button-outline:hover {
+  background: #FFFFFF14;
+  box-shadow: 0 6px 16px #10002030;
 }
 
 .hero {
@@ -597,30 +613,43 @@ a {
 }
 
 .document-container {
-  max-width: 920px;
+  max-width: 900px;
   padding-top: 64px;
   padding-bottom: 72px;
 }
 
+.document-page {
+  font-family: Arial, Helvetica, sans-serif;
+  color: #25212b;
+}
+
 .document-header {
-  max-width: 760px;
-  margin-bottom: 30px;
+  max-width: 100%;
+  margin: 0 auto 36px;
+  text-align: center;
 }
 
 .document-header h1 {
   margin: 14px 0 12px;
-  font-size: clamp(34px, 5vw, 48px);
-  line-height: 1.12;
+  font-size: clamp(30px, 4vw, 36px);
+  line-height: 1.5;
 }
 
 .document-header p {
   color: var(--color-muted);
-  font-size: 17px;
-  line-height: 1.7;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.document-header p:not(.document-meta) {
+  max-width: 760px;
+  margin: 0 auto;
 }
 
 .document-meta {
+  margin-top: 12px !important;
   font-size: 13px !important;
+  text-align: right;
 }
 
 .document-review-note {
@@ -638,10 +667,17 @@ a {
 
 .document-body {
   display: grid;
-  gap: 24px;
+  gap: 0;
+  font-size: 16px;
 }
 
-.document-body section,
+.document-body section {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 .faq-section {
   padding: 24px;
   border: 1px solid var(--color-border);
@@ -649,33 +685,70 @@ a {
   background: #fff;
 }
 
-.document-body h2,
+.document-body h2 {
+  margin: 24px 0 12px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 .faq-section h2,
 .faq-support h2 {
   margin: 0 0 12px;
   font-size: 22px;
 }
 
-.document-body p,
-.document-body li {
-  color: var(--color-muted);
-  line-height: 1.75;
+.document-body h2 {
+  color: #20152b;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.015em;
 }
 
-.document-body p + p {
-  margin-top: 12px;
+.document-body p,
+.document-body li {
+  color: #34303a;
+  font-size: 16px;
+  line-height: 1.5;
+  text-align: justify;
+  hyphens: auto;
+  orphans: 3;
+  widows: 3;
+}
+
+.document-body p {
+  margin: 0 0 12px;
+  text-indent: 1.25cm;
 }
 
 .document-body ul {
   display: grid;
-  gap: 10px;
-  padding-left: 22px;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding-left: 1.25cm;
+}
+
+.document-body li {
+  padding-left: 2px;
 }
 
 .document-body a {
-  color: var(--color-primary);
+  color: #6421a3;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+.document-body .document-references {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.document-body .document-references li {
+  margin: 0 0 10px;
+  padding-left: 0;
+  text-indent: 0;
+  overflow-wrap: anywhere;
 }
 
 .document-related {
@@ -685,6 +758,31 @@ a {
   margin-top: 28px;
   padding-top: 22px;
   border-top: 1px solid var(--color-border);
+}
+
+@media print {
+  .document-page {
+    background: #fff;
+  }
+
+  .document-container {
+    max-width: none;
+    padding: 3cm 2cm 2cm 3cm;
+  }
+
+  .document-header,
+  .document-body,
+  .document-related {
+    color: #000;
+  }
+
+  .document-body section {
+    break-inside: avoid-page;
+  }
+
+  .document-related {
+    display: none;
+  }
 }
 
 .document-related a {
@@ -952,14 +1050,6 @@ a {
   line-height: 1.3;
 }
 
-.plan-card .plan-description {
-  min-height: 4.8em;
-  margin: 10px 0 0;
-  color: var(--color-muted);
-  font-size: 14px;
-  line-height: 1.6;
-}
-
 .plan-card .plan-price {
   margin: 12px 0 0;
   color: var(--color-text);
@@ -1181,46 +1271,6 @@ a {
   color: var(--color-muted);
   font-size: 13px;
   line-height: 1.5;
-}
-
-.directory-referral-callout {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 28px;
-  margin-top: 28px;
-  border: 1px solid #e6ccff;
-  border-radius: 20px;
-  padding: 26px 30px;
-  background: linear-gradient(115deg, #fff 0%, #fbf6ff 100%);
-  box-shadow: 0 10px 28px #3000500a;
-}
-
-.directory-referral-copy {
-  max-width: 760px;
-}
-
-.directory-referral-copy .eyebrow {
-  color: var(--color-primary);
-}
-
-.directory-referral-callout h2 {
-  margin: 8px 0 6px;
-  color: var(--color-text);
-  font-size: clamp(20px, 2.4vw, 27px);
-  line-height: 1.2;
-}
-
-.directory-referral-callout p {
-  margin: 0;
-  color: var(--color-muted);
-  font-size: 16px;
-  line-height: 1.55;
-}
-
-.directory-referral-callout > .button {
-  flex: 0 0 auto;
-  white-space: nowrap;
 }
 
 .directory-result-count {
@@ -1629,7 +1679,6 @@ a {
     padding-bottom: 48px;
   }
 
-  .document-body section,
   .faq-section {
     padding: 19px;
   }
@@ -1689,21 +1738,6 @@ a {
 
   .directory-filter-note {
     margin-bottom: 18px;
-  }
-
-  .directory-referral-callout {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 18px;
-    margin-top: 22px;
-    padding: 22px;
-  }
-
-  .directory-referral-callout > .button {
-    width: 100%;
-    justify-content: center;
-    white-space: normal;
-    text-align: center;
   }
 
   .provider-join-section {
@@ -1937,12 +1971,6 @@ a {
 .vallex-admin-subtabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; border-bottom: 1px solid #30394c; }
 .vallex-admin-subtabs button { min-height: 42px; border: 0; border-bottom: 3px solid transparent; background: transparent; padding: 8px 14px; color: #bac6d6; font: inherit; font-weight: 700; cursor: pointer; }
 .vallex-admin-subtabs button.is-active { border-bottom-color: #c084fc; color: #f3e8ff; }
-.vallex-sales-form, .vallex-sales-form * { box-sizing: border-box; }
-.vallex-sales-form label, .vallex-sales-filters label { min-width: 0; }
-.vallex-sales-form input, .vallex-sales-form select, .vallex-sales-form textarea,
-.vallex-sales-filters input, .vallex-sales-filters select { width: 100%; min-width: 0; max-width: 100%; }
-.vallex-sales-select { display: block; min-height: 42px; border-color: #384359; border-radius: 9px; background-color: #202a3e; padding: 9px 32px 9px 11px; color: #f3f4f6; color-scheme: light; font: inherit; font-weight: 400; }
-.vallex-admin-page .vallex-sales-select option { background-color: #fff; color: #1f2937; }
 .vallex-admin-removal-details { max-width: 280px; margin-top: 8px; color: #fcd9a6; font-size: .78rem; line-height: 1.45; }
 .vallex-admin-removal-details p { margin: 4px 0 0; color: #e4d4c2; white-space: pre-wrap; overflow-wrap: anywhere; }
 .vallex-admin-support-filters { display: grid; grid-template-columns: minmax(200px, 1.5fr) repeat(3, minmax(150px, 1fr)); gap: 12px; margin: 0 0 18px; }
@@ -1999,9 +2027,16 @@ a {
 .vallex-admin-page .traffic-campaign-card header p,
 .vallex-admin-page .traffic-attribution,
 .vallex-admin-page .traffic-history { color: #b4c0d1; }
+.vallex-admin-page .traffic-client-history { border-color: #384359; background: #1b2438; color: #e5e7eb; }
+.vallex-admin-page .traffic-client-history th, .vallex-admin-page .traffic-client-history td { border-color: #384359; }
+.vallex-admin-page .traffic-client-history th { color: #c4b5fd; }
+.vallex-admin-page .traffic-client-history td { color: #d1d9e5; }
 .vallex-admin-page .traffic-admin-metrics article,
 .vallex-admin-page .traffic-lead-card,
 .vallex-admin-page .traffic-campaign-card { border-color: #384359; background: #1b2438; color: #e5e7eb; }
+.vallex-admin-page .traffic-lead-summary, .vallex-admin-page .traffic-campaign-summary { color: #e5e7eb; }
+.vallex-admin-page .traffic-lead-summary small, .vallex-admin-page .traffic-campaign-summary small { color: #b4c0d1; }
+.vallex-admin-page .traffic-client-campaign-history > h3 { color: #f1e7ff; }
 .vallex-admin-page .traffic-admin-metrics strong,
 .vallex-admin-page .traffic-lead-head h3,
 .vallex-admin-page .traffic-campaign-card h3 { color: #f1e7ff; }
@@ -2009,8 +2044,10 @@ a {
 .vallex-admin-page .traffic-campaign-form { border-color: #384359; background: #1b2438; color: #e5e7eb; }
 .vallex-admin-page .traffic-plan-editor > label,
 .vallex-admin-page .traffic-campaign-form > label,
+.vallex-admin-page .traffic-campaign-form fieldset > label,
 .vallex-admin-page .traffic-lead-fields > label,
-.vallex-admin-page .traffic-campaign-metrics > label { color: #d1d9e5; }
+.vallex-admin-page .traffic-campaign-metrics > label { color: #e2e8f0; }
+.vallex-admin-page .traffic-disclaimer { color: #b4c0d1; }
 .vallex-admin-page .traffic-plan-editor input:not([type="checkbox"]),
 .vallex-admin-page .traffic-plan-editor textarea,
 .vallex-admin-page .traffic-lead-fields input,
@@ -2022,6 +2059,16 @@ a {
 .vallex-admin-page .traffic-campaign-metrics select,
 .vallex-admin-page .traffic-campaign-metrics textarea { border-color: #46536a; background: #101727; color: #f3f4f6; }
 .vallex-admin-page .traffic-lead-contact a { color: #d8b4fe; }
+.vallex-admin-page .traffic-lead-contact .traffic-whatsapp-button { display: inline-flex; justify-content: center; border: 1px solid #16845b; border-radius: 9px; background: #116847; padding: 8px 11px; color: #f0fdf4; }
+.vallex-admin-page .traffic-contract-box { display: grid; gap: 12px; margin-top: 16px; border-top: 1px solid #354055; padding-top: 14px; color: #e5e7eb; }
+.vallex-admin-page .traffic-contract-box p { margin: 4px 0 0; color: #b4c0d1; font-size: .84rem; line-height: 1.5; }
+.vallex-admin-page .traffic-contract-actions, .vallex-admin-page .traffic-signed-contract { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.vallex-admin-page .traffic-contract-send-actions { display: flex; min-width: 100%; align-items: center; flex-wrap: wrap; gap: 10px; border-radius: 9px; background: #202a3e; padding: 10px 12px; color: #d1d9e5; font-size: .85rem; }
+.vallex-admin-page .traffic-signed-contract { justify-content: space-between; border-radius: 9px; background: #202a3e; padding: 10px 12px; color: #d1d9e5; font-size: .85rem; }
+.vallex-admin-page .traffic-delete-contract { border-color: #8b3a4d; color: #fecdd3; }
+.vallex-admin-page .traffic-file-label { position: relative; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.vallex-admin-page .traffic-file-label input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
+.vallex-admin-page .traffic-file-label:focus-within { outline: 2px solid #c084fc; outline-offset: 2px; }
 .vallex-admin-page .traffic-lead-need { color: #e5e7eb; }
 .vallex-admin-page .traffic-history { border-color: #354055; }
 .vallex-admin-page .bg-white { background-color: #1b2438; }
@@ -2035,6 +2082,16 @@ a {
 .vallex-admin-page input:disabled { background-color: #293449; color: #bac6d6; }
 
 @media (max-width: 640px) {
+  .document-body p,
+  .document-body li {
+    text-align: left;
+    hyphens: manual;
+  }
+
+  .document-body p {
+    text-indent: 0;
+  }
+
   .access-dock { top: auto; right: 14px; bottom: 18px; }
   .access-dock-trigger { border: 1px solid #c084fc; border-radius: 999px; padding: 12px 16px; writing-mode: initial; transform: none; }
   .access-dock-panel { top: auto; right: 0; bottom: calc(100% + 10px); width: min(280px, calc(100vw - 28px)); }
@@ -2124,28 +2181,63 @@ a {
 .traffic-plan-editor h3 { margin: 0; font-size: 1.08rem; }
 .traffic-plan-editor .traffic-publish-toggle { display: flex; grid-template-columns: auto 1fr; align-items: center; }
 .traffic-plan-editor .traffic-publish-toggle input { width: 18px; height: 18px; accent-color: #7500bf; }
+.traffic-client-history { margin: 4px 0 16px; border: 1px solid #384359; border-radius: 12px; background: #1b2438; padding: 13px 16px; color: #e5e7eb; }
+.traffic-client-history summary { cursor: pointer; color: #f1e7ff; font-weight: 700; }
+.traffic-client-history-scroll { overflow-x: auto; margin-top: 12px; }
+.traffic-client-history table { width: 100%; min-width: 980px; border-collapse: collapse; text-align: left; font-size: .86rem; }
+.traffic-client-history th, .traffic-client-history td { border-bottom: 1px solid #384359; padding: 10px 12px; vertical-align: top; }
+.traffic-client-history th { color: #c4b5fd; font-weight: 700; }
+.traffic-client-history td { color: #d1d9e5; }
+.traffic-client-history td > a, .traffic-client-history td > strong { display: block; }
+.traffic-client-history td a, .traffic-social-links a { color: #d8b4fe; text-decoration: underline; text-underline-offset: 2px; }
+.traffic-client-history td small { display: block; margin-top: 3px; color: #aebbd0; }
+.traffic-social-links { display: flex; gap: 8px; }
 .traffic-lead-list, .traffic-campaign-list { display: grid; gap: 13px; }
+.traffic-lead-card, .traffic-campaign-card { overflow: hidden; }
+.traffic-lead-summary, .traffic-campaign-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; list-style: none; }
+.traffic-lead-summary::-webkit-details-marker, .traffic-campaign-summary::-webkit-details-marker { display: none; }
+.traffic-lead-summary > div { display: grid; gap: 4px; }
+.traffic-lead-summary strong { font-size: 1rem; }
+.traffic-lead-summary small, .traffic-campaign-summary small { color: #64748b; font-size: .84rem; }
+.traffic-lead-summary-meta { display: grid; justify-items: end; gap: 5px; color: #b4c0d1; font-size: .82rem; }
+.traffic-lead-summary-meta b, .traffic-campaign-summary > b { color: #d8b4fe; }
+.traffic-lead-detail { padding-top: 16px; }
+.traffic-client-campaign-history { margin-top: 16px; }
+.traffic-client-campaign-history > h3 { margin: 0 0 10px; color: #27183b; font-size: 1rem; }
+.traffic-campaign-summary { display: grid; gap: 8px; }
+.traffic-campaign-summary > header { width: 100%; }
+.traffic-campaign-summary > b { justify-self: start; font-size: .84rem; }
 .traffic-lead-card, .traffic-campaign-card { border: 1px solid #e7eaf0; border-radius: 14px; background: #fff; padding: 18px; }
 .traffic-lead-head, .traffic-campaign-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
 .traffic-lead-head h3, .traffic-campaign-card h3 { margin: 5px 0; font-size: 1.08rem; }
 .traffic-lead-head small, .traffic-campaign-card header p { color: #64748b; }
 .traffic-lead-contact { display: grid; gap: 6px; text-align: right; }
 .traffic-lead-contact a { color: #6800a8; font-weight: 650; }
-.traffic-social-links { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 10px; color: #9aa7bb; font-size: .88rem; }
-.traffic-social-links a { color: #d8b4fe; font-weight: 700; text-decoration: none; }
-.traffic-social-links a:hover { color: #f3e8ff; text-decoration: underline; }
 .traffic-lead-need { margin: 15px 0 8px; color: #334155; line-height: 1.6; white-space: pre-wrap; }
 .traffic-attribution { color: #64748b; font-size: .8rem; }
-.traffic-lead-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 12px; margin-top: 16px; }
+.traffic-lead-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: start; gap: 12px; margin-top: 16px; }
 .traffic-lead-event { grid-column: span 2; }
 .traffic-history { margin-top: 14px; border-top: 1px solid #edf0f5; padding-top: 12px; color: #475569; font-size: .85rem; }
 .traffic-history summary { cursor: pointer; font-weight: 700; }
 .traffic-history ul { display: grid; gap: 7px; margin: 10px 0 0; padding-left: 18px; }
 .traffic-history time { color: #7c3aed; font-weight: 650; }
-.traffic-campaign-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 13px; border: 1px solid #e7def0; border-radius: 14px; background: #fcfaff; padding: 18px; }
-.traffic-campaign-metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: end; gap: 10px; margin-top: 15px; }
+.traffic-campaign-form { display: block; border: 1px solid #e7def0; border-radius: 14px; background: #fcfaff; padding: 18px; }
+.traffic-campaign-form fieldset { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 13px; width: 100%; min-width: 0; margin: 0; border: 0; padding: 0; }
+.traffic-campaign-form fieldset > label { display: grid; gap: 7px; color: #382a46; font-size: 14px; font-weight: 650; }
+.traffic-campaign-form .traffic-full { grid-column: 1 / -1; }
+.traffic-campaign-metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: start; gap: 10px; margin-top: 15px; }
 .traffic-campaign-card > header p { margin: 4px 0 0; font-size: .85rem; }
 .traffic-campaign-card .vallex-admin-badge { flex: 0 0 auto; }
+.vallex-admin-provider-actions { display: flex; min-width: 190px; flex-wrap: wrap; gap: 8px; }
+.vallex-admin-provider-editor { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; border: 1px solid #343d52; border-radius: 12px; background: #111827; padding: 18px; }
+.vallex-admin-provider-editor label { display: grid; gap: 7px; color: #c2ccda; font-size: .85rem; font-weight: 700; }
+.vallex-admin-provider-editor input { min-height: 44px; border: 1px solid #46536a; border-radius: 8px; background: #0f172a; padding: 9px 12px; color: #f8fafc; font: inherit; font-weight: 400; }
+.vallex-admin-provider-editor-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.vallex-admin-removal-form { display: grid; gap: 12px; border: 1px solid #674037; border-radius: 12px; background: #231821; padding: 18px; }
+.vallex-admin-removal-form label { display: grid; gap: 7px; color: #f2d3c8; font-size: .85rem; font-weight: 700; }
+.vallex-admin-removal-form textarea { min-height: 105px; resize: vertical; border: 1px solid #69484c; border-radius: 8px; background: #101727; padding: 10px 12px; color: #f8fafc; font: inherit; font-weight: 400; }
+.vallex-admin-removal-form > p { color: #d6c6c8; font-size: .84rem; line-height: 1.5; }
+
 .traffic-results { display: grid; gap: 18px; }
 .traffic-results-filters { display: grid; grid-template-columns: 1.3fr 1.3fr 1fr auto; align-items: end; gap: 12px; border: 1px solid #384359; border-radius: 16px; background: #151d30; padding: 18px; }
 .traffic-results-filters label { display: grid; gap: 7px; color: #d1d9e5; font-size: .88rem; font-weight: 700; }
@@ -2173,15 +2265,15 @@ a {
 .traffic-results-latest > div { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
 .traffic-results-latest > div span { display: grid; gap: 5px; color: #aab6c7; font-size: .8rem; }
 .traffic-results-latest > div strong { color: #f3e8ff; font-size: 1rem; }
-.vallex-admin-provider-actions { display: flex; min-width: 190px; flex-wrap: wrap; gap: 8px; }
-.vallex-admin-provider-editor { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; border: 1px solid #343d52; border-radius: 12px; background: #111827; padding: 18px; }
-.vallex-admin-provider-editor label { display: grid; gap: 7px; color: #c2ccda; font-size: .85rem; font-weight: 700; }
-.vallex-admin-provider-editor input { min-height: 44px; border: 1px solid #46536a; border-radius: 8px; background: #0f172a; padding: 9px 12px; color: #f8fafc; font: inherit; font-weight: 400; }
-.vallex-admin-provider-editor-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
-.vallex-admin-removal-form { display: grid; gap: 12px; border: 1px solid #674037; border-radius: 12px; background: #231821; padding: 18px; }
-.vallex-admin-removal-form label { display: grid; gap: 7px; color: #f2d3c8; font-size: .85rem; font-weight: 700; }
-.vallex-admin-removal-form textarea { min-height: 105px; resize: vertical; border: 1px solid #69484c; border-radius: 8px; background: #101727; padding: 10px 12px; color: #f8fafc; font: inherit; font-weight: 400; }
-.vallex-admin-removal-form > p { color: #d6c6c8; font-size: .84rem; line-height: 1.5; }
+
+@media (max-width: 900px) {
+  .traffic-results-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .traffic-results-campaign-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .traffic-results-filters, .traffic-results-campaign-list, .traffic-results-latest > div { grid-template-columns: 1fr; }
+  .traffic-results-client, .traffic-results-chart-heading { align-items: stretch; flex-direction: column; }
+}
 
 @media (max-width: 900px) {
   .vallex-admin-support-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2190,17 +2282,16 @@ a {
   .traffic-admin-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .traffic-campaign-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .traffic-lead-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .traffic-results-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .traffic-results-campaign-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .traffic-campaign-form fieldset { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
   .traffic-steps { grid-template-columns: 1fr; }
-  .traffic-form-grid, .traffic-admin-metrics, .traffic-campaign-form, .traffic-campaign-metrics, .traffic-lead-fields { grid-template-columns: 1fr; }
+  .traffic-form-grid, .traffic-admin-metrics, .traffic-campaign-metrics, .traffic-lead-fields, .traffic-campaign-form fieldset { grid-template-columns: 1fr; }
+  .traffic-lead-summary, .traffic-campaign-summary > header { align-items: stretch; flex-direction: column; }
+  .traffic-lead-summary-meta { justify-items: start; }
   .traffic-lead-event, .traffic-full { grid-column: 1; }
   .traffic-admin-heading, .traffic-lead-head, .traffic-campaign-card > header { align-items: stretch; flex-direction: column; }
   .traffic-lead-contact { text-align: left; }
-  .traffic-results-filters, .traffic-results-campaign-list, .traffic-results-latest > div { grid-template-columns: 1fr; }
-  .traffic-results-client, .traffic-results-chart-heading { align-items: stretch; flex-direction: column; }
   .traffic-admin-heading > button { width: 100%; }
   .vallex-admin-provider-editor { grid-template-columns: 1fr; }
   .vallex-admin-provider-actions { min-width: 0; }
@@ -2225,6 +2316,9 @@ a[class*="button-"],
 a[class*="vallex-admin-primary"],
 a[class*="vallex-admin-secondary"],
 a[class*="vallex-admin-back"],
+a[class*="-button"],
+a[class*="Button"],
+a[class*="rounded-lg"],
 a.inline-flex,
 a[role="button"] {
   min-height: 52px;
@@ -2235,7 +2329,7 @@ a[role="button"] {
   font-weight: 700;
   line-height: 1.25;
   text-align: center;
-  transition: transform .18s ease, box-shadow .18s ease, outline-color .18s ease;
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease, filter .18s ease, transform .18s ease, box-shadow .18s ease, outline-color .18s ease;
 }
 
 button:not(:disabled):hover,
@@ -2247,6 +2341,9 @@ a[class*="button-"]:hover,
 a[class*="vallex-admin-primary"]:hover,
 a[class*="vallex-admin-secondary"]:hover,
 a[class*="vallex-admin-back"]:hover,
+a[class*="-button"]:hover,
+a[class*="Button"]:hover,
+a[class*="rounded-lg"]:hover,
 a.inline-flex:hover,
 a[role="button"]:hover {
   transform: translateY(-1px);
@@ -2269,6 +2366,9 @@ a[class*="button-"]:focus-visible,
 a[class*="vallex-admin-primary"]:focus-visible,
 a[class*="vallex-admin-secondary"]:focus-visible,
 a[class*="vallex-admin-back"]:focus-visible,
+a[class*="-button"]:focus-visible,
+a[class*="Button"]:focus-visible,
+a[class*="rounded-lg"]:focus-visible,
 a.inline-flex:focus-visible,
 a[role="button"]:focus-visible {
   outline: 2px solid currentColor;
@@ -2285,6 +2385,9 @@ a[role="button"]:focus-visible {
   a[class*="vallex-admin-primary"],
   a[class*="vallex-admin-secondary"],
   a[class*="vallex-admin-back"],
+  a[class*="-button"],
+  a[class*="Button"],
+  a[class*="rounded-lg"],
   a.inline-flex,
   a[role="button"] {
     transition: none;
@@ -2299,6 +2402,9 @@ a[role="button"]:focus-visible {
   a[class*="vallex-admin-primary"]:hover,
   a[class*="vallex-admin-secondary"]:hover,
   a[class*="vallex-admin-back"]:hover,
+  a[class*="-button"]:hover,
+  a[class*="Button"]:hover,
+  a[class*="rounded-lg"]:hover,
   a.inline-flex:hover,
   a[role="button"]:hover {
     transform: none;

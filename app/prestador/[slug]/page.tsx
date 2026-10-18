@@ -229,9 +229,6 @@ Gostaria de saber mais sobre seus valores e condições de atendimento local, po
             >
               ← Voltar aos prestadores
             </Link>
-            <span className="hidden rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700 sm:inline-flex">
-              Prestador verificado
-            </span>
           </div>
         </div>
       </header>

@@ -1,8 +1,15 @@
 
 export const siteConfig = {
   name: "VALLEX",
-  brand: "VALLEX | SERVIÇOFÁCIL",
+  brand: "VALLEX |SERVIÇOFÁCIL",
   tagline: "Tecnologia e soluções ao seu alcance.",
+
+  legal: {
+    companyName: "VALQUIMAR SANTOS",
+    cnpj: "64.543.250/0001-50",
+    businessAddress:
+      "Rua Rio de Janeiro, Sala 02, Vila Jardim São Judas Tadeu, Goiânia/GO, CEP 74685-410",
+  },
 
   description:
     "Soluções em informática, elétrica e tecnologia para pessoas e empresas.",
@@ -16,7 +23,7 @@ export const siteConfig = {
 
   contact: {
     email: "vallexbusiness@gmail.com",
-    phone: "+55 (62) 98540-8497",
+    phone: "(62) 98540-8497",
     whatsapp: "+55 (62) 98540-8497",
   },
 

@@ -144,9 +144,10 @@ export async function GET(request: Request) {
     const { error: syncError } = await auth.context.supabase.from("vallex_finance_entries").upsert(bankEntries, { onConflict: "asaas_transaction_id", ignoreDuplicates: true });
     if (syncError) console.error("Falha ao registrar extrato Asaas no livro financeiro VALLEX:", syncError);
   }
-  const [entriesResult, salesResult] = await Promise.all([
+  const [entriesResult, salesResult, setupPaymentsResult] = await Promise.all([
     auth.context.supabase.from("vallex_finance_entries").select("*").is("deleted_at", null).gte("entry_date", from).lte("entry_date", to).order("entry_date", { ascending: false }).limit(1500),
     auth.context.supabase.from("vallex_sales_clients").select("id,contact_name,company_name,product,product_scope,stage,contract_start_date,contract_end_date,setup_value,monthly_value,archived_at").order("updated_at", { ascending: false }).limit(2000),
+    auth.context.supabase.from("vallex_finance_entries").select("id,entry_type,category,amount,status,sales_client_id").eq("entry_type", "income").eq("category", "Implantação / entrada").not("sales_client_id", "is", null).is("deleted_at", null).limit(5000),
   ]);
   if (entriesResult.error) return NextResponse.json({ ok: false, code: "FINANCE_SCHEMA_REQUIRED", message: "A estrutura do Financeiro VALLEX ainda não foi aplicada. Execute supabase/financeiro_vallex.sql no Supabase de teste." }, { status: 503 });
   const sales = salesResult.error ? [] : (salesResult.data ?? []).filter((sale) => !sale.archived_at);
@@ -155,6 +156,7 @@ export async function GET(request: Request) {
     permissions: auth.context.permissions,
     entries: entriesResult.data ?? [],
     sales,
+    setupPayments: setupPaymentsResult.error ? [] : setupPaymentsResult.data ?? [],
     asaas: { configured: asaas.configured, balance: asaas.balance, transactions: asaas.transactions, message: asaas.message },
     asaasSalesAvailable: !salesResult.error,
     period: { from, to },
@@ -195,7 +197,14 @@ export async function PATCH(request: Request) {
     const category = text(body.category, 80);
     const description = text(body.description, 180);
     if (!category || description.length < 2) return NextResponse.json({ ok: false, message: "Informe uma categoria e descrição válidas." }, { status: 400 });
-    update = { category, description, updated_by: auth.context.userId, updated_at: new Date().toISOString() };
+    const hasSalesLink = Object.prototype.hasOwnProperty.call(body, "sales_client_id");
+    const salesClientId = hasSalesLink ? text(body.sales_client_id, 50) || null : undefined;
+    if (salesClientId && !/^[0-9a-f-]{36}$/i.test(salesClientId)) return NextResponse.json({ ok: false, message: "Selecione um cliente válido para vincular esta entrada." }, { status: 400 });
+    if (salesClientId) {
+      const { data: sale, error: saleError } = await auth.context.supabase.from("vallex_sales_clients").select("id").eq("id", salesClientId).is("archived_at", null).maybeSingle();
+      if (saleError || !sale) return NextResponse.json({ ok: false, message: "O cadastro de Vendas selecionado não foi encontrado ou está arquivado." }, { status: 400 });
+    }
+    update = { category, description, ...(hasSalesLink ? { sales_client_id: salesClientId } : {}), updated_by: auth.context.userId, updated_at: new Date().toISOString() };
   } else {
     if (typeof body.entry_type === "string") {
       update = { ...readEntry(body), updated_by: auth.context.userId, updated_at: new Date().toISOString() };

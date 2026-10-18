@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/client";
 export default function CadastroEquipePage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,6 +26,12 @@ export default function CadastroEquipePage() {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
+        options: { data: {
+          terms_version: "2026-10-17-v2",
+          privacy_notice_version: "2026-10-17-v2",
+          terms_accepted_at: new Date().toISOString(),
+          privacy_notice_accepted_at: new Date().toISOString(),
+        } },
       });
       if (signUpError) throw signUpError;
       setMessage(data.session
@@ -49,6 +56,10 @@ export default function CadastroEquipePage() {
         </label>
         <label className="grid gap-1 text-sm font-medium text-slate-700">Senha
           <input required type="password" minLength={6} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2.5" placeholder="Mínimo de 6 caracteres" />
+        </label>
+        <label className="flex items-start gap-2 text-sm leading-5 text-slate-600">
+          <input type="checkbox" required checked={acceptedLegal} onChange={(event) => setAcceptedLegal(event.target.checked)} className="mt-1 accent-violet-700" />
+          <span>Tenho 18 anos ou mais, li e aceito os <Link className="font-semibold text-violet-700 underline" href="/termos" target="_blank" rel="noopener noreferrer">Termos de Uso</Link> e li a <Link className="font-semibold text-violet-700 underline" href="/privacidade" target="_blank" rel="noopener noreferrer">Política de Privacidade</Link>.</span>
         </label>
         {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</p>}
         {message && <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-900" role="status">{message}</p>}

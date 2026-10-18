@@ -9,14 +9,6 @@ const campaignStatuses = ["planejada", "ativa", "pausada", "concluida"] as const
 const planCodes = ["local", "crescimento", "estrategico"] as const;
 const str = (value: unknown, max = 2000) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const numberOrNull = (value: unknown) => value === "" || value === null || value === undefined ? null : parseCurrencyInput(value as string | number);
-function normalizedSocialUrl(value: unknown) {
-  const raw = str(value, 500);
-  if (!raw) return null;
-  try {
-    const url = new URL(raw);
-    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : undefined;
-  } catch { return undefined; }
-}
 const nonNegative = (value: unknown) => {
   const parsed = numberOrNull(value);
   return parsed === null || (Number.isFinite(parsed) && parsed >= 0) ? parsed : NaN;
@@ -28,7 +20,7 @@ export async function GET(request: Request) {
   const { supabase } = auth.context;
   const [plans, leads, campaigns, activity, snapshots] = await Promise.all([
     supabase.from("traffic_service_plans").select("id,code,name,tagline,price_label,description,features,published,sort_order,updated_at").order("sort_order"),
-    supabase.from("traffic_leads").select("id,name,phone,email,audience,organization_name,plan_code,need_description,status,service_value,media_budget,responsible_name,facebook_url,instagram_url,source,utm_source,utm_medium,utm_campaign,utm_content,utm_term,referrer,landing_path,created_at,updated_at").order("created_at", { ascending: false }),
+    supabase.from("traffic_leads").select("id,name,phone,email,audience,organization_name,plan_code,need_description,status,service_value,media_budget,responsible_name,source,utm_source,utm_medium,utm_campaign,utm_content,utm_term,referrer,landing_path,facebook_url,instagram_url,signed_contract_path,signed_contract_name,signed_contract_at,created_at,updated_at").order("created_at", { ascending: false }),
     supabase.from("traffic_campaigns").select("id,lead_id,name,channel,status,start_date,end_date,media_budget,amount_spent,impressions,clicks,leads_generated,conversions,notes,created_at").order("created_at", { ascending: false }),
     supabase.from("traffic_lead_activity").select("id,lead_id,event_type,description,created_at,actor_user_id").order("created_at", { ascending: false }).limit(500),
     supabase.from("traffic_campaign_snapshots").select("id,campaign_id,recorded_at,amount_spent,impressions,clicks,leads_generated,conversions,status").order("recorded_at", { ascending: true }).limit(10000),
@@ -36,17 +28,36 @@ export async function GET(request: Request) {
   const error = plans.error ?? leads.error ?? campaigns.error ?? activity.error ?? snapshots.error;
   if (error) {
     console.error("Falha ao carregar operação de tráfego:", error);
-    return NextResponse.json({ ok: false, code: "TRAFFIC_SCHEMA_REQUIRED", message: "A estrutura do módulo ainda não foi aplicada no Supabase. Execute o SQL supabase/trafego_pago.sql." }, { status: 503 });
+    return NextResponse.json({ ok: false, code: "TRAFFIC_SCHEMA_REQUIRED", message: "Confira se as migrações supabase/trafego_pago.sql e supabase/trafego_contratos_assinados.sql foram aplicadas no Supabase de teste." }, { status: 503 });
   }
   return NextResponse.json({ ok: true, plans: plans.data ?? [], leads: leads.data ?? [], campaigns: campaigns.data ?? [], activity: activity.data ?? [], snapshots: snapshots.data ?? [] }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(request: Request) {
-  const auth = await requireTrafficAdmin(request, "manage_campaigns");
+  const bodyForPermission = await request.clone().json().catch(() => ({})) as Record<string, unknown>;
+  const requestedKind = str(bodyForPermission.kind, 30);
+  const auth = await requireTrafficAdmin(request, requestedKind === "contract_dispatch" ? "manage_leads" : "manage_campaigns");
   if (!auth.ok) return auth.response;
   const { supabase, userId } = auth.context;
   try {
     const body = await request.json() as Record<string, unknown>;
+    const kind = str(body.kind, 30);
+    if (kind === "contract_dispatch") {
+      const leadId = str(body.leadId, 50);
+      const channel = str(body.channel, 20);
+      const fileName = str(body.fileName, 180).replace(/[\x00-\x1f\\/]/g, "_");
+      if (!/^[0-9a-f-]{36}$/i.test(leadId) || !fileName || !["whatsapp", "email"].includes(channel)) {
+        return NextResponse.json({ ok: false, message: "Informe um atendimento, arquivo e canal de envio válidos." }, { status: 400 });
+      }
+      const { data: lead, error: leadError } = await supabase.from("traffic_leads").select("id").eq("id", leadId).maybeSingle();
+      if (leadError) throw leadError;
+      if (!lead) return NextResponse.json({ ok: false, message: "O atendimento não foi encontrado." }, { status: 404 });
+      const channelLabel = channel === "whatsapp" ? "WhatsApp" : "e-mail";
+      const { error } = await supabase.from("traffic_lead_activity").insert({ lead_id: leadId, actor_user_id: userId, event_type: "contrato_enviado", description: `Contrato compartilhado para assinatura via ${channelLabel}: ${fileName}.` });
+      if (error) throw error;
+      return NextResponse.json({ ok: true }, { status: 201 });
+    }
+
     const leadId = str(body.leadId, 50);
     const name = str(body.name, 160);
     const channel = str(body.channel, 80);
@@ -107,13 +118,14 @@ export async function PATCH(request: Request) {
       const serviceValue = nonNegative(body.serviceValue);
       const mediaBudget = nonNegative(body.mediaBudget);
       if ((serviceValue !== null && !Number.isFinite(serviceValue)) || (mediaBudget !== null && !Number.isFinite(mediaBudget))) return NextResponse.json({ ok: false, message: "Valores comerciais não podem ser negativos." }, { status: 400 });
-      const facebookUrl = normalizedSocialUrl(body.facebookUrl);
-      const instagramUrl = normalizedSocialUrl(body.instagramUrl);
-      if (facebookUrl === undefined || instagramUrl === undefined) return NextResponse.json({ ok: false, message: "Informe links válidos, começando com https:// ou http://." }, { status: 400 });
+      const facebookUrl = str(body.facebookUrl, 500);
+      const instagramUrl = str(body.instagramUrl, 500);
+      const isValidSocialUrl = (value: string) => { if (!value) return true; try { const url = new URL(value); return (url.protocol === "http:" || url.protocol === "https:") && Boolean(url.hostname); } catch { return false; } };
+      if (!isValidSocialUrl(facebookUrl) || !isValidSocialUrl(instagramUrl)) return NextResponse.json({ ok: false, message: "Informe links válidos começando com http:// ou https://." }, { status: 400 });
       const { data: previous, error: lookupError } = await supabase.from("traffic_leads").select("status,service_value,media_budget").eq("id", id).maybeSingle();
       if (lookupError) throw lookupError;
       if (!previous) return NextResponse.json({ ok: false, message: "O contato não foi encontrado." }, { status: 404 });
-      const { error } = await supabase.from("traffic_leads").update({ status, service_value: serviceValue, media_budget: mediaBudget, responsible_name: str(body.responsibleName, 160) || null, facebook_url: facebookUrl, instagram_url: instagramUrl, updated_at: new Date().toISOString() }).eq("id", id);
+      const { error } = await supabase.from("traffic_leads").update({ status, service_value: serviceValue, media_budget: mediaBudget, responsible_name: str(body.responsibleName, 160) || null, facebook_url: facebookUrl || null, instagram_url: instagramUrl || null, updated_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
       const event = str(body.event, 2000);
       const entries = [

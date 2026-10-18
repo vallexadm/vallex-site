@@ -395,16 +395,15 @@ export default function VallexAdminPage() {
           <div className="vallex-admin-shortcuts">
             {(isOwner || permissions.support?.view) && <button type="button" onClick={() => setTab("support")}><strong>Fila de suporte</strong><span>{pendingSupport} solicitação(ões) em andamento →</span></button>}
             {(isOwner || permissions.providers?.view) && <button type="button" onClick={() => setTab("providers")}><strong>Acompanhar prestadores</strong><span>Planos, cadastro e situação das vitrines →</span></button>}
-            {(isOwner || permissions.traffic?.view) && <Link href="/admin/trafego"><strong>Gestão de tráfego pago</strong><span>Planos, negociações e campanhas →</span></Link>}
+            {(isOwner || permissions.traffic?.view) && <Link href="/admin/trafego"><strong>Gestão de tráfego pago</strong><span>Planos, negociações e indicadores de campanhas →</span></Link>}
             {(isOwner || permissions.traffic?.view) && <Link href="/admin/trafego/resultados"><strong>Painel gráfico de campanhas</strong><span>Ver evolução por cliente, campanha e período →</span></Link>}
-            {(isOwner || permissions.sales?.view) && <Link href="/admin/vendas"><strong>Vendas VALLEX</strong><span>Clientes, produtos e acompanhamento comercial →</span></Link>}
+            {(isOwner || permissions.sales?.view) && <Link href="/admin/vendas"><strong>Vendas VALLEX</strong><span>Clientes, produtos, propostas e acompanhamento comercial →</span></Link>}
             {(isOwner || permissions.finance?.view) && <Link href="/admin/financeiro"><strong>Financeiro VALLEX</strong><span>Saldo Asaas, movimentações e despesas da empresa →</span></Link>}
             {isOwner && <Link href="/admin/acessos"><strong>Equipe e permissões</strong><span>Gerencie os cargos e acessos da equipe VALLEX →</span></Link>}
             <Link href="/contato"><strong>Ver página de contato</strong><span>Confira o formulário e os canais públicos →</span></Link>
             <Link href="/sistema/login"><strong>Acessar área do prestador</strong><span>Conferir a experiência do ServiçoFácil →</span></Link>
           </div>
         </section>}
-
         <nav className="vallex-admin-tabs" aria-label="Seções administrativas">
           {([ ["overview", "Visão geral", true], ["providers", "Prestadores", isOwner || permissions.providers?.view === true], ["support", "Suporte", isOwner || permissions.support?.view === true] ] as const).filter(([, , allowed]) => allowed).map(([value, label]) => (
             <button key={value} type="button" className={tab === value ? "is-active" : ""} onClick={() => setTab(value)}>{label}</button>
