@@ -2191,6 +2191,7 @@ a {
 .traffic-client-history td > a, .traffic-client-history td > strong { display: block; }
 .traffic-client-history td a, .traffic-social-links a { color: #d8b4fe; text-decoration: underline; text-underline-offset: 2px; }
 .traffic-client-history td small { display: block; margin-top: 3px; color: #aebbd0; }
+.traffic-client-history .traffic-archive-action { min-height: 34px; padding: 7px 10px; white-space: nowrap; }
 .traffic-social-links { display: flex; gap: 8px; }
 .traffic-lead-list, .traffic-campaign-list { display: grid; gap: 13px; }
 .traffic-lead-card, .traffic-campaign-card { overflow: hidden; }

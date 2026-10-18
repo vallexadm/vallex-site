@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   const { supabase } = auth.context;
   const [plans, leads, campaigns, activity, snapshots] = await Promise.all([
     supabase.from("traffic_service_plans").select("id,code,name,tagline,price_label,description,features,published,sort_order,updated_at").order("sort_order"),
-    supabase.from("traffic_leads").select("id,name,phone,email,audience,organization_name,plan_code,need_description,status,service_value,media_budget,responsible_name,source,utm_source,utm_medium,utm_campaign,utm_content,utm_term,referrer,landing_path,facebook_url,instagram_url,signed_contract_path,signed_contract_name,signed_contract_at,created_at,updated_at").order("created_at", { ascending: false }),
+    supabase.from("traffic_leads").select("id,name,phone,email,audience,organization_name,plan_code,need_description,status,service_value,media_budget,responsible_name,source,utm_source,utm_medium,utm_campaign,utm_content,utm_term,referrer,landing_path,facebook_url,instagram_url,signed_contract_path,signed_contract_name,signed_contract_at,archived_at,archived_by,created_at,updated_at").order("created_at", { ascending: false }),
     supabase.from("traffic_campaigns").select("id,lead_id,name,channel,status,start_date,end_date,media_budget,amount_spent,impressions,clicks,leads_generated,conversions,notes,created_at").order("created_at", { ascending: false }),
     supabase.from("traffic_lead_activity").select("id,lead_id,event_type,description,created_at,actor_user_id").order("created_at", { ascending: false }).limit(500),
     supabase.from("traffic_campaign_snapshots").select("id,campaign_id,recorded_at,amount_spent,impressions,clicks,leads_generated,conversions,status").order("recorded_at", { ascending: true }).limit(10000),
@@ -28,9 +28,10 @@ export async function GET(request: Request) {
   const error = plans.error ?? leads.error ?? campaigns.error ?? activity.error ?? snapshots.error;
   if (error) {
     console.error("Falha ao carregar operação de tráfego:", error);
-    return NextResponse.json({ ok: false, code: "TRAFFIC_SCHEMA_REQUIRED", message: "Confira se as migrações supabase/trafego_pago.sql e supabase/trafego_contratos_assinados.sql foram aplicadas no Supabase de teste." }, { status: 503 });
+    return NextResponse.json({ ok: false, code: "TRAFFIC_SCHEMA_REQUIRED", message: "Confira se as migrações de tráfego pago, contratos assinados e clientes arquivados foram aplicadas no Supabase de teste." }, { status: 503 });
   }
-  return NextResponse.json({ ok: true, plans: plans.data ?? [], leads: leads.data ?? [], campaigns: campaigns.data ?? [], activity: activity.data ?? [], snapshots: snapshots.data ?? [] }, { headers: { "Cache-Control": "private, no-store" } });
+  const leadRows = leads.data ?? [];
+  return NextResponse.json({ ok: true, plans: plans.data ?? [], leads: leadRows.filter((lead) => !lead.archived_at), archivedLeads: leadRows.filter((lead) => Boolean(lead.archived_at)), campaigns: campaigns.data ?? [], activity: activity.data ?? [], snapshots: snapshots.data ?? [] }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(request: Request) {
@@ -66,6 +67,10 @@ export async function POST(request: Request) {
     }
     const budget = nonNegative(body.mediaBudget) ?? 0;
     if (!Number.isFinite(budget)) return NextResponse.json({ ok: false, message: "O orçamento de mídia precisa ser zero ou maior." }, { status: 400 });
+    const { data: selectedLead, error: selectedLeadError } = await supabase.from("traffic_leads").select("id,archived_at").eq("id", leadId).maybeSingle();
+    if (selectedLeadError) throw selectedLeadError;
+    if (!selectedLead) return NextResponse.json({ ok: false, message: "O cliente não foi encontrado." }, { status: 404 });
+    if (selectedLead.archived_at) return NextResponse.json({ ok: false, message: "Este cliente está encerrado. Reative o cadastro antes de registrar uma nova campanha." }, { status: 409 });
     const { data, error } = await supabase.from("traffic_campaigns").insert({
       lead_id: leadId,
       name,
@@ -98,6 +103,20 @@ export async function PATCH(request: Request) {
     const kind = str(body.kind, 20);
     const id = str(body.id, 50);
     if (!id || !/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ ok: false, message: "Identificador inválido." }, { status: 400 });
+
+    if (kind === "archive_lead") {
+      const archived = body.archived === true;
+      const { data: lead, error: lookupError } = await supabase.from("traffic_leads").select("id,archived_at").eq("id", id).maybeSingle();
+      if (lookupError) throw lookupError;
+      if (!lead) return NextResponse.json({ ok: false, message: "O cliente não foi encontrado." }, { status: 404 });
+      if (Boolean(lead.archived_at) === archived) return NextResponse.json({ ok: true });
+      const now = new Date().toISOString();
+      const { error } = await supabase.from("traffic_leads").update({ archived_at: archived ? now : null, archived_by: archived ? userId : null, updated_at: now }).eq("id", id);
+      if (error) throw error;
+      const { error: activityError } = await supabase.from("traffic_lead_activity").insert({ lead_id: id, actor_user_id: userId, event_type: archived ? "encerramento" : "reativacao", description: archived ? "Contrato encerrado e cliente arquivado. Campanhas, indicadores, documentos e histórico foram preservados." : "Cliente reativado para acompanhamento ativo." });
+      if (activityError) throw activityError;
+      return NextResponse.json({ ok: true });
+    }
 
     if (kind === "plan") {
       const code = str(body.code, 40);
