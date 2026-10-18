@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase/client";
 
-const legalVersion = "2026-10-14-v1";
+const legalVersion = "2026-10-17-v2";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "signup" | "recovery" | "reset">("login");
@@ -14,11 +14,14 @@ export default function LoginPage() {
   const [organizationName, setOrganizationName] = useState("");
   const [businessType, setBusinessType] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [teamAccess, setTeamAccess] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const isTeamAccess = params.get("next") === "/admin";
+    if (isTeamAccess) window.setTimeout(() => setTeamAccess(true), 0);
     if (params.get("redefinir-senha") === "1") {
       void supabase.auth.getSession().then(({ data }) => {
         setMode("reset");
@@ -26,8 +29,10 @@ export default function LoginPage() {
           ? "Escolha uma nova senha para sua conta."
           : "Abra o link mais recente recebido por e-mail para continuar a redefinição.");
       });
+    } else if (isTeamAccess) {
+      window.setTimeout(() => setMode("login"), 0);
     } else if (params.get("cadastro") === "1") {
-      setMode("signup");
+      window.setTimeout(() => setMode("signup"), 0);
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -94,6 +99,8 @@ export default function LoginPage() {
               business_type: businessType.trim(),
               terms_version: legalVersion,
               privacy_notice_version: legalVersion,
+              terms_accepted_at: new Date().toISOString(),
+              privacy_notice_accepted_at: new Date().toISOString(),
             },
           },
         });
@@ -199,7 +206,7 @@ export default function LoginPage() {
             Entrar
           </button>
 
-          <button
+          {!teamAccess && <button
             type="button"
             onClick={() => {
               setMode("signup");
@@ -214,7 +221,13 @@ export default function LoginPage() {
             } transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600`}
           >
             Criar conta
-          </button>
+          </button>}
+        </div>}
+
+        {teamAccess && <div className="mb-5 rounded-lg border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
+          <p className="font-semibold">Acesso da equipe VALLEX</p>
+          <p className="mt-1">Se você já criou a conta, entre com o e-mail cadastrado pelo proprietário. Primeiro acesso? Use o cadastro exclusivo da equipe, sem informar dados de prestador.</p>
+          <div className="mt-4 flex justify-center"><Link href={`/sistema/equipe/cadastro${email.trim() ? `?email=${encodeURIComponent(email.trim().toLowerCase())}` : ""}`} className="button button-primary w-full sm:w-auto">Criar conta da equipe VALLEX</Link></div>
         </div>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -314,7 +327,7 @@ export default function LoginPage() {
                 className="mt-1 accent-violet-700"
               />
               <span>
-                Li e aceito os <Link className="font-semibold text-violet-700 underline underline-offset-2 hover:text-violet-900" href="/termos" target="_blank" rel="noopener noreferrer">Termos de Uso</Link> e li a{" "}
+                Tenho 18 anos ou mais, li e aceito os <Link className="font-semibold text-violet-700 underline underline-offset-2 hover:text-violet-900" href="/termos" target="_blank" rel="noopener noreferrer">Termos de Uso</Link> e li a{" "}
                 <Link className="font-semibold text-violet-700 underline underline-offset-2 hover:text-violet-900" href="/privacidade" target="_blank" rel="noopener noreferrer">Política de Privacidade</Link>.
               </span>
             </label>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getPlanEntitlements } from "@/lib/server/plan-entitlements";
 
 export const runtime = "nodejs";
 
@@ -158,14 +159,28 @@ export async function GET(request: Request) {
     );
   }
 
-  const prestadores = profiles.map((profile) => ({
-    ...profile,
-    services: (services ?? []).filter(
-      (service) =>
-        service.organization_id === profile.organization_id &&
-        (profile.is_preview || service.is_published)
-    ),
-  }));
+  const planResults = await Promise.all(profiles.map(async (profile) => ({
+    organizationId: profile.organization_id,
+    result: await getPlanEntitlements(supabaseAdmin, profile.organization_id),
+  })));
+  if (planResults.some(({ result }) => !result.entitlements)) {
+    return NextResponse.json({ ok: false, message: "Não foi possível verificar os planos dos prestadores." }, { status: 503 });
+  }
+  const limitsByOrganization = new Map(
+    planResults.map(({ organizationId, result }) => [organizationId, result.entitlements ? result.entitlements.maxServices : 1] as const)
+  );
+
+  const prestadores = profiles.map((profile) => {
+    const activeServices = (services ?? []).filter(
+      (service) => service.organization_id === profile.organization_id && (profile.is_preview || service.is_published)
+    );
+    const configuredLimit = limitsByOrganization.get(profile.organization_id);
+    const maxServices = configuredLimit === undefined ? 1 : configuredLimit;
+    return {
+      ...profile,
+      services: maxServices === null ? activeServices : activeServices.slice(0, maxServices),
+    };
+  });
 
   return NextResponse.json({ ok: true, prestadores });
 }

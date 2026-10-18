@@ -4,6 +4,7 @@ import Link from "next/link";
 import SystemBrand from "@/components/SystemBrand";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { getProviderPlanCopy } from "@/lib/provider-plan-copy";
 type Plan = { id: string; code: string; name: string; monthlyPrice: number; maxUsers: number };
 type CurrentPlan = {
   code: string;
@@ -18,22 +19,6 @@ type CurrentPlan = {
 type PlanData = { plans: Plan[]; current: CurrentPlan | null };
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const loginHref = "/sistema/login?next=%2Fsistema%2Fplanos";
-const planFeatures: Record<string, string[]> = {
-  free: [
-    "Consulte as solicitações recebidas em modo somente leitura.",
-    "Inclui 1 usuário. Gestão e filtros começam no Basic.",
-  ],
-  basic: [
-    "Acesso ao painel de gestão do prestador.",
-    "5 dias grátis para novos cadastros, sem cobrança durante o teste.",
-    "Configure a Vitrine e organize serviços, clientes, agenda e financeiro.",
-    "Gerencie solicitações, filtros e orçamentos.",
-  ],
-  professional: [
-    "Painel com todos os recursos do Basic.",
-    "Exporte as solicitações em arquivo CSV.",
-  ],
-};
 export default function PlanosPage() {
   return <Suspense fallback={<main className="min-h-screen bg-slate-100 p-6 text-slate-600">Carregando planos...</main>}><PlanosContent /></Suspense>;
 }
@@ -50,7 +35,7 @@ function PlanosContent() {
   };
   const message = paymentMessages[searchParams.get("pagamento") ?? ""] ?? "";
   const panelAccessMessage = searchParams.get("acesso") === "painel"
-    ? "No Free, você pode consultar solicitações em modo somente leitura. Basic libera gestão e filtros; Professional acrescenta exportação CSV."
+    ? "No Free, você pode publicar 1 serviço na Vitrine, consultar solicitações e falar com o cliente pelo WhatsApp. Basic amplia o catálogo para 5 serviços e libera a gestão do negócio; Professional permite 10 serviços, exportação CSV e mais usuários."
     : "";
   useEffect(() => {
     async function load() {
@@ -146,15 +131,18 @@ function PlanosContent() {
         <div className="mt-8 grid gap-5 md:grid-cols-3">{data.plans.map((plan) => {
           const current = data.current?.code === plan.code && (data.current.status === "active" || data.current.status === "trialing");
           const paid = plan.monthlyPrice > 0;
+          const copy = getProviderPlanCopy(plan.code);
           const reactivatingExpiredPlan =
             paid && data.current?.code === plan.code && data.current.status !== "active" && data.current.status !== "trialing";
           return <article key={plan.id} className={"flex flex-col rounded-2xl border bg-white p-6 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-purple-500 hover:shadow-lg focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-100 " + (current ? "border-purple-400 ring-2 ring-purple-100" : "border-slate-200")}>
             <p className="text-sm font-semibold uppercase tracking-wide text-purple-700">{plan.name}</p>
+            <h3 className="mt-3 text-xl font-semibold leading-snug text-slate-900">{copy.title}</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{copy.description}</p>
             <p className="mt-4 text-3xl font-bold text-slate-900">{money.format(plan.monthlyPrice)}<span className="text-base font-normal text-slate-500"> / mês</span></p>
             <p className="mt-3 text-sm text-slate-600">{plan.code.toLowerCase() === "free" ? "1 usuário na equipe." : `Até ${plan.maxUsers} ${plan.maxUsers === 1 ? "usuário" : "usuários"} na equipe.`}</p>
             {paid && <p className="mt-2 text-sm text-slate-600">Cobrança recorrente mensal pelo Asaas, paga com cartão de crédito.</p>}
             <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-600">
-              {(planFeatures[plan.code.toLowerCase()] ?? []).map((feature) => <li key={feature}>{feature}</li>)}
+              {copy.features.map((feature) => <li key={feature}>{feature}</li>)}
             </ul>
             <div className="mt-auto space-y-3 pt-6">
               {current ? <>
@@ -181,7 +169,7 @@ function PlanosContent() {
             </div>
           </article>;
         })}</div>
-        <p className="mt-6 text-sm text-slate-500">O retorno do checkout não confirma o pagamento. A alteração do plano depende da confirmação recebida do Asaas.</p>
+        <p className="mt-6 text-sm text-slate-500">Novas organizações começam com 5 dias de teste do Basic. Sem uma assinatura confirmada ao fim do teste, o acesso passa para o Free. O retorno do checkout não confirma o pagamento; a contratação dos planos pagos depende da confirmação do Asaas.</p>
       </>}
     </section>
   </main>;

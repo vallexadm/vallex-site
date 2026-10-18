@@ -1,4 +1,5 @@
 import { calculateFuelCost, type FuelCostDetails } from "@/lib/fuel-cost";
+import { parseCurrencyInput } from "@/lib/currency";
 
 export const quoteCostCategories = [
   "materiais_insumos",
@@ -55,7 +56,7 @@ export function normalizeQuoteInternalCosts(value: unknown): QuoteCostNormalizat
         efficiency_km_per_liter: String(fuel?.efficiency_km_per_liter ?? ""),
       };
       const distance = Number(details.distance_km);
-      const price = Number(details.price_per_liter);
+      const price = parseCurrencyInput(details.price_per_liter);
       const efficiency = Number(details.efficiency_km_per_liter);
       const amount = calculateFuelCost(details);
       if ((fuelType !== "gasolina" && fuelType !== "etanol") || ![distance, price, efficiency].every(Number.isFinite) || distance <= 0 || price <= 0 || efficiency <= 0 || amount <= 0) {
@@ -70,7 +71,7 @@ export function normalizeQuoteInternalCosts(value: unknown): QuoteCostNormalizat
       continue;
     }
 
-    const amount = typeof row.amount === "number" ? row.amount : Number(row.amount);
+    const amount = parseCurrencyInput(typeof row.amount === "number" ? row.amount : String(row.amount ?? ""));
     if (!Number.isFinite(amount) || amount <= 0) {
       return { ok: false, message: "Informe um valor maior que zero para cada custo interno." };
     }

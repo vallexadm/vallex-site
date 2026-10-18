@@ -16,6 +16,7 @@ export default function AceitarConvitePage() {
   const [invitedEmail, setInvitedEmail] = useState("");
   const [password, setPassword] = useState("");
   const [creatingAccount, setCreatingAccount] = useState(false);
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -113,6 +114,12 @@ export default function AceitarConvitePage() {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
+        options: { data: {
+          terms_version: "2026-10-17-v2",
+          privacy_notice_version: "2026-10-17-v2",
+          terms_accepted_at: new Date().toISOString(),
+          privacy_notice_accepted_at: new Date().toISOString(),
+        } },
       });
 
       if (signUpError) throw signUpError;
@@ -189,6 +196,10 @@ export default function AceitarConvitePage() {
               <input id="invite-signup-email" type="email" readOnly value={invitedEmail} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-700" />
               <label htmlFor="invite-signup-password" className="block text-sm font-medium text-slate-700">Crie uma senha</label>
               <input id="invite-signup-password" type="password" autoComplete="new-password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900" placeholder="Mínimo de 6 caracteres" />
+              <label className="flex items-start gap-2 text-sm leading-5 text-slate-600">
+                <input type="checkbox" required checked={acceptedLegal} onChange={(event) => setAcceptedLegal(event.target.checked)} className="mt-1 accent-violet-700" />
+                <span>Tenho 18 anos ou mais, li e aceito os <a className="font-semibold text-violet-700 underline" href="/termos" target="_blank" rel="noopener noreferrer">Termos de Uso</a> e li a <a className="font-semibold text-violet-700 underline" href="/privacidade" target="_blank" rel="noopener noreferrer">Política de Privacidade</a>.</span>
+              </label>
               <button type="submit" disabled={creatingAccount || loading} className="w-full rounded-lg bg-purple-700 px-4 py-3 font-medium text-white hover:bg-purple-800 disabled:opacity-60">
                 {creatingAccount ? "Criando conta..." : "Criar conta e entrar na equipe"}
               </button>

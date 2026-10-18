@@ -58,6 +58,12 @@ export default function Footer() {
       </div>
 
       <div className="container footer-bottom">
+        <p>
+          {siteConfig.legal.companyName} · CNPJ {siteConfig.legal.cnpj}
+        </p>
+        <p>
+          Endereço comercial para identificação e contato (sem atendimento presencial): {siteConfig.legal.businessAddress}
+        </p>
         © {new Date().getFullYear()} VALLEX | SERVIÇOFÁCIL.
         Todos os direitos reservados.
       </div>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getPlanEntitlements } from "@/lib/server/plan-entitlements";
 
 export const runtime = "nodejs";
 
@@ -293,6 +294,25 @@ export async function POST(request: Request) {
       },
       { status: 404 }
     );
+  }
+
+  if (!previewRequested) {
+    const planResult = await getPlanEntitlements(supabaseAdmin, profile.organization_id);
+    if (!planResult.entitlements) return NextResponse.json({ ok: false, message: planResult.error }, { status: 503 });
+    const maxServices = planResult.entitlements.maxServices;
+    if (maxServices !== null) {
+      const { data: activeServices, error: activeServicesError } = await supabaseAdmin
+        .from("vitrine_services")
+        .select("id")
+        .eq("organization_id", profile.organization_id)
+        .eq("is_published", true)
+        .order("display_order", { ascending: true })
+        .order("created_at", { ascending: true });
+      if (activeServicesError) return NextResponse.json({ ok: false, message: "Não foi possível validar a disponibilidade do serviço." }, { status: 500 });
+      if ((activeServices ?? []).slice(0, maxServices).every((activeService) => activeService.id !== service.id)) {
+        return NextResponse.json({ ok: false, message: "Este serviço não está disponível no plano atual." }, { status: 404 });
+      }
+    }
   }
 
   const { error: insertError } =

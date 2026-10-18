@@ -3,10 +3,12 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import SystemBrand from "@/components/SystemBrand";
+import CurrencyInput from "@/components/CurrencyInput";
 import { createClient } from "@supabase/supabase-js";
 import { calculateFuelCost, type FuelCostDetails } from "@/lib/fuel-cost";
 import { quoteCostCategories, type QuoteInternalCost } from "@/lib/orcamento-custos";
 import { defaultMemberPermissions, normalizeMemberPermissions, type MemberPermissions } from "@/lib/team-permissions";
+import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
 
 type QuoteCostForm = {
   id: string;
@@ -90,10 +92,7 @@ const quoteCostLabels: Record<QuoteInternalCost["category"], string> = {
 };
 
 function parseMoney(value: string) {
-  const normalized = value.includes(",")
-    ? value.replace(/\./g, "").replace(",", ".")
-    : value;
-  return Number(normalized);
+  return parseCurrencyInput(value);
 }
 
 function makeCostForm(item?: QuoteInternalCost): QuoteCostForm {
@@ -101,10 +100,10 @@ function makeCostForm(item?: QuoteInternalCost): QuoteCostForm {
     id: crypto.randomUUID(),
     category: item?.category ?? "materiais_insumos",
     description: item?.description ?? "",
-    amount: item ? String(item.amount).replace(".", ",") : "",
+    amount: item ? formatCurrencyInput(item.amount) : "",
     distance_km: item?.fuel_details ? String(item.fuel_details.distance_km).replace(".", ",") : "",
     fuel_type: item?.fuel_details?.fuel_type ?? "gasolina",
-    price_per_liter: item?.fuel_details ? String(item.fuel_details.price_per_liter).replace(".", ",") : "",
+    price_per_liter: item?.fuel_details ? formatCurrencyInput(item.fuel_details.price_per_liter) : "",
     efficiency_km_per_liter: item?.fuel_details ? String(item.fuel_details.efficiency_km_per_liter).replace(".", ",") : "",
   };
 }
@@ -400,7 +399,7 @@ export default function OrcamentosPage() {
         setCustomerId(orcamento.customer_id);
         setTitulo(orcamento.titulo);
         setDescricao(orcamento.descricao ?? "");
-        setValor(String(orcamento.valor_servico ?? orcamento.valor).replace(".", ","));
+        setValor(formatCurrencyInput(orcamento.valor_servico ?? orcamento.valor));
         setCustosInternos((orcamento.custos_internos ?? []).map((item) => makeCostForm(item)));
         setValidadeAte(orcamento.validade_ate ?? "");
         setObservacoes(orcamento.observacoes ?? "");
@@ -681,13 +680,10 @@ export default function OrcamentosPage() {
                   Valor do serviço *
                 </label>
 
-                <input
+                <CurrencyInput
                   value={valor}
-                  onChange={(event) =>
-                    setValor(event.target.value)
-                  }
+                  onChange={setValor}
                   required
-                  inputMode="decimal"
                   placeholder="0,00"
                   className="mt-2 w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-purple-500"
                 />
@@ -765,14 +761,14 @@ export default function OrcamentosPage() {
                             <select value={item.fuel_type} onChange={(event) => updateItem({ fuel_type: event.target.value as FuelCostDetails["fuel_type"] })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"><option value="gasolina">Gasolina</option><option value="etanol">Etanol (álcool)</option></select>
                           </label>
                           <label className="text-sm font-medium text-slate-700">Preço por litro (R$)
-                            <input required type="number" min="0.01" step="0.01" value={item.price_per_liter} onChange={(event) => updateItem({ price_per_liter: event.target.value })} placeholder="Ex.: 5,89" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
+                            <CurrencyInput required min={0.01} value={item.price_per_liter} onChange={(price_per_liter) => updateItem({ price_per_liter })} placeholder="Ex.: 5,89" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
                           </label>
                           <label className="text-sm font-medium text-slate-700">Consumo médio (km/L)
                             <input required type="number" min="0.1" step="0.1" value={item.efficiency_km_per_liter} onChange={(event) => updateItem({ efficiency_km_per_liter: event.target.value })} placeholder="Ex.: 10,5" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
                           </label>
                           <p className="self-end rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-950 md:col-span-2">Custo estimado do combustível: <strong>{formatCurrency(calculatedFuel)}</strong></p>
                         </> : <label className="text-sm font-medium text-slate-700">Valor (R$)
-                          <input required type="number" min="0.01" step="0.01" value={item.amount} onChange={(event) => updateItem({ amount: event.target.value })} placeholder="Ex.: 35,00" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
+                          <CurrencyInput required min={0.01} value={item.amount} onChange={(amount) => updateItem({ amount })} placeholder="Ex.: 35,00" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
                         </label>}
                       </div>
                       <button type="button" onClick={() => setCustosInternos((current) => current.filter((row) => row.id !== item.id))} className="mt-3 text-sm font-medium text-red-700">Remover custo {index + 1}</button>

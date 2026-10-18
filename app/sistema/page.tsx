@@ -482,6 +482,14 @@ export default function SistemaPage() {
     <span className="mt-4 inline-block text-xs font-medium text-slate-500">Em breve</span>
   </article>
 ))}
+  <Link
+    href="/sistema/suporte"
+    className="group rounded-xl border border-amber-200 bg-white p-6 shadow-sm transition duration-150 hover:-translate-y-1 hover:border-amber-400 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2"
+  >
+    <h3 className="text-lg font-semibold text-slate-900">Suporte VALLEX</h3>
+    <p className="mt-2 text-sm leading-6 text-slate-600">Peça ajuda com sua conta, plano ou qualquer ferramenta do ServiçoFácil.</p>
+    <span className="mt-5 inline-flex items-center gap-2 rounded-lg bg-purple-700 px-4 py-2 text-sm font-semibold text-white transition group-hover:bg-purple-800">Abrir suporte <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">→</span></span>
+  </Link>
 {role === "owner" && (
   <Link
     href="/sistema/vitrine"

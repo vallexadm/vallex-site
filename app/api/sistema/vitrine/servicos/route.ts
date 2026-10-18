@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { normalizeMemberPermissions, ownerPermissions } from "@/lib/team-permissions";
+import { getPlanEntitlements } from "@/lib/server/plan-entitlements";
 
 export const runtime = "nodejs";
 
@@ -255,6 +256,9 @@ export async function GET(request: Request) {
 
   if (!auth.permissions.services.view) return NextResponse.json({ ok: false, message: "O proprietário ainda não liberou a consulta do catálogo de serviços para sua conta." }, { status: 403 });
 
+  const planResult = await getPlanEntitlements(auth.supabaseAdmin, auth.organization.id);
+  if (!planResult.entitlements) return NextResponse.json({ ok: false, message: planResult.error }, { status: 503 });
+
   const { data, error } = await auth.supabaseAdmin
     .from("vitrine_services")
     .select(
@@ -278,6 +282,11 @@ export async function GET(request: Request) {
     ok: true,
     permissions: auth.permissions,
     services: data ?? [],
+    plan: {
+      code: planResult.entitlements.code,
+      maxServices: planResult.entitlements.maxServices,
+      publishedServiceCount: (data ?? []).filter((service) => service.is_published).length,
+    },
   });
 }
 
@@ -289,6 +298,9 @@ export async function POST(request: Request) {
   }
 
   if (!auth.permissions.services.manage) return NextResponse.json({ ok: false, message: "O proprietário ainda não liberou alterações no catálogo de serviços para sua conta." }, { status: 403 });
+
+  const planResult = await getPlanEntitlements(auth.supabaseAdmin, auth.organization.id);
+  if (!planResult.entitlements) return NextResponse.json({ ok: false, message: planResult.error }, { status: 503 });
 
   let body: unknown;
 
@@ -432,6 +444,19 @@ export async function POST(request: Request) {
     }
   }
 
+  if (isPublished && planResult.entitlements.maxServices !== null) {
+    const { count, error: countError } = await auth.supabaseAdmin
+      .from("vitrine_services")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", auth.organization.id)
+      .eq("is_published", true);
+
+    if (countError) return NextResponse.json({ ok: false, message: "Não foi possível verificar o limite de serviços do plano." }, { status: 500 });
+    if ((count ?? 0) >= planResult.entitlements.maxServices) {
+      return NextResponse.json({ ok: false, code: "SERVICE_LIMIT_REACHED", message: `Seu plano permite manter até ${planResult.entitlements.maxServices} serviço(s) ativo(s) na Vitrine. Oculte um serviço ou consulte os planos para ampliar o limite.` }, { status: 409 });
+    }
+  }
+
   const { data, error } = await auth.supabaseAdmin
     .from("vitrine_services")
     .insert({
@@ -476,6 +501,9 @@ export async function PATCH(request: Request) {
   }
 
   if (!auth.permissions.services.manage) return NextResponse.json({ ok: false, message: "O proprietário ainda não liberou alterações no catálogo de serviços para sua conta." }, { status: 403 });
+
+  const planResult = await getPlanEntitlements(auth.supabaseAdmin, auth.organization.id);
+  if (!planResult.entitlements) return NextResponse.json({ ok: false, message: planResult.error }, { status: 503 });
 
   let body: unknown;
 
@@ -692,6 +720,19 @@ export async function PATCH(request: Request) {
       },
       { status: 400 }
     );
+  }
+
+  if (updates.is_published === true && !existingService.is_published && planResult.entitlements.maxServices !== null) {
+    const { count, error: countError } = await auth.supabaseAdmin
+      .from("vitrine_services")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", auth.organization.id)
+      .eq("is_published", true);
+
+    if (countError) return NextResponse.json({ ok: false, message: "Não foi possível verificar o limite de serviços do plano." }, { status: 500 });
+    if ((count ?? 0) >= planResult.entitlements.maxServices) {
+      return NextResponse.json({ ok: false, code: "SERVICE_LIMIT_REACHED", message: `Seu plano permite manter até ${planResult.entitlements.maxServices} serviço(s) ativo(s) na Vitrine. Oculte um serviço ou consulte os planos para ampliar o limite.` }, { status: 409 });
+    }
   }
 
   const { data, error } = await auth.supabaseAdmin

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseCurrencyInput } from "@/lib/currency";
 import { createClient } from "@supabase/supabase-js";
 import { normalizeQuoteInternalCosts } from "@/lib/orcamento-custos";
 import { normalizeMemberPermissions, ownerPermissions } from "@/lib/team-permissions";
@@ -300,9 +301,7 @@ export async function POST(request: Request) {
         ? data.validade_ate.trim()
         : null;
 
-    const valorServico = typeof data.valor_servico === "number"
-      ? data.valor_servico
-      : typeof data.valor === "number" ? data.valor : Number(data.valor);
+    const valorServico = parseCurrencyInput((data.valor_servico ?? data.valor) as string | number);
     const normalizedCosts = normalizeQuoteInternalCosts(data.custos_internos ?? []);
 
     if (!customerId || !titulo) {
@@ -511,9 +510,7 @@ export async function PATCH(request: Request) {
         : null;
 
     const hasInternalCostFields = Object.prototype.hasOwnProperty.call(data, "valor_servico") || Object.prototype.hasOwnProperty.call(data, "custos_internos");
-    const valorServicoInput = typeof data.valor_servico === "number"
-      ? data.valor_servico
-      : typeof data.valor === "number" ? data.valor : Number(data.valor);
+    const valorServicoInput = parseCurrencyInput((data.valor_servico ?? data.valor) as string | number);
 
     const allowedStatuses = [
       "rascunho",

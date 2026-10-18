@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getPlanEntitlements } from "@/lib/server/plan-entitlements";
 
 export const runtime = "nodejs";
 
@@ -96,6 +97,12 @@ export async function GET(
     );
   }
 
+  const planResult = await getPlanEntitlements(supabaseAdmin, profile.organization_id);
+  if (!planResult.entitlements) return NextResponse.json({ ok: false, message: planResult.error }, { status: 503 });
+  const visibleServices = planResult.entitlements.maxServices === null
+    ? services ?? []
+    : (services ?? []).slice(0, planResult.entitlements.maxServices);
+
   return NextResponse.json({
     ok: true,
     profile: {
@@ -112,6 +119,6 @@ export async function GET(
       logo_url: profile.logo_url,
       is_published: profile.is_published,
     },
-    services: services ?? [],
+    services: visibleServices,
   });
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseCurrencyInput } from "@/lib/currency";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import { normalizeMemberPermissions, ownerPermissions } from "@/lib/team-permissions";
@@ -77,10 +78,32 @@ export async function GET(request: Request) {
     const { admin, organization, permissions } = context;
     if (!permissions.finance.view) return fail("O proprietário ainda não liberou a consulta do Financeiro para sua conta.", 403);
     const params = new URL(request.url).searchParams;
+    if (params.get("audit") === "all") {
+      const fromDate = params.get("from") ?? "";
+      const toDate = params.get("to") ?? "";
+      if (!validDate(fromDate) || !validDate(toDate) || fromDate > toDate) return fail("Informe um período válido para o histórico.", 400);
+      const nextDay = new Date(`${toDate}T00:00:00.000Z`);
+      nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+      const fromTimestamp = new Date(`${fromDate}T00:00:00-03:00`).toISOString();
+      const toTimestamp = new Date(`${nextDay.toISOString().slice(0, 10)}T00:00:00-03:00`).toISOString();
+      const { data: auditEvents, error } = await admin.from("organization_finance_audit_logs")
+        .select("id, service_record_id, actor_user_id, actor_email, action, details, created_at")
+        .eq("organization_id", organization.id)
+        .gte("created_at", fromTimestamp)
+        .lt("created_at", toTimestamp)
+        .order("created_at", { ascending: false })
+        .limit(5000);
+      if (error) {
+        console.error("Erro ao consultar histórico do financeiro:", error);
+        return fail("Não foi possível carregar o histórico. Aplique a atualização financeiro_edicao_historico.sql no Supabase.", 500);
+      }
+      return NextResponse.json({ ok: true, permissions, audit_events: auditEvents ?? [] });
+    }
     if (params.get("receivables") === "all") {
       const { data: outstandingServices, error } = await admin.from("organization_service_records")
-        .select("id, customer_id, service_name, service_date, source, amount_charged, amount_received, direct_cost, installments_total, notes, created_at, customers(id, name), payments:organization_service_payments(id, installment_number, payment_method, payment_date, amount), scheduled_installments:organization_service_installments(id, installment_number, due_date, amount), cost_items:organization_service_cost_items(id, category, description, amount)")
+        .select("id, charge_code, customer_id, service_name, service_date, source, amount_charged, amount_received, direct_cost, installments_total, notes, created_at, customers(id, name), payments:organization_service_payments(id, installment_number, payment_method, payment_date, amount), scheduled_installments:organization_service_installments(id, installment_number, due_date, amount), cost_items:organization_service_cost_items(id, category, description, amount)")
         .eq("organization_id", organization.id)
+        .is("deleted_at", null)
         .order("service_date", { ascending: false })
         .limit(5000);
       if (error) {
@@ -93,8 +116,9 @@ export async function GET(request: Request) {
     if (params.get("cashflow") === "all") {
       const [servicesResult, expensesResult] = await Promise.all([
         admin.from("organization_service_records")
-          .select("id, customer_id, service_name, service_date, amount_charged, amount_received, installments_total, customers(id, name), payments:organization_service_payments(id, installment_number, amount), scheduled_installments:organization_service_installments(id, installment_number, due_date, amount)")
+          .select("id, charge_code, customer_id, service_name, service_date, amount_charged, amount_received, installments_total, customers(id, name), payments:organization_service_payments(id, installment_number, amount), scheduled_installments:organization_service_installments(id, installment_number, due_date, amount)")
           .eq("organization_id", organization.id)
+          .is("deleted_at", null)
           .order("service_date", { ascending: false })
           .limit(5000),
         admin.from("organization_business_expenses")
@@ -124,8 +148,9 @@ export async function GET(request: Request) {
 
     const [servicesResult, paidExpensesResult, pendingExpensesResult, customersResult, paymentsResult, indicatorsResult, providerProfileResult] = await Promise.all([
       admin.from("organization_service_records")
-        .select("id, customer_id, service_name, service_date, source, amount_charged, amount_received, direct_cost, installments_total, notes, created_at, customers(id, name), payments:organization_service_payments(id, installment_number, payment_method, payment_date, amount), scheduled_installments:organization_service_installments(id, installment_number, due_date, amount), cost_items:organization_service_cost_items(id, category, description, amount)")
+        .select("id, charge_code, customer_id, service_name, service_date, source, amount_charged, amount_received, direct_cost, installments_total, notes, created_at, customers(id, name), payments:organization_service_payments(id, installment_number, payment_method, payment_date, amount), scheduled_installments:organization_service_installments(id, installment_number, due_date, amount), cost_items:organization_service_cost_items(id, category, description, amount)")
         .eq("organization_id", organization.id)
+        .is("deleted_at", null)
         .gte("service_date", fromDate)
         .lte("service_date", toDate)
         .order("service_date", { ascending: false })
@@ -199,11 +224,77 @@ export async function PATCH(request: Request) {
   try {
     const context = await getFinanceContext(request);
     if ("error" in context) return context.error;
-    const { admin, organization, permissions } = context;
+    const { admin, user, organization, permissions } = context;
     if (!permissions.finance.manage) return fail("O proprietário ainda não liberou alterações no Financeiro para sua conta.", 403);
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") return fail("Dados da conta inválidos.", 400);
     const data = body as Record<string, unknown>;
+    if (data.type === "service_record") {
+      const serviceRecordId = typeof data.service_record_id === "string" ? data.service_record_id.trim() : "";
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(serviceRecordId)) return fail("Cobrança inválida.", 400);
+      if (data.action === "delete") {
+        const { error } = await admin.rpc("soft_delete_organization_service_record", {
+          p_organization_id: organization.id,
+          p_service_record_id: serviceRecordId,
+          p_actor_user_id: user.id,
+        });
+        if (error) {
+          const message = error.message.includes("SERVICE_HAS_RECEIPTS")
+            ? "Esta cobrança já tem recebimentos registrados e não pode ser excluída."
+            : error.message.includes("SERVICE_NOT_FOUND")
+              ? "Cobrança não encontrada."
+              : "Não foi possível excluir a cobrança. Confira a atualização SQL do financeiro.";
+          return fail(message, error.message.includes("SERVICE_NOT_FOUND") ? 404 : error.message.includes("SERVICE_HAS_RECEIPTS") ? 409 : 500);
+        }
+        return NextResponse.json({ ok: true, message: "Cobrança excluída do financeiro. O histórico foi preservado." });
+      }
+      if (data.action !== "update") return fail("Operação da cobrança inválida.", 400);
+      const customerId = typeof data.customer_id === "string" ? data.customer_id.trim() : "";
+      const serviceName = typeof data.service_name === "string" ? data.service_name.trim() : "";
+      const serviceDate = data.service_date;
+      const source = typeof data.source === "string" ? data.source : "";
+      const amountCharged = parseCurrencyInput(data.amount_charged as string | number);
+      const notes = typeof data.notes === "string" ? data.notes.trim() : "";
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(customerId)) return fail("Selecione um cliente válido.", 400);
+      if (serviceName.length < 2 || serviceName.length > 200 || !validDate(serviceDate) || !(sources as readonly string[]).includes(source)) return fail("Confira o serviço, a data e a origem.", 400);
+      if (!Number.isFinite(amountCharged) || amountCharged <= 0 || notes.length > 2000) return fail("Confira o valor cobrado e as observações.", 400);
+      if (!Array.isArray(data.scheduled_installments) || data.scheduled_installments.some((item) => !item || typeof item !== "object" || Array.isArray(item))) return fail("A lista de parcelas está inválida.", 400);
+      const scheduledInstallments = (data.scheduled_installments as Array<Record<string, unknown>>).map((item, index) => ({
+        installment_number: Number(item.installment_number ?? index + 1),
+        due_date: item.due_date,
+        amount: parseCurrencyInput(item.amount as string | number),
+      }));
+      if (scheduledInstallments.length > 24 || scheduledInstallments.some((item) => !Number.isInteger(item.installment_number) || !validDate(item.due_date) || !Number.isFinite(item.amount) || item.amount <= 0)) return fail("Confira os valores e vencimentos das parcelas.", 400);
+      const { error } = await admin.rpc("update_organization_service_record", {
+        p_organization_id: organization.id,
+        p_service_record_id: serviceRecordId,
+        p_customer_id: customerId,
+        p_service_name: serviceName,
+        p_service_date: serviceDate,
+        p_source: source,
+        p_amount_charged: amountCharged,
+        p_notes: notes || null,
+        p_scheduled_installments: scheduledInstallments,
+        p_actor_user_id: user.id,
+      });
+      if (error) {
+        console.error("Erro ao editar cobrança do financeiro:", error);
+        const message = error.message.includes("CHARGE_BELOW_RECEIVED")
+          ? "O valor cobrado não pode ficar abaixo do total já recebido."
+          : error.message.includes("INVALID_INSTALLMENTS")
+            ? "As parcelas devem caber no saldo e não podem ficar abaixo do que já foi recebido."
+            : error.message.includes("INSTALLMENT_COUNT_CHANGE_NOT_SUPPORTED")
+              ? "A quantidade de parcelas com recebimentos registrados não pode ser alterada."
+              : error.message.includes("CUSTOMER_NOT_FOUND")
+                ? "O cliente selecionado não pertence a esta organização."
+                : error.message.includes("SERVICE_NOT_FOUND")
+                  ? "Cobrança não encontrada."
+                  : "Não foi possível editar a cobrança. Confira a atualização SQL do financeiro.";
+        const status = error.message.includes("SERVICE_NOT_FOUND") ? 404 : error.message.includes("CHARGE_BELOW_RECEIVED") || error.message.includes("INVALID_INSTALLMENTS") || error.message.includes("INSTALLMENT_COUNT_CHANGE_NOT_SUPPORTED") ? 400 : 500;
+        return fail(message, status);
+      }
+      return NextResponse.json({ ok: true, message: "Cobrança atualizada." });
+    }
     const expenseId = typeof data.expense_id === "string" ? data.expense_id.trim() : "";
     const paymentStatus = data.payment_status;
     const paidDate = data.paid_date;
@@ -247,8 +338,8 @@ export async function POST(request: Request) {
       const customerId = typeof data.customer_id === "string" ? data.customer_id.trim() : "";
       const serviceName = typeof data.service_name === "string" ? data.service_name.trim() : "";
       const source = typeof data.source === "string" ? data.source : "";
-      const amountCharged = Number(data.amount_charged);
-      const amountReceived = Number(data.amount_received);
+      const amountCharged = parseCurrencyInput(data.amount_charged as string | number);
+      const amountReceived = parseCurrencyInput(data.amount_received as string | number);
       if (data.scheduled_installments !== undefined && (!Array.isArray(data.scheduled_installments) || data.scheduled_installments.some((item) => !item || typeof item !== "object" || Array.isArray(item)))) {
         return fail("A lista de parcelas ou custos está inválida.", 400);
       }
@@ -261,11 +352,11 @@ export async function POST(request: Request) {
       const initialPaymentMethod = typeof data.payment_method === "string" ? data.payment_method : "";
       const initialPaymentDate = data.initial_payment_date;
       const notes = typeof data.notes === "string" ? data.notes.trim() : "";
-      const normalizedInstallments = scheduledInstallments.map((item) => ({ amount: Number(item.amount), due_date: item.due_date }));
+      const normalizedInstallments = scheduledInstallments.map((item) => ({ amount: parseCurrencyInput(item.amount as string | number), due_date: item.due_date }));
       const normalizedCostItems = costItems.map((item) => ({
         category: typeof item.category === "string" ? item.category : "",
         description: typeof item.description === "string" ? item.description.trim() : "",
-        amount: Number(item.amount),
+        amount: parseCurrencyInput(item.amount as string | number),
       }));
       const directCost = normalizedCostItems.reduce((total, item) => total + item.amount, 0);
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(customerId)) return fail("Selecione um cliente cadastrado.", 400);
@@ -367,7 +458,7 @@ export async function POST(request: Request) {
       const installmentNumber = Number(data.installment_number);
       const installmentsTotal = Number(data.installments_total);
       const paymentMethod = typeof data.payment_method === "string" ? data.payment_method : "";
-      const amount = Number(data.amount);
+      const amount = parseCurrencyInput(data.amount as string | number);
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(serviceRecordId)) return fail("Serviço inválido.", 400);
       if (!Number.isInteger(installmentNumber) || !Number.isInteger(installmentsTotal) || installmentNumber < 1 || installmentNumber > installmentsTotal || installmentsTotal > 24) return fail("Informe uma parcela válida (de 1 a 24).", 400);
       if (!(paymentMethods as readonly string[]).includes(paymentMethod)) return fail("Selecione um meio de pagamento válido.", 400);
@@ -399,7 +490,7 @@ export async function POST(request: Request) {
     if (recordType === "expense") {
       const description = typeof data.description === "string" ? data.description.trim() : "";
       const category = typeof data.category === "string" ? data.category.trim() : "";
-      const amount = Number(data.amount);
+      const amount = parseCurrencyInput(data.amount as string | number);
       const paymentStatus = typeof data.payment_status === "string" ? data.payment_status : "";
       const expenseType = data.expense_type === "fixa_mensal" ? "fixa_mensal" : "avulsa";
       const classifications = ["despesa_fixa", "despesa_variavel", "operacional", "pessoal", "comercial_marketing", "nao_operacional", "financeira"] as const;
