@@ -394,6 +394,7 @@ CREATE TABLE IF NOT EXISTS "public"."asaas_checkout_sessions" (
     "plan_id" "uuid" NOT NULL,
     "created_by" "uuid" NOT NULL,
     "external_reference" "text" NOT NULL,
+    "billing_type" "text" DEFAULT 'CREDIT_CARD'::"text" NOT NULL,
     "asaas_checkout_id" "text",
     "checkout_url" "text",
     "asaas_customer_id" "text",
@@ -401,6 +402,7 @@ CREATE TABLE IF NOT EXISTS "public"."asaas_checkout_sessions" (
     "status" "text" DEFAULT 'pending'::"text" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "asaas_checkout_sessions_billing_type_check" CHECK (("billing_type" = ANY (ARRAY['CREDIT_CARD'::"text", 'PIX'::"text", 'BOLETO'::"text"]))),
     CONSTRAINT "asaas_checkout_sessions_status_check" CHECK (("status" = ANY (ARRAY['pending'::"text", 'paid'::"text", 'canceled'::"text", 'expired'::"text", 'failed'::"text"])))
 );
 

@@ -90,6 +90,14 @@ export default function PrivacidadePage() {
                   próprio.
                 </li>
                 <li>
+                  <strong>CPF ou CNPJ para pagamento por Pix ou boleto:</strong>{" "}
+                  quando você escolhe uma dessas formas de pagamento, pedimos o
+                  documento do responsável pelo pagamento para identificá-lo no
+                  cadastro de cobrança e viabilizar a emissão das cobranças do
+                  plano. Esse dado não é solicitado nesse formulário quando a
+                  opção escolhida é cartão de crédito.
+                </li>
+                <li>
                   <strong>Registros técnicos:</strong> dados de autenticação,
                   sessão, data e hora de acesso e informações técnicas
                   necessárias para funcionamento, segurança e prevenção a
@@ -114,6 +122,7 @@ export default function PrivacidadePage() {
               <ul>
                 <li><strong>Responder contatos e encaminhar solicitações:</strong> procedimentos preliminares relacionados a contrato, solicitados pelo titular (LGPD, art. 7º, V).</li>
                 <li><strong>Criar e administrar conta, fornecer recursos e cobrar assinatura:</strong> execução de contrato ou de procedimentos preliminares (art. 7º, V).</li>
+                <li><strong>Identificar o responsável e emitir cobranças por Pix ou boleto:</strong> execução do contrato ou de procedimentos preliminares solicitados pelo titular (art. 7º, V). O documento é pedido apenas quando uma dessas formas de pagamento é escolhida.</li>
                 <li><strong>Manter registros fiscais, contábeis e de acesso exigidos:</strong> cumprimento de obrigação legal ou regulatória (art. 7º, II).</li>
                 <li><strong>Proteger contas, prevenir fraude e manter a segurança:</strong> legítimo interesse, após avaliação de necessidade e direitos dos titulares (art. 7º, IX), ou outra base aplicável ao caso.</li>
                 <li><strong>Enviar comunicações promocionais não essenciais:</strong> consentimento quando exigido; você pode retirar o consentimento pelo canal indicado na mensagem ou pelo contato da VALLEX.</li>
@@ -133,6 +142,12 @@ export default function PrivacidadePage() {
                 países; quando houver transferência internacional, ela seguirá
                 os mecanismos previstos na LGPD e na regulamentação da ANPD.
                 Não vendemos dados pessoais.
+              </p>
+              <p>
+                Se você escolher Pix ou boleto para pagar um plano, o CPF ou
+                CNPJ informado será enviado ao Asaas para identificar o
+                responsável pelo pagamento, cadastrar o pagador e processar as
+                cobranças.
               </p>
               <p>
                 Para exibir informações locais, a hospedagem Netlify fornece
@@ -176,6 +191,12 @@ export default function PrivacidadePage() {
                 restaurado. Para pedir o encerramento da conta ou exclusão de
                 dados, entre em contato pelo canal abaixo; a VALLEX explicará
                 quais informações precisam permanecer e por quê.
+              </p>
+              <p>
+                No fluxo atual de contratação, o CPF ou CNPJ informado para Pix
+                ou boleto é transmitido ao Asaas e não é gravado no banco de
+                dados da VALLEX. O Asaas trata e conserva os dados conforme sua
+                própria política de privacidade e as obrigações aplicáveis.
               </p>
             </section>
 
