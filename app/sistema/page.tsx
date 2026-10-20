@@ -225,8 +225,8 @@ export default function SistemaPage() {
     return (
       <main className="min-h-screen bg-slate-100">
         <header className="bg-[#17002E] px-4 py-4 text-white sm:px-6 sm:py-5">
-          <div className="mx-auto flex max-w-3xl flex-col items-center justify-between gap-3 text-center sm:flex-row sm:text-left">
-            <div className="flex items-center justify-center gap-3">
+          <div className="mx-auto grid max-w-3xl grid-cols-1 items-center gap-3 text-center lg:grid-cols-[1fr_auto_1fr] lg:text-left">
+            <div className="flex items-center justify-center gap-3 lg:justify-self-start">
               <Image
                 src="/vallex-logo.png"
                 alt="VALLEX"
@@ -237,9 +237,9 @@ export default function SistemaPage() {
               />
               <h1 className="text-lg font-bold text-purple-200 sm:text-xl">ServiçoFácil</h1>
             </div>
-            <div className="flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto sm:gap-3">
+            {isVallexAdmin && <Link href="/admin" className="justify-self-center rounded-lg border border-purple-300 px-4 py-2 text-center text-sm hover:bg-purple-900">Admin VALLEX</Link>}
+            <div className="flex w-full flex-wrap items-center justify-center gap-2 lg:w-auto lg:justify-self-end lg:gap-3">
               <LocalClock variant="dark" />
-              {isVallexAdmin && <Link href="/admin" className="rounded-lg border border-purple-300 px-4 py-2 text-center text-sm hover:bg-purple-900">Admin VALLEX</Link>}
               <button
                 onClick={handleLogout}
                 className="rounded-lg border border-purple-300 px-4 py-2 text-center text-sm hover:bg-purple-900"
@@ -330,8 +330,8 @@ export default function SistemaPage() {
   return (
     <main className="min-h-screen bg-slate-100">
       <header className="bg-[#17002E] px-4 py-4 text-white sm:px-6 sm:py-5">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 text-center sm:flex-row sm:text-left">
-          <div className="flex items-center justify-center gap-3">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-3 text-center lg:grid-cols-[1fr_auto_1fr] lg:text-left">
+          <div className="flex items-center justify-center gap-3 lg:justify-self-start">
             <Image
               src="/vallex-logo.png"
               alt="VALLEX"
@@ -343,9 +343,9 @@ export default function SistemaPage() {
             <h1 className="text-lg font-bold text-purple-200 sm:text-xl">ServiçoFácil</h1>
           </div>
 
-          <div className="flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto sm:gap-3">
+          {isVallexAdmin && <Link href="/admin" className="justify-self-center rounded-lg border border-purple-300 px-4 py-2 text-center text-sm hover:bg-purple-900">Admin VALLEX</Link>}
+          <div className="flex w-full flex-wrap items-center justify-center gap-2 lg:w-auto lg:justify-self-end lg:gap-3">
             <LocalClock variant="dark" />
-            {isVallexAdmin && <Link href="/admin" className="rounded-lg border border-purple-300 px-4 py-2 text-center text-sm hover:bg-purple-900">Admin VALLEX</Link>}
             <button
               onClick={handleLogout}
               className="rounded-lg border border-purple-300 px-4 py-2 text-center text-sm hover:bg-purple-900"
@@ -545,4 +545,5 @@ href="/sistema/planos"
     </main>
   );
 }
+
 
