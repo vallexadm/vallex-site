@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { currencyValueInWords, formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
 
 type CurrencyInputProps = {
@@ -18,11 +18,16 @@ type CurrencyInputProps = {
 };
 
 export default function CurrencyInput({ value, onChange, className, placeholder = "0,00", min, max, required, readOnly, disabled, id, name }: CurrencyInputProps) {
-  const [display, setDisplay] = useState(String(value ?? ""));
+  const valueText = String(value ?? "");
+  const [display, setDisplay] = useState(valueText);
+  const [previousValue, setPreviousValue] = useState(valueText);
   const parsed = parseCurrencyInput(display);
   const words = currencyValueInWords(display);
 
-  useEffect(() => setDisplay(String(value ?? "")), [value]);
+  if (valueText !== previousValue) {
+    setPreviousValue(valueText);
+    setDisplay(valueText);
+  }
 
   function speakValue() {
     if (!words || typeof window === "undefined" || !("speechSynthesis" in window)) return;
