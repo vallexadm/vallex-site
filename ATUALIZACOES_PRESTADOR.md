@@ -161,3 +161,9 @@ Fechamento da validação do teste Basic: build de produção aprovado; lint sem
 
 ## 21/10/2026 — padrão de confirmação aprovado pelo usuário
 - Usuário aprovou retorno local abaixo dos botões da Vitrine e pediu preservar o padrão para salvar/enviar/excluir e demais ações internas. Registrado em AGENTS.md para próximas implementações e revisões. Outros módulos ainda precisam de adequação individual; não considerados concluídos por este registro.
+
+
+## 21/10/2026 — causa do bloqueio Netlify localizada no log
+- Captura do usuário aponta ASAAS_WEBHOOK_TOKEN_SHA256 no cache binário .netlify/.next/cache/turbopack/...sst, não em linha de fonte versionada.
+- npm run build passa a usar Next.js --webpack. prebuild remove apenas caches Turbopack gerados em .next e .netlify/.next, verificando contenção no diretório do projeto.
+- Scanner permanece ativo; nenhum segredo ou escopo foi alterado. Sem isenção de chave/caminho. Banco e alterações paralelas de SQL preservados.
