@@ -167,3 +167,9 @@ Fechamento da validação do teste Basic: build de produção aprovado; lint sem
 - Captura do usuário aponta ASAAS_WEBHOOK_TOKEN_SHA256 no cache binário .netlify/.next/cache/turbopack/...sst, não em linha de fonte versionada.
 - npm run build passa a usar Next.js --webpack. prebuild remove apenas caches Turbopack gerados em .next e .netlify/.next, verificando contenção no diretório do projeto.
 - Scanner permanece ativo; nenhum segredo ou escopo foi alterado. Sem isenção de chave/caminho. Banco e alterações paralelas de SQL preservados.
+
+
+## 21/10/2026 — endereço do convite no preview Netlify
+- Screenshot confirmou convite criado, mas envio não solicitado por falta de NEXT_PUBLIC_SITE_URL.
+- Next config incorpora exclusivamente a URL pública do build: DEPLOY_PRIME_URL para preview/branch; URL explícita preservada em produção/local. Nenhuma chave é incorporada.
+- Supabase ainda precisa autorizar https://deploy-preview-3--vallex.netlify.app/sistema/convites/aceitar** no projeto usado pelo preview. Convites existentes podem ser reenviados sem recadastrar colaborador.
