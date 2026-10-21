@@ -1,12 +1,13 @@
+import { createHash, randomBytes } from "node:crypto";
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import path from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 
-const localTestToken = "vallex-local-webhook-test-token-not-real-2026";
-const localTestTokenHash =
-  "e1c102b84aa06f92c6436bc74c3c71f437f8d4f968a737f2622150a19de2ba7e";
+// Credencial efêmera exclusiva desta execução; nunca reutiliza configuração real.
+const localTestToken = `vallex-test-${randomBytes(32).toString("hex")}`;
+const localTestTokenHash = createHash("sha256").update(localTestToken).digest("hex");
 
 registerHooks({
   resolve(specifier, context, nextResolve) {

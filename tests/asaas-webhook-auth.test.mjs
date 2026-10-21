@@ -1,10 +1,11 @@
+import { createHash, randomBytes } from "node:crypto";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { matchesAsaasWebhookToken } from "../lib/server/asaas-webhook-auth.ts";
 
-const localTestToken = "vallex-local-webhook-test-token-not-real-2026";
-const localTestTokenHash =
-  "e1c102b84aa06f92c6436bc74c3c71f437f8d4f968a737f2622150a19de2ba7e";
+// Credencial efêmera exclusiva desta execução; nunca reutiliza configuração real.
+const localTestToken = `vallex-test-${randomBytes(32).toString("hex")}`;
+const localTestTokenHash = createHash("sha256").update(localTestToken).digest("hex");
 
 test("accepts the local fixture when its SHA-256 hash matches", () => {
   assert.equal(
