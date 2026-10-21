@@ -173,3 +173,9 @@ Fechamento da validação do teste Basic: build de produção aprovado; lint sem
 - Screenshot confirmou convite criado, mas envio não solicitado por falta de NEXT_PUBLIC_SITE_URL.
 - Next config incorpora exclusivamente a URL pública do build: DEPLOY_PRIME_URL para preview/branch; URL explícita preservada em produção/local. Nenhuma chave é incorporada.
 - Supabase ainda precisa autorizar https://deploy-preview-3--vallex.netlify.app/sistema/convites/aceitar** no projeto usado pelo preview. Convites existentes podem ser reenviados sem recadastrar colaborador.
+
+
+## 21/10/2026 — continuar acesso após criar conta de colaborador
+- Após cadastro sem sessão, esconde formulário já enviado e apresenta Já confirmei meu e-mail — continuar junto à confirmação.
+- Sem sessão, segue ao login preservando convite no next. Com sessão do destinatário, conclui aceite; conta diferente é recusada. Confirmação do cadastro retorna à URL do convite.
+- Após aceite, botão Acessar painel do colaborador mantém a revalidação de identidade, organização e papel member. Não há liberação antes do aceite.
