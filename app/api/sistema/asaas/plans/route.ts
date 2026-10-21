@@ -1,3 +1,4 @@
+import { isProviderTrialExpired } from "@/lib/provider-trial";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isAsaasPeriodExpired } from "@/lib/server/asaas-billing-dates";
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
   const trialExpired =
     subscription?.status === "trialing" &&
     (!subscription.current_period_end ||
-      isAsaasPeriodExpired(subscription.current_period_end));
+      isProviderTrialExpired(subscription.current_period_end));
   if (trialExpired) {
     const { data: freePlan, error: freePlanError } = await admin
       .from("plans")

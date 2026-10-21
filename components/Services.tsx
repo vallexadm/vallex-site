@@ -450,6 +450,15 @@ export default function Services({
                     <Link className="button button-primary provider-open-button" href={`/prestador/${encodeURIComponent(provider.slug)}`}>
                       Ver Vitrine e solicitar orçamento
                     </Link>
+                  ) : process.env.NODE_ENV === "production" && provider.is_preview ? (
+                    <div className="provider-preview-forms">
+                      <span className="button button-primary provider-open-button" aria-disabled="true">
+                        Ver Vitrine e solicitar orçamento
+                      </span>
+                      <p className="provider-private-hint">
+                        Prévia visual. Os pedidos serão liberados após publicar a Vitrine.
+                      </p>
+                    </div>
                   ) : (
                     <>
                       <p className="provider-private-hint">

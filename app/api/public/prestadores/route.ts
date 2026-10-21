@@ -31,13 +31,6 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const previewRequested = url.searchParams.get("previsualizar") === "1";
 
-  // A prévia de registros não publicados existe apenas no desenvolvimento local.
-  if (previewRequested && process.env.NODE_ENV === "production") {
-    return NextResponse.json(
-      { ok: false, message: "Prévia disponível somente em desenvolvimento." },
-      { status: 404 }
-    );
-  }
 
   const supabaseAdmin = createClient(supabaseUrl, supabaseSecretKey, {
     auth: { autoRefreshToken: false, persistSession: false },

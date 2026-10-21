@@ -1,3 +1,4 @@
+import { hasMemberAffiliation } from "@/lib/server/member-affiliation";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { SUPPORT_TOOLS } from "@/lib/support-tools";
@@ -88,13 +89,13 @@ export async function POST(request: Request) {
       .eq("owner_id", user.id)
       .maybeSingle();
     if (ownerError) return fail("Não foi possível consultar o negócio conectado.", 500);
-    organization = owned;
+    organization = await hasMemberAffiliation(admin, user.id) ? null : owned;
 
     if (!organization) {
       const { data: memberships, error: membershipError } = await admin
         .from("organization_members")
         .select("organization_id")
-        .eq("user_id", user.id);
+        .eq("is_active", true).eq("user_id", user.id);
       if (membershipError) return fail("Não foi possível consultar seu vínculo com o negócio.", 500);
       if (!memberships?.length) return fail("Sua conta ainda não está vinculada a um negócio VALLEX.", 403);
       if (memberships.length > 1) return fail("Sua conta está vinculada a mais de um negócio. Entre em contato com a VALLEX.", 409);

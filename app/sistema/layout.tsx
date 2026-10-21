@@ -12,7 +12,7 @@ const pathsWithoutPanel = new Set([
 
 type AccessState = {
   path: string;
-  status: "allowed" | "error";
+  status: "allowed" | "error" | "blocked";
 };
 
 export default function SistemaLayout({
@@ -52,6 +52,11 @@ export default function SistemaLayout({
           } else {
             router.replace("/sistema");
           }
+          return;
+        }
+
+        if (response.status === 403 && result.code === "MEMBER_DISABLED") {
+          if (!cancelled) setAccess({ path: pathname, status: "blocked" });
           return;
         }
 
@@ -107,6 +112,18 @@ export default function SistemaLayout({
         Verificando acesso ao painel…
       </main>
     );
+  }
+
+  if (access.status === "blocked") {
+    return <ProviderLogoutBar>
+      <main className="flex min-h-screen items-center justify-center bg-slate-100 px-6 text-slate-700">
+        <section role="alert" className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <h1 className="text-xl font-semibold">Acesso de colaborador desativado</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-600">O proprietário suspendeu seu acesso à equipe. Entre em contato com ele para solicitar a reativação.</p>
+          <button type="button" onClick={() => window.location.reload()} className="mt-6 rounded-lg bg-purple-700 px-4 py-2.5 text-sm font-semibold text-white">Verificar acesso novamente</button>
+        </section>
+      </main>
+    </ProviderLogoutBar>;
   }
 
   if (access.status === "error") {

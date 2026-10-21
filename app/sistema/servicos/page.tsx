@@ -1,5 +1,7 @@
 "use client";
 
+import ActionNotice from "@/components/ActionNotice";
+
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -153,7 +155,7 @@ export default function ServicosPage() {
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900">
-      <header className="bg-[#210039] text-white"><div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5"><SystemBrand /><Link href="/sistema" className="rounded-lg border border-purple-300 px-4 py-2 text-sm font-semibold hover:bg-purple-900">← Voltar ao painel</Link></div></header>
+      <header className="bg-[#210039] text-white"><div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5"><SystemBrand /><Link href="/sistema" className="rounded-lg border border-purple-300 px-4 py-2 text-sm font-semibold hover:bg-purple-800">← Voltar ao painel</Link></div></header>
       <div className="mx-auto max-w-6xl px-5 py-10">
         <p className="text-sm text-slate-500">Gestão do negócio</p><h1 className="mt-1 text-3xl font-bold">Serviços</h1><p className="mt-2 text-lg text-slate-600">Cadastre o catálogo, os valores e o que será exibido na Vitrine pública.</p>
         <aside className="mt-5 rounded-xl border border-violet-200 bg-violet-50 p-5 text-sm text-violet-950">
@@ -165,8 +167,8 @@ export default function ServicosPage() {
           </ol>
           <p className="mt-2">Em resumo: este é o catálogo de ofertas; o Financeiro registra os serviços efetivamente realizados.</p>
         </aside>
-        {error && <div role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{error}</div>}
-        {notice && <div role="status" className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-green-800">{notice}</div>}
+        {error && <ActionNotice message={error} error onClose={() => setError("")} />}
+        {notice && <ActionNotice message={notice} onClose={() => setNotice("")} />}
         {canManageServices && <form onSubmit={save} className="mt-7 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold">{editingId ? "Editar serviço" : "Adicionar serviço"}</h2>
           <p className="mt-1 text-sm text-slate-600">Deixe o preço em branco quando for necessário avaliar antes de orçar. {serviceLimit === null ? "Seu plano não possui limite de serviços publicados." : `Plano atual: ${publishedServiceCount} de ${serviceLimit} serviço(s) ativo(s) na Vitrine.`}</p>

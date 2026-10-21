@@ -122,6 +122,7 @@ DECLARE
   v_service public.organization_service_records%ROWTYPE;
   v_customer_name text;
   v_received numeric(12,2);
+  v_received_outside_schedule numeric(12,2);
   v_scheduled_count integer;
   v_new_count integer;
   v_new_scheduled_total numeric(12,2);
@@ -152,9 +153,18 @@ BEGIN
   WHERE id = p_customer_id AND organization_id = p_organization_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'CUSTOMER_NOT_FOUND'; END IF;
 
-  SELECT COALESCE(sum(amount), 0) INTO v_received
-  FROM public.organization_service_payments
-  WHERE service_record_id = p_service_record_id;
+  -- Parcelas guardam o valor integral, inclusive a parte ja recebida.
+  -- Somar novamente esses recebimentos duplicaria valores na validacao.
+  -- Entradas e recebimentos sem parcela correspondente continuam consumindo saldo.
+  SELECT COALESCE(sum(payment.amount), 0),
+         COALESCE(sum(payment.amount) FILTER (WHERE NOT EXISTS (
+           SELECT 1 FROM public.organization_service_installments installment
+           WHERE installment.service_record_id = payment.service_record_id
+             AND installment.installment_number = payment.installment_number
+         )), 0)
+  INTO v_received, v_received_outside_schedule
+  FROM public.organization_service_payments payment
+  WHERE payment.service_record_id = p_service_record_id;
   IF p_amount_charged < v_received THEN RAISE EXCEPTION 'CHARGE_BELOW_RECEIVED'; END IF;
 
   SELECT count(*) INTO v_scheduled_count
@@ -173,7 +183,7 @@ BEGIN
   INTO v_new_scheduled_total, v_invalid
   FROM jsonb_to_recordset(p_scheduled_installments)
     AS item(installment_number integer, amount numeric, due_date date);
-  IF v_invalid OR p_amount_charged < v_received + v_new_scheduled_total THEN
+  IF v_invalid OR p_amount_charged < v_received_outside_schedule + v_new_scheduled_total THEN
     RAISE EXCEPTION 'INVALID_INSTALLMENTS';
   END IF;
 

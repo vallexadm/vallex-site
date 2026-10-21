@@ -40,6 +40,7 @@ type AsaasEvent = {
     customer?: string | null;
     externalReference?: string | null;
     dueDate?: string | null;
+    status?: string;
   };
 };
 
@@ -48,6 +49,7 @@ type CheckoutSession = {
   organization_id: string;
   plan_id: string;
   status: string;
+  billing_type: string;
   asaas_customer_id: string | null;
   asaas_subscription_id: string | null;
   asaas_checkout_id: string | null;
@@ -69,7 +71,7 @@ async function findCheckoutSession(
     const { data, error } = await admin
       .from("asaas_checkout_sessions")
       .select(
-        "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
+        "id, organization_id, plan_id, status, billing_type, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
       )
       .eq("asaas_checkout_id", checkout.id)
       .maybeSingle();
@@ -82,7 +84,7 @@ async function findCheckoutSession(
     const { data, error } = await admin
       .from("asaas_checkout_sessions")
       .select(
-        "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
+        "id, organization_id, plan_id, status, billing_type, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
       )
       .eq("external_reference", checkout.externalReference)
       .maybeSingle();
@@ -102,7 +104,7 @@ async function findSubscriptionSession(
     const { data, error } = await admin
       .from("asaas_checkout_sessions")
       .select(
-        "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
+        "id, organization_id, plan_id, status, billing_type, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
       )
       .eq("asaas_checkout_id", subscription.checkoutSession)
       .maybeSingle();
@@ -115,7 +117,7 @@ async function findSubscriptionSession(
     const { data, error } = await admin
       .from("asaas_checkout_sessions")
       .select(
-        "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
+        "id, organization_id, plan_id, status, billing_type, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
       )
       .eq("asaas_subscription_id", subscription.id)
       .maybeSingle();
@@ -128,7 +130,7 @@ async function findSubscriptionSession(
     const { data, error } = await admin
       .from("asaas_checkout_sessions")
       .select(
-        "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
+        "id, organization_id, plan_id, status, billing_type, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
       )
       .eq("external_reference", subscription.externalReference)
       .maybeSingle();
@@ -141,7 +143,7 @@ async function findSubscriptionSession(
     const { data, error } = await admin
       .from("asaas_checkout_sessions")
       .select(
-        "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
+        "id, organization_id, plan_id, status, billing_type, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
       )
       .eq("asaas_customer_id", subscription.customer)
       .in("status", ["pending", "paid"])
@@ -166,7 +168,7 @@ async function findPaymentSession(
     const { data, error } = await admin
       .from("asaas_checkout_sessions")
       .select(
-        "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
+        "id, organization_id, plan_id, status, billing_type, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
       )
       .eq("asaas_subscription_id", payment.subscription)
       .maybeSingle();
@@ -179,7 +181,7 @@ async function findPaymentSession(
     const { data, error } = await admin
       .from("asaas_checkout_sessions")
       .select(
-        "id, organization_id, plan_id, status, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
+        "id, organization_id, plan_id, status, billing_type, asaas_customer_id, asaas_subscription_id, asaas_checkout_id"
       )
       .eq("external_reference", payment.externalReference)
       .maybeSingle();
@@ -370,8 +372,36 @@ async function extendPaidSubscriptionPeriod(
 ) {
   if (!payment.subscription || !payment.dueDate) return;
 
-  const session = await findPaymentSession(admin, payment);
-  if (!session || session.status !== "paid") return;
+  let session = await findPaymentSession(admin, payment);
+  if (!session) return;
+  if (
+    session.status === "pending" &&
+    (session.billing_type === "PIX" || session.billing_type === "BOLETO")
+  ) {
+    const customerId = payment.customer ?? session.asaas_customer_id;
+    const { error } = await admin
+      .from("asaas_checkout_sessions")
+      .update({
+        status: "paid",
+        asaas_subscription_id: payment.subscription,
+        asaas_customer_id: customerId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", session.id)
+      .eq("status", "pending");
+    if (error) throw error;
+    session = {
+      ...session,
+      status: "paid",
+      asaas_subscription_id: payment.subscription,
+      asaas_customer_id: customerId,
+    };
+    const firstPeriodDueDate = nextMonthlyDueDateAfter(payment.dueDate);
+    if (firstPeriodDueDate) {
+      await activatePaidPlan(admin, session, firstPeriodDueDate);
+    }
+  }
+  if (session.status !== "paid") return;
   if (
     session.asaas_subscription_id &&
     session.asaas_subscription_id !== payment.subscription

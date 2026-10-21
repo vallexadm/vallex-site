@@ -1,3 +1,5 @@
+import { hasMemberAffiliation } from "@/lib/server/member-affiliation";
+import { requireProviderPanelAccess } from "@/lib/server/provider-panel-access";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { normalizeMemberPermissions, ownerPermissions } from "@/lib/team-permissions";
@@ -34,15 +36,21 @@ async function getContext(request: Request) {
   const { data: owned, error: ownerError } = await admin
     .from("organizations").select("id, name, owner_id").eq("owner_id", user.id).maybeSingle();
   if (ownerError) return { error: reply("Não foi possível consultar a organização.", 500) };
-  if (owned) return { admin, user, organization: owned, role: "owner" as Role, permissions: ownerPermissions };
+  if (owned && !await hasMemberAffiliation(admin, user.id)) {
+    const accessError = await requireProviderPanelAccess(admin, owned.id);
+    if (accessError) return { error: accessError };
+    return { admin, user, organization: owned, role: "owner" as Role, permissions: ownerPermissions };
+  }
 
   const { data: membership, error: memberError } = await admin
-    .from("organization_members").select("organization_id, role, permissions").eq("user_id", user.id).maybeSingle();
+    .from("organization_members").select("organization_id, role, permissions").eq("is_active", true).eq("user_id", user.id).maybeSingle();
   if (memberError) return { error: reply("Não foi possível consultar sua equipe.", 500) };
   if (!membership || membership.role !== "member") return { error: reply("Organização não encontrada.", 403) };
   const { data: organization, error: organizationError } = await admin
     .from("organizations").select("id, name, owner_id").eq("id", membership.organization_id).maybeSingle();
   if (organizationError || !organization) return { error: reply("Não foi possível carregar a organização.", 500) };
+  const accessError = await requireProviderPanelAccess(admin, organization.id);
+  if (accessError) return { error: accessError };
   return { admin, user, organization, role: "member" as Role, permissions: normalizeMemberPermissions(membership.permissions) };
 }
 
@@ -67,7 +75,7 @@ export async function GET(request: Request) {
     if (role === "owner" || permissions.agenda.manage) {
       const [{ data: customerRows, error: customerError }, { data: members, error: membersError }, { data: acceptedInvitations, error: invitationError }] = await Promise.all([
         admin.from("customers").select("id, name, phone, address").eq("organization_id", organization.id).eq("status", "ativo").order("name"),
-        admin.from("organization_members").select("user_id, role").eq("organization_id", organization.id),
+        admin.from("organization_members").select("user_id, role").eq("is_active", true).eq("organization_id", organization.id),
         admin.from("organization_invitations").select("accepted_by, invitee_name, contact_phone").eq("organization_id", organization.id).eq("status", "accepted"),
       ]);
       if (customerError || membersError || invitationError) return reply("Não foi possível carregar clientes e equipe. Confira a atualização SQL de convites.", 500);
@@ -119,7 +127,7 @@ export async function POST(request: Request) {
     const [{ data: customer }, { data: ownerMember }, { data: assigneeMember }] = await Promise.all([
       admin.from("customers").select("id").eq("id", customerId).eq("organization_id", organization.id).maybeSingle(),
       Promise.resolve({ data: assignee === organization.owner_id ? { user_id: organization.owner_id } : null }),
-      admin.from("organization_members").select("user_id").eq("organization_id", organization.id).eq("user_id", assignee).maybeSingle(),
+      admin.from("organization_members").select("user_id").eq("is_active", true).eq("organization_id", organization.id).eq("user_id", assignee).maybeSingle(),
     ]);
     if (!customer) return reply("O cliente não pertence à organização.", 404);
     if (!ownerMember && !assigneeMember) return reply("O colaborador selecionado não pertence à equipe.", 400);

@@ -1,3 +1,5 @@
+import { hasMemberAffiliation } from "@/lib/server/member-affiliation";
+import { requireProviderPanelAccess } from "@/lib/server/provider-panel-access";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { normalizeMemberPermissions, ownerPermissions } from "@/lib/team-permissions";
@@ -100,7 +102,9 @@ async function getAuthenticatedContext(request: NextRequest) {
     };
   }
 
-  if (ownedOrganization) {
+  if (ownedOrganization && !await hasMemberAffiliation(supabaseAdmin, userId)) {
+    const accessError = await requireProviderPanelAccess(supabaseAdmin, ownedOrganization.id);
+    if (accessError) return { error: accessError };
     return {
       supabaseAdmin,
       userId,
@@ -127,7 +131,7 @@ async function getAuthenticatedContext(request: NextRequest) {
         )
       `
     )
-    .eq("user_id", userId)
+    .eq("is_active", true).eq("user_id", userId)
     .maybeSingle();
 
   if (membershipError) {
@@ -157,6 +161,8 @@ async function getAuthenticatedContext(request: NextRequest) {
     ? membership.organizations[0]
     : membership.organizations;
 
+  const accessError = await requireProviderPanelAccess(supabaseAdmin, organization.id);
+  if (accessError) return { error: accessError };
   return {
     supabaseAdmin,
     userId,

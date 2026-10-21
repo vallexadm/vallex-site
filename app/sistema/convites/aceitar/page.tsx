@@ -12,6 +12,7 @@ export default function AceitarConvitePage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [accepted, setAccepted] = useState(false);
+  const [acceptedContext, setAcceptedContext] = useState<{ userId: string; organizationId: string } | null>(null);
   const [accountEmail, setAccountEmail] = useState("");
   const [invitedEmail, setInvitedEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,6 +22,14 @@ export default function AceitarConvitePage() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
+      const authHash = new URLSearchParams(window.location.hash.slice(1));
+      const authError = authHash.get("error") || params.get("error");
+      if (authError) {
+        setError("Não foi possível validar o link de acesso. Ele pode ter expirado ou já ter sido utilizado. Solicite um novo e-mail ao proprietário e abra somente o mais recente. Se já possui senha, entre na sua conta para aceitar o convite ainda vigente.");
+        // Remove a falha da URL, preservando os parâmetros do convite.
+        window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+      }
+
       const tokenFromLink = params.get("token") ?? "";
       const emailFromLink = params.get("email") ?? "";
 
@@ -33,6 +42,21 @@ export default function AceitarConvitePage() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  async function openCollaboratorPanel() {
+    setError(""); setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!user || !session || user.id !== acceptedContext?.userId) throw new Error("A conta conectada mudou. Entre novamente com o e-mail do colaborador.");
+      const response = await fetch("/api/sistema/organizacao", { headers: { Authorization: `Bearer ${session.access_token}` } });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível verificar seu vínculo.");
+      if (result.role !== "member" || result.organization.id !== acceptedContext.organizationId) throw new Error("O painel retornou outro perfil ou organização. O acesso foi interrompido para preservar o vínculo de colaborador.");
+      router.replace("/sistema"); router.refresh();
+    } catch (error) { setError(error instanceof Error ? error.message : "Não foi possível abrir o painel."); }
+    finally { setLoading(false); }
+  }
 
   function loginUrl() {
     const next = `${window.location.pathname}${window.location.search}`;
@@ -74,6 +98,7 @@ export default function AceitarConvitePage() {
         return;
       }
 
+      setAcceptedContext({ userId: result.userId, organizationId: result.organization.id });
       setAccepted(true);
       setMessage(
         `Convite aceito! Você agora faz parte da organização ${result.organization.name}.`
@@ -238,7 +263,8 @@ export default function AceitarConvitePage() {
         ) : (
           <button
             type="button"
-            onClick={() => router.replace("/sistema")}
+            disabled={loading}
+            onClick={() => void openCollaboratorPanel()}
             className="mt-6 w-full rounded-lg bg-purple-700 px-4 py-3 font-medium text-white transition hover:bg-purple-800"
           >
             Acessar painel

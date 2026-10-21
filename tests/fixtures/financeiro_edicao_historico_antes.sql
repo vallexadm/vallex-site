@@ -1,0 +1,355 @@
+-- Aplicar no Supabase depois das migrations financeiro_prestador.sql,
+-- financeiro_recebimentos_parcelados.sql e financeiro_detalhamento.sql.
+-- Mantém cobranças excluídas como arquivo e registra operações com data/hora.
+
+ALTER TABLE public.organization_service_records
+  ADD COLUMN IF NOT EXISTS deleted_at timestamptz,
+  ADD COLUMN IF NOT EXISTS deleted_by uuid REFERENCES auth.users(id) ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS public.organization_finance_audit_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  service_record_id uuid REFERENCES public.organization_service_records(id) ON DELETE SET NULL,
+  actor_user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  actor_email text,
+  action text NOT NULL CHECK (action IN ('created', 'updated', 'deleted', 'payment_registered')),
+  details jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.organization_finance_audit_logs
+  ADD COLUMN IF NOT EXISTS actor_email text;
+
+CREATE INDEX IF NOT EXISTS organization_finance_audit_logs_org_date_idx
+  ON public.organization_finance_audit_logs (organization_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS organization_finance_audit_logs_service_idx
+  ON public.organization_finance_audit_logs (service_record_id, created_at DESC);
+
+ALTER TABLE public.organization_finance_audit_logs ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.organization_finance_audit_logs FROM anon, authenticated;
+GRANT ALL ON TABLE public.organization_finance_audit_logs TO service_role;
+
+CREATE OR REPLACE FUNCTION public.log_organization_service_created()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_customer_name text;
+  v_actor_email text;
+BEGIN
+  SELECT name INTO v_customer_name FROM public.customers
+  WHERE id = NEW.customer_id AND organization_id = NEW.organization_id;
+  SELECT email INTO v_actor_email FROM auth.users WHERE id = NEW.created_by;
+
+  INSERT INTO public.organization_finance_audit_logs (
+    organization_id, service_record_id, actor_user_id, actor_email, action, details
+  ) VALUES (
+    NEW.organization_id, NEW.id, NEW.created_by, v_actor_email, 'created',
+    jsonb_build_object(
+      'customer_name', COALESCE(v_customer_name, 'Cliente'),
+      'service_name', NEW.service_name,
+      'service_date', NEW.service_date,
+      'amount_charged', NEW.amount_charged
+    )
+  );
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS organization_service_created_audit ON public.organization_service_records;
+CREATE TRIGGER organization_service_created_audit
+AFTER INSERT ON public.organization_service_records
+FOR EACH ROW EXECUTE FUNCTION public.log_organization_service_created();
+
+CREATE OR REPLACE FUNCTION public.log_organization_service_payment()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_service_name text;
+  v_customer_name text;
+  v_actor_email text;
+BEGIN
+  SELECT s.service_name, c.name INTO v_service_name, v_customer_name
+  FROM public.organization_service_records s
+  LEFT JOIN public.customers c ON c.id = s.customer_id
+  WHERE s.id = NEW.service_record_id AND s.organization_id = NEW.organization_id;
+  SELECT email INTO v_actor_email FROM auth.users WHERE id = NEW.created_by;
+
+  INSERT INTO public.organization_finance_audit_logs (
+    organization_id, service_record_id, actor_user_id, actor_email, action, details
+  ) VALUES (
+    NEW.organization_id, NEW.service_record_id, NEW.created_by, v_actor_email, 'payment_registered',
+    jsonb_build_object(
+      'customer_name', COALESCE(v_customer_name, 'Cliente'),
+      'service_name', COALESCE(v_service_name, 'Serviço'),
+      'installment_number', NEW.installment_number,
+      'payment_method', NEW.payment_method,
+      'payment_date', NEW.payment_date,
+      'amount', NEW.amount
+    )
+  );
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS organization_service_payment_audit ON public.organization_service_payments;
+CREATE TRIGGER organization_service_payment_audit
+AFTER INSERT ON public.organization_service_payments
+FOR EACH ROW EXECUTE FUNCTION public.log_organization_service_payment();
+
+CREATE OR REPLACE FUNCTION public.update_organization_service_record(
+  p_organization_id uuid,
+  p_service_record_id uuid,
+  p_customer_id uuid,
+  p_service_name text,
+  p_service_date date,
+  p_source text,
+  p_amount_charged numeric,
+  p_notes text,
+  p_scheduled_installments jsonb,
+  p_actor_user_id uuid
+) RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_service public.organization_service_records%ROWTYPE;
+  v_customer_name text;
+  v_received numeric(12,2);
+  v_scheduled_count integer;
+  v_new_count integer;
+  v_new_scheduled_total numeric(12,2);
+  v_before_installments jsonb;
+  v_after_installments jsonb;
+  v_invalid boolean;
+  v_actor_email text;
+BEGIN
+  IF p_service_name IS NULL OR char_length(btrim(p_service_name)) NOT BETWEEN 2 AND 200
+     OR p_service_date IS NULL
+     OR p_source NOT IN ('vallex', 'indicacao', 'redes_sociais', 'busca_web', 'recorrente', 'outros')
+     OR p_amount_charged IS NULL OR p_amount_charged <= 0
+     OR p_notes IS NOT NULL AND char_length(p_notes) > 2000
+     OR p_scheduled_installments IS NULL
+     OR jsonb_typeof(p_scheduled_installments) <> 'array' THEN
+    RAISE EXCEPTION 'INVALID_SERVICE_DATA';
+  END IF;
+
+  SELECT * INTO v_service
+  FROM public.organization_service_records
+  WHERE id = p_service_record_id
+    AND organization_id = p_organization_id
+    AND deleted_at IS NULL
+  FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'SERVICE_NOT_FOUND'; END IF;
+
+  PERFORM 1 FROM public.customers
+  WHERE id = p_customer_id AND organization_id = p_organization_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'CUSTOMER_NOT_FOUND'; END IF;
+
+  SELECT COALESCE(sum(amount), 0) INTO v_received
+  FROM public.organization_service_payments
+  WHERE service_record_id = p_service_record_id;
+  IF p_amount_charged < v_received THEN RAISE EXCEPTION 'CHARGE_BELOW_RECEIVED'; END IF;
+
+  SELECT count(*) INTO v_scheduled_count
+  FROM public.organization_service_installments
+  WHERE service_record_id = p_service_record_id;
+  v_new_count := jsonb_array_length(p_scheduled_installments);
+  IF v_new_count <> v_scheduled_count OR v_new_count > 24 THEN
+    RAISE EXCEPTION 'INSTALLMENT_COUNT_CHANGE_NOT_SUPPORTED';
+  END IF;
+
+  SELECT COALESCE(sum(item.amount), 0), COALESCE(bool_or(
+    item.installment_number IS NULL OR item.installment_number < 1 OR item.installment_number > v_new_count
+    OR item.amount IS NULL OR item.amount <= 0
+    OR item.due_date IS NULL
+  ), false)
+  INTO v_new_scheduled_total, v_invalid
+  FROM jsonb_to_recordset(p_scheduled_installments)
+    AS item(installment_number integer, amount numeric, due_date date);
+  IF v_invalid OR p_amount_charged < v_received + v_new_scheduled_total THEN
+    RAISE EXCEPTION 'INVALID_INSTALLMENTS';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM (
+      SELECT item.installment_number, item.amount,
+             row_number() OVER (ORDER BY raw.ordinality)::integer AS expected_number
+      FROM jsonb_array_elements(p_scheduled_installments) WITH ORDINALITY AS raw(value, ordinality)
+      CROSS JOIN LATERAL jsonb_to_record(raw.value)
+        AS item(installment_number integer, amount numeric, due_date date)
+    ) schedule
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(sum(p.amount), 0) AS received
+      FROM public.organization_service_payments p
+      WHERE p.service_record_id = p_service_record_id
+        AND p.installment_number = schedule.installment_number
+    ) paid ON true
+    WHERE schedule.installment_number <> schedule.expected_number
+       OR paid.received > schedule.amount
+  ) THEN
+    RAISE EXCEPTION 'INVALID_INSTALLMENTS';
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'installment_number', installment_number, 'amount', amount, 'due_date', due_date
+  ) ORDER BY installment_number), '[]'::jsonb)
+  INTO v_before_installments
+  FROM public.organization_service_installments
+  WHERE service_record_id = p_service_record_id;
+
+  SELECT name INTO v_customer_name FROM public.customers
+  WHERE id = p_customer_id AND organization_id = p_organization_id;
+  SELECT email INTO v_actor_email FROM auth.users WHERE id = p_actor_user_id;
+
+  UPDATE public.organization_service_records
+  SET customer_id = p_customer_id,
+      service_name = btrim(p_service_name),
+      service_date = p_service_date,
+      source = p_source,
+      amount_charged = p_amount_charged,
+      notes = NULLIF(btrim(COALESCE(p_notes, '')), ''),
+      updated_at = now()
+  WHERE id = p_service_record_id AND organization_id = p_organization_id;
+
+  UPDATE public.organization_service_installments schedule
+  SET amount = item.amount, due_date = item.due_date
+  FROM jsonb_to_recordset(p_scheduled_installments)
+    AS item(installment_number integer, amount numeric, due_date date)
+  WHERE schedule.service_record_id = p_service_record_id
+    AND schedule.installment_number = item.installment_number;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'installment_number', installment_number, 'amount', amount, 'due_date', due_date
+  ) ORDER BY installment_number), '[]'::jsonb)
+  INTO v_after_installments
+  FROM public.organization_service_installments
+  WHERE service_record_id = p_service_record_id;
+
+  INSERT INTO public.organization_finance_audit_logs (
+    organization_id, service_record_id, actor_user_id, actor_email, action, details
+  ) VALUES (
+    p_organization_id, p_service_record_id, p_actor_user_id, v_actor_email, 'updated',
+    jsonb_build_object(
+      'before', jsonb_build_object(
+        'customer_name', (SELECT name FROM public.customers WHERE id = v_service.customer_id),
+        'service_name', v_service.service_name,
+        'service_date', v_service.service_date,
+        'source', v_service.source,
+        'amount_charged', v_service.amount_charged,
+        'notes', v_service.notes,
+        'installments', v_before_installments
+      ),
+      'after', jsonb_build_object(
+        'customer_name', v_customer_name,
+        'service_name', btrim(p_service_name),
+        'service_date', p_service_date,
+        'source', p_source,
+        'amount_charged', p_amount_charged,
+        'notes', NULLIF(btrim(COALESCE(p_notes, '')), ''),
+        'installments', v_after_installments
+      )
+    )
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.soft_delete_organization_service_record(
+  p_organization_id uuid,
+  p_service_record_id uuid,
+  p_actor_user_id uuid
+) RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_service public.organization_service_records%ROWTYPE;
+  v_customer_name text;
+  v_actor_email text;
+BEGIN
+  SELECT * INTO v_service
+  FROM public.organization_service_records
+  WHERE id = p_service_record_id
+    AND organization_id = p_organization_id
+    AND deleted_at IS NULL
+  FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'SERVICE_NOT_FOUND'; END IF;
+  IF v_service.amount_received > 0 OR EXISTS (
+    SELECT 1 FROM public.organization_service_payments
+    WHERE service_record_id = p_service_record_id
+  ) THEN
+    RAISE EXCEPTION 'SERVICE_HAS_RECEIPTS';
+  END IF;
+
+  SELECT name INTO v_customer_name FROM public.customers WHERE id = v_service.customer_id;
+  SELECT email INTO v_actor_email FROM auth.users WHERE id = p_actor_user_id;
+  UPDATE public.organization_service_records
+  SET deleted_at = now(), deleted_by = p_actor_user_id, updated_at = now()
+  WHERE id = p_service_record_id AND organization_id = p_organization_id;
+
+  INSERT INTO public.organization_finance_audit_logs (
+    organization_id, service_record_id, actor_user_id, actor_email, action, details
+  ) VALUES (
+    p_organization_id, p_service_record_id, p_actor_user_id, v_actor_email, 'deleted',
+    jsonb_build_object(
+      'customer_name', COALESCE(v_customer_name, 'Cliente'),
+      'service_name', v_service.service_name,
+      'service_date', v_service.service_date,
+      'amount_charged', v_service.amount_charged,
+      'notes', v_service.notes
+    )
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.update_organization_service_record(uuid, uuid, uuid, text, date, text, numeric, text, jsonb, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.update_organization_service_record(uuid, uuid, uuid, text, date, text, numeric, text, jsonb, uuid) TO service_role;
+REVOKE ALL ON FUNCTION public.soft_delete_organization_service_record(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.soft_delete_organization_service_record(uuid, uuid, uuid) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.get_organization_finance_indicators(p_organization_id uuid)
+RETURNS TABLE (
+  total_charged numeric,
+  total_received numeric,
+  direct_costs numeric,
+  total_expenses numeric,
+  paid_expenses numeric,
+  cash_balance numeric,
+  estimated_profit numeric,
+  profit_margin numeric
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH service_totals AS (
+    SELECT COALESCE(sum(amount_charged), 0) AS charged,
+           COALESCE(sum(amount_received), 0) AS received,
+           COALESCE(sum(direct_cost), 0) AS costs
+    FROM public.organization_service_records
+    WHERE organization_id = p_organization_id AND deleted_at IS NULL
+  ), expense_totals AS (
+    SELECT COALESCE(sum(amount), 0) AS expenses,
+           COALESCE(sum(amount) FILTER (WHERE payment_status = 'pago'), 0) AS paid
+    FROM public.organization_business_expenses
+    WHERE organization_id = p_organization_id
+  )
+  SELECT s.charged, s.received, s.costs, e.expenses, e.paid,
+         s.received - s.costs - e.paid,
+         s.charged - s.costs - e.expenses,
+         CASE WHEN s.charged > 0
+              THEN ((s.charged - s.costs - e.expenses) / s.charged) * 100
+              ELSE 0 END
+  FROM service_totals s CROSS JOIN expense_totals e;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_organization_finance_indicators(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_organization_finance_indicators(uuid) TO service_role;

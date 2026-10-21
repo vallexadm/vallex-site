@@ -1,3 +1,4 @@
+import { sendInvitationEmail } from "@/lib/server/invitation-email";
 import { NextResponse } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const authClient = createClient(authUrl, authAnonKey);
+    const authClient = createClient(authUrl, authAnonKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const supabaseAdmin = createClient(supabaseUrl, supabaseSecretKey);
 
     const { data: authData, error: authError } =
@@ -214,10 +215,12 @@ export async function POST(request: Request) {
       );
     }
 
+    const emailDelivery = await sendInvitationEmail(authClient, email, invitationToken);
     return NextResponse.json(
       {
         ok: true,
-        message: "Convite criado. Copie e encaminhe o link ao colaborador.",
+        emailDelivery,
+        message: `Convite criado. ${emailDelivery.message}` ,
         invitation: {
           id: invitation.invitation_id,
           email,

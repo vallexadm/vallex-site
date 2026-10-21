@@ -39,6 +39,7 @@ export default function SistemaPage() {
 
   useEffect(() => {
     async function checkSession() {
+  setNeedsOrganization(false);
   const { data, error } = await supabase.auth.getUser();
 
   if (error || !data.user) {
@@ -48,14 +49,7 @@ export default function SistemaPage() {
 
   setEmail(data.user.email ?? "");
   const metadata = data.user.user_metadata ?? {};
-  setOrganizationName(
-    typeof metadata.organization_name === "string"
-      ? metadata.organization_name
-      : ""
-  );
-  setBusinessType(
-    typeof metadata.business_type === "string" ? metadata.business_type : ""
-  );
+
 
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
@@ -92,6 +86,14 @@ export default function SistemaPage() {
       response.status === 404 &&
       result.code === "ORGANIZATION_NOT_FOUND"
     ) {
+  setOrganizationName(
+    typeof metadata.organization_name === "string"
+      ? metadata.organization_name
+      : ""
+  );
+  setBusinessType(
+    typeof metadata.business_type === "string" ? metadata.business_type : ""
+  );
       setNeedsOrganization(true);
       setChecking(false);
       return;
@@ -105,7 +107,9 @@ export default function SistemaPage() {
       return;
     }
 
+    setContextError("");
     setOrganizationName(result.organization.name);
+    setBusinessType(result.organization.business_type ?? "");
     setRole(result.role);
     setModulePermissions(normalizeMemberPermissions(result.permissions?.modules));
   } catch {
@@ -115,7 +119,11 @@ export default function SistemaPage() {
   setChecking(false);
 }
 
-    checkSession();
+    void checkSession();
+    const revalidate = () => { void checkSession(); };
+    window.addEventListener("focus", revalidate);
+    const timer = window.setInterval(revalidate, 30000);
+    return () => { window.removeEventListener("focus", revalidate); window.clearInterval(timer); };
   }, [router]);
 
   useEffect(() => {
@@ -197,7 +205,8 @@ export default function SistemaPage() {
         throw new Error(result.message ?? "Não foi possível criar sua área.");
       }
 
-      setOrganizationName(result.organization.name);
+      setContextError("");
+    setOrganizationName(result.organization.name);
       setBusinessType(result.organization.business_type ?? businessType);
       setRole("owner");
       setNeedsOrganization(false);
@@ -224,25 +233,25 @@ export default function SistemaPage() {
   if (needsOrganization) {
     return (
       <main className="min-h-screen bg-slate-100">
-        <header className="bg-[#17002E] px-6 py-5 text-white">
-          <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
+        <header className="bg-[#17002E] px-4 py-4 text-white sm:px-6 sm:py-5">
+          <div className="mx-auto flex max-w-3xl flex-col items-center justify-between gap-3 text-center sm:flex-row sm:text-left">
+            <div className="flex items-center justify-center gap-3">
               <Image
                 src="/vallex-logo.png"
                 alt="VALLEX"
                 width={7271}
                 height={5879}
                 priority
-                className="h-[54px] w-[66px] object-contain"
+                className="h-12 w-14 object-contain sm:h-[54px] sm:w-[66px]"
               />
-              <h1 className="text-xl font-bold text-purple-200">ServiçoFácil</h1>
+              <h1 className="text-lg font-bold text-purple-200 sm:text-xl">ServiçoFácil</h1>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto sm:gap-3">
               <LocalClock variant="dark" />
-              {isVallexAdmin && <Link href="/admin" className="rounded-lg border border-purple-300 px-4 py-2 text-sm hover:bg-purple-900">Admin VALLEX</Link>}
+              {isVallexAdmin && <Link href="/admin" className="rounded-lg border border-purple-300 px-4 py-2 text-center text-sm hover:bg-purple-800">Admin VALLEX</Link>}
               <button
                 onClick={handleLogout}
-                className="rounded-lg border border-purple-300 px-4 py-2 text-sm hover:bg-purple-900"
+                className="rounded-lg border border-purple-300 px-4 py-2 text-center text-sm hover:bg-purple-800"
               >
                 Sair
               </button>
@@ -303,7 +312,7 @@ export default function SistemaPage() {
             </div>
 
             <p className="text-sm text-slate-500">
-              Sua área começa com 5 dias grátis do plano Basic, sem cobrança.
+              Sua área começa com 30 dias grátis do plano Basic, sem cobrança.
               Depois do teste, a conta volta ao Free. A Vitrine será criada
               como não publicada; você decide quando torná-la pública.
             </p>
@@ -329,26 +338,26 @@ export default function SistemaPage() {
 
   return (
     <main className="min-h-screen bg-slate-100">
-      <header className="bg-[#17002E] px-6 py-5 text-white">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+      <header className="bg-[#17002E] px-4 py-4 text-white sm:px-6 sm:py-5">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 text-center sm:flex-row sm:text-left">
+          <div className="flex items-center justify-center gap-3">
             <Image
               src="/vallex-logo.png"
               alt="VALLEX"
               width={7271}
               height={5879}
               priority
-              className="h-[54px] w-[66px] object-contain"
+              className="h-12 w-14 object-contain sm:h-[54px] sm:w-[66px]"
             />
-            <h1 className="text-xl font-bold text-purple-200">ServiçoFácil</h1>
+            <h1 className="text-lg font-bold text-purple-200 sm:text-xl">ServiçoFácil</h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto sm:gap-3">
             <LocalClock variant="dark" />
-            {isVallexAdmin && <Link href="/admin" className="rounded-lg border border-purple-300 px-4 py-2 text-sm hover:bg-purple-900">Admin VALLEX</Link>}
+            {isVallexAdmin && <Link href="/admin" className="rounded-lg border border-purple-300 px-4 py-2 text-center text-sm hover:bg-purple-800">Admin VALLEX</Link>}
             <button
               onClick={handleLogout}
-              className="rounded-lg border border-purple-300 px-4 py-2 text-sm hover:bg-purple-900"
+              className="rounded-lg border border-purple-300 px-4 py-2 text-center text-sm hover:bg-purple-800"
             >
               Sair
             </button>
@@ -484,7 +493,7 @@ export default function SistemaPage() {
 ))}
   <Link
     href="/sistema/suporte"
-    className="group rounded-xl border border-amber-200 bg-white p-6 shadow-sm transition duration-150 hover:-translate-y-1 hover:border-amber-400 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2"
+    className="group rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition duration-150 hover:-translate-y-1 hover:border-violet-300 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-2"
   >
     <h3 className="text-lg font-semibold text-slate-900">Suporte VALLEX</h3>
     <p className="mt-2 text-sm leading-6 text-slate-600">Peça ajuda com sua conta, plano ou qualquer ferramenta do ServiçoFácil.</p>

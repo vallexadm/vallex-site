@@ -1,5 +1,7 @@
 "use client";
 
+import ActionNotice from "@/components/ActionNotice";
+
 import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -94,6 +96,8 @@ function isBrazilianPhone(value: string) {
 export default function VitrinePage() {
   const router = useRouter();
   const previewDialogRef = useRef<HTMLDialogElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const logoSavingRef = useRef(false);
 
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -101,6 +105,7 @@ export default function VitrinePage() {
   const [enviandoLogo, setEnviandoLogo] = useState(false);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
+  const [noticeArea, setNoticeArea] = useState<"general" | "profile" | "logo">("general");
   const [previewOpen, setPreviewOpen] = useState(false);
 
   const [organization, setOrganization] =
@@ -218,6 +223,7 @@ function prepararEdicaoServico(service: VitrineService) {
 }
 
 async function salvarServico(event: FormEvent) {
+  setNoticeArea("general");
   event.preventDefault();
 
   setErro("");
@@ -304,6 +310,7 @@ async function salvarServico(event: FormEvent) {
 async function alterarPublicacaoServico(
   service: VitrineService
 ) {
+  setNoticeArea("general");
   setErro("");
   setSucesso("");
 
@@ -352,6 +359,7 @@ async function alterarPublicacaoServico(
 }
 
 async function excluirServico(service: VitrineService) {
+  setNoticeArea("general");
   const confirmacao = window.confirm(
     `Deseja realmente excluir o serviço "${service.name}"?`
   );
@@ -496,6 +504,7 @@ async function excluirServico(service: VitrineService) {
   }
 
   async function salvarVitrine(event?: FormEvent) {
+    setNoticeArea("profile");
     event?.preventDefault();
 
     if (phone && !isBrazilianPhone(phone)) {
@@ -556,7 +565,27 @@ async function excluirServico(service: VitrineService) {
     }
   }
 
+  async function removerLogo() {
+    setNoticeArea("logo");
+    if (logoSavingRef.current || !window.confirm("Remover a imagem da identidade visual da Vitrine?")) return;
+    logoSavingRef.current = true; setEnviandoLogo(true); limparMensagens();
+    try {
+      const token = await obterToken();
+      if (!token) return;
+      const response = await fetch("/api/sistema/arquivos", { method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ finalidade: "logo" }) });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível remover a imagem.");
+      setLogoUrl(""); setProfile(current => current ? { ...current, logo_url: null } : current);
+      setSucesso("Imagem removida da Vitrine.");
+    } catch (error) { setErro(error instanceof Error ? error.message : "Não foi possível remover a imagem."); }
+    finally { logoSavingRef.current = false; setEnviandoLogo(false); }
+  }
+
   async function enviarLogo(event: React.ChangeEvent<HTMLInputElement>) {
+    setNoticeArea("logo");
+    if (logoSavingRef.current) return;
     const arquivo = event.target.files?.[0];
     event.target.value = "";
     if (!arquivo) return;
@@ -567,6 +596,7 @@ async function excluirServico(service: VitrineService) {
       return;
     }
 
+    logoSavingRef.current = true;
     setEnviandoLogo(true);
     try {
       const token = await obterToken();
@@ -589,6 +619,7 @@ async function excluirServico(service: VitrineService) {
     } catch (error) {
       setErro(error instanceof Error ? error.message : "Não foi possível enviar a logo.");
     } finally {
+      logoSavingRef.current = false;
       setEnviandoLogo(false);
     }
   }
@@ -596,6 +627,7 @@ async function excluirServico(service: VitrineService) {
   async function alterarPublicacao(
     action: "publish" | "revoke"
   ) {
+    setNoticeArea("profile");
     limparMensagens();
 
     const confirmacao =
@@ -701,17 +733,15 @@ async function excluirServico(service: VitrineService) {
           </Link>
         </div>
 
-        {process.env.NODE_ENV !== "production" && (
-          <div className="mb-6">
-            <button
-              type="button"
-              onClick={() => setPreviewOpen(true)}
-              className="inline-flex rounded-lg bg-purple-700 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-800"
-            >
-              Pré-visualizar no catálogo local
-            </button>
-          </div>
-        )}
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => setPreviewOpen(true)}
+            className="inline-flex rounded-lg bg-purple-700 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-800"
+          >
+            Pré-visualizar no catálogo
+          </button>
+        </div>
 
         <dialog
           ref={previewDialogRef}
@@ -728,30 +758,18 @@ async function excluirServico(service: VitrineService) {
           <div className="vitrine-preview-header">
             <div>
               <h2 id="vitrine-preview-title">Prévia da Vitrine</h2>
-              <p>Visualização do catálogo local em uma janela sobre esta página.</p>
+              <p>Veja como sua Vitrine aparecerá no catálogo público.</p>
             </div>
             <button type="button" className="vitrine-preview-close" onClick={() => setPreviewOpen(false)} aria-label="Fechar prévia">
               ×
             </button>
           </div>
-          <iframe title="Prévia do catálogo local" src="/catalogo?previsualizar=1" />
+          <iframe title="Prévia do catálogo" src="/catalogo?previsualizar=1" />
         </dialog>
 
-        {erro && (
-          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
-            <p className="font-semibold">
-              Não foi possível concluir a operação.
-            </p>
+        {noticeArea === "general" && erro && <ActionNotice message={erro} error onClose={() => setErro("")} />}
 
-            <p className="mt-1 text-sm">{erro}</p>
-          </div>
-        )}
-
-        {sucesso && (
-          <div className="mb-5 rounded-xl border border-green-200 bg-green-50 p-4 text-green-700">
-            <p className="font-semibold">{sucesso}</p>
-          </div>
-        )}
+        {noticeArea === "general" && sucesso && <ActionNotice message={sucesso} onClose={() => setSucesso("")} />}
 
         <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -1089,6 +1107,7 @@ async function excluirServico(service: VitrineService) {
             </label>
 
             <input
+              ref={logoInputRef}
               id="logo_file"
               type="file"
               accept="image/jpeg,image/png,image/webp"
@@ -1099,6 +1118,10 @@ async function excluirServico(service: VitrineService) {
             <p className="mt-2 text-xs text-gray-500">
               JPG, PNG ou WebP; até 2 MB. {enviandoLogo ? "Enviando…" : ""}
             </p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <button type="button" disabled={enviandoLogo || salvando || publicando} onClick={() => logoInputRef.current?.click()} className="rounded-lg border border-purple-300 bg-white px-4 py-2 text-sm font-semibold text-purple-800 hover:bg-purple-50 disabled:opacity-50">{logoUrl ? "Trocar imagem" : "Adicionar imagem"}</button>
+              {logoUrl && <button type="button" disabled={enviandoLogo || salvando || publicando} onClick={() => void removerLogo()} className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">Remover imagem</button>}
+            </div>
             {logoUrl && (
               <div className="mt-4 flex items-center gap-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
                 <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
@@ -1108,13 +1131,15 @@ async function excluirServico(service: VitrineService) {
                 <span className="text-sm text-gray-600">Prévia da logo na Vitrine</span>
               </div>
             )}
+
+            {noticeArea === "logo" && (erro || sucesso) && <ActionNotice inline message={erro || sucesso} error={Boolean(erro)} onClose={limparMensagens} />}
           </section>
 
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
-                disabled={salvando || publicando}
+                disabled={salvando || publicando || enviandoLogo}
                 className="rounded-lg bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {salvando
@@ -1125,7 +1150,7 @@ async function excluirServico(service: VitrineService) {
               {profile && !profile.is_published && (
                 <button
                   type="button"
-                  disabled={salvando || publicando}
+                  disabled={salvando || publicando || enviandoLogo}
                   onClick={() => alterarPublicacao("publish")}
                   className="rounded-lg bg-green-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -1138,7 +1163,7 @@ async function excluirServico(service: VitrineService) {
               {profile?.is_published && (
                 <button
                   type="button"
-                  disabled={salvando || publicando}
+                  disabled={salvando || publicando || enviandoLogo}
                   onClick={() => alterarPublicacao("revoke")}
                   className="rounded-lg border border-red-300 bg-white px-5 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -1149,6 +1174,8 @@ async function excluirServico(service: VitrineService) {
               )}
             </div>
 
+
+            {noticeArea === "profile" && (erro || sucesso) && <ActionNotice inline message={erro || sucesso} error={Boolean(erro)} onClose={limparMensagens} />}
             <div className="mt-5 rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
               <p className="font-semibold text-gray-800">
                 Sobre a publicação

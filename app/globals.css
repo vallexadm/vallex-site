@@ -2324,6 +2324,11 @@ a[class*="Button"],
 a[class*="rounded-lg"],
 a.inline-flex,
 a[role="button"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  vertical-align: middle;
   min-height: 52px;
   padding: 0 20px;
   border-radius: 8px;
@@ -2349,6 +2354,7 @@ a[class*="Button"]:hover,
 a[class*="rounded-lg"]:hover,
 a.inline-flex:hover,
 a[role="button"]:hover {
+  filter: brightness(1.12);
   transform: translateY(-1px);
   box-shadow: 0 5px 14px rgb(35 0 64 / 22%);
 }
@@ -2518,3 +2524,36 @@ a[role="button"]:focus-visible {
 .vallex-sales-filters input, .vallex-sales-filters select { width: 100%; min-width: 0; max-width: 100%; }
 .vallex-sales-select { display: block; min-height: 42px; border-color: #384359; border-radius: 9px; background-color: #202a3e; padding: 9px 32px 9px 11px; color: #f3f4f6; color-scheme: light; font: inherit; font-weight: 400; }
 .vallex-admin-page .vallex-sales-select option { background-color: #fff; color: #1f2937; }
+
+
+/* Campos invalidados apos interacao ou tentativa de envio. */
+input[data-validation-invalid="true"],
+select[data-validation-invalid="true"],
+textarea[data-validation-invalid="true"] {
+  border-color: #b91c1c !important;
+  background-color: #fff7f7 !important;
+  outline-color: #b91c1c !important;
+  box-shadow: 0 0 0 1px #b91c1c !important;
+}
+input[type="checkbox"][data-validation-invalid="true"],
+input[type="radio"][data-validation-invalid="true"] {
+  outline: 2px solid #b91c1c;
+  outline-offset: 2px;
+}
+.vallex-field-error {
+  display: block;
+  margin-top: 0.35rem;
+  color: #b91c1c;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+@layer base {
+  :where(button, input[type='button'], input[type='submit'], input[type='reset'], .button, a[class*='button-'], a[class*='vallex-admin-primary'], a[class*='vallex-admin-secondary'], a[class*='vallex-admin-back'], a[class*='-button'], a[class*='Button'], a[class*='rounded-lg'], a.inline-flex, a[role='button']) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+}

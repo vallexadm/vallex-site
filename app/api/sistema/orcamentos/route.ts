@@ -1,3 +1,5 @@
+import { hasMemberAffiliation } from "@/lib/server/member-affiliation";
+import { requireProviderPanelAccess } from "@/lib/server/provider-panel-access";
 import { NextResponse } from "next/server";
 import { parseCurrencyInput } from "@/lib/currency";
 import { createClient } from "@supabase/supabase-js";
@@ -114,14 +116,16 @@ async function getUserOrganization(
     };
   }
 
-  if (organization) {
+  if (organization && !await hasMemberAffiliation(adminClient, userId)) {
+    const accessError = await requireProviderPanelAccess(adminClient, organization.id);
+    if (accessError) return { organization: null, role: null, permissions: null, error: accessError };
     return { organization, role: "owner" as const, permissions: ownerPermissions, error: null };
   }
 
   const { data: membership, error: membershipError } = await adminClient
     .from("organization_members")
     .select("organization_id, role, permissions")
-    .eq("user_id", userId)
+    .eq("is_active", true).eq("user_id", userId)
     .maybeSingle();
 
   if (membershipError) {
@@ -144,6 +148,8 @@ async function getUserOrganization(
     return { organization: null, role: null, permissions: null, error: errorResponse("Não foi possível carregar a organização.", 500) };
   }
 
+  const accessError = await requireProviderPanelAccess(adminClient, memberOrganization.id);
+  if (accessError) return { organization: null, role: null, permissions: null, error: accessError };
   return { organization: memberOrganization, role: "member" as const, permissions: normalizeMemberPermissions(membership.permissions), error: null };
 }
 

@@ -163,6 +163,7 @@ export async function POST(request: NextRequest) {
         name: acceptedInvitation.organization_name,
       },
       membershipId: acceptedInvitation.membership_id,
+      userId: user.id,
     },
     { status: 200 }
   );

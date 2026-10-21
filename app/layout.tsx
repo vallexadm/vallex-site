@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import { getSiteUrl } from "@/lib/seo";
 import "./globals.css";
+import FormValidation from "@/components/FormValidation";
 
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
@@ -28,8 +29,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR">
-      <body>{children}</body>
+    <html lang="pt-BR" data-scroll-behavior="smooth">
+      <body><FormValidation />{children}</body>
     </html>
   );
 }

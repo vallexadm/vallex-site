@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import SystemBrand from "@/components/SystemBrand";
@@ -20,6 +20,7 @@ const permissionModules: { key: keyof MemberPermissions; title: string; descript
 ];
 
 export default function ConfiguracoesPage() {
+  const savingPermissionRef = useRef(false);
   const router = useRouter();
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -87,6 +88,9 @@ export default function ConfiguracoesPage() {
   }
 
   async function changePermission(member: TeamMember, moduleKey: keyof MemberPermissions, actionKey: string, checked: boolean) {
+    // A matriz inteira e enviada; serializar impede sobrescrita por cliques rapidos.
+    if (savingPermissionRef.current) return;
+    savingPermissionRef.current = true;
     const permissionKey = `${member.user_id}:${moduleKey}:${actionKey}`;
     setError(""); setNotice(""); setSavingPermissionKey(permissionKey);
     const permissions = JSON.parse(JSON.stringify(member.permissions)) as MemberPermissions;
@@ -111,7 +115,7 @@ export default function ConfiguracoesPage() {
       setNotice(`Permissões de ${member.name || member.email || "colaborador"} atualizadas.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível salvar as permissões.");
-    } finally { setSavingPermissionKey(""); }
+    } finally { savingPermissionRef.current = false; setSavingPermissionKey(""); }
   }
 
   return (
@@ -136,7 +140,7 @@ export default function ConfiguracoesPage() {
           <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-semibold">Permissões dos colaboradores</h2>
             <p className="mt-1 text-sm text-slate-600">Escolha o que cada pessoa pode consultar ou alterar. As permissões são salvas ao mudar cada opção; ações de alteração também liberam a consulta do módulo.</p>
-            {members.length === 0 ? <div className="mt-4 rounded-lg border border-dashed border-slate-300 p-5 text-sm text-slate-600">Ainda não há colaboradores vinculados. Depois que alguém aceitar um convite, você poderá definir os acessos aqui. <Link className="font-semibold text-purple-800 underline" href="/sistema/equipe">Convidar ou gerenciar equipe</Link></div> : <div className="mt-5 space-y-5">{members.map((member) => <article key={member.user_id} className="rounded-xl border border-slate-200 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">{member.name || "Colaborador"}</h3><p className="text-sm text-slate-600">{member.email}</p></div>{savingPermissionKey.startsWith(`${member.user_id}:`) && <span className="text-sm text-slate-500" role="status">Salvando opção…</span>}</div><div className="mt-4 grid gap-4 lg:grid-cols-2">{permissionModules.map((module) => <section key={module.key} className="rounded-lg bg-slate-50 p-4"><h4 className="font-semibold">{module.title}</h4><p className="mt-1 text-xs text-slate-600">{module.description}</p><div className="mt-3 space-y-2">{module.actions.map((action) => <label key={action.key} className="flex cursor-pointer items-start gap-2 text-sm"><input type="checkbox" checked={Boolean((member.permissions[module.key] as unknown as Record<string, boolean>)[action.key])} disabled={savingPermissionKey === `${member.user_id}:${module.key}:${action.key}`} onChange={(event) => void changePermission(member, module.key, action.key, event.target.checked)} className="mt-0.5 h-4 w-4 accent-purple-700" /><span>{action.label}</span></label>)}</div></section>)}</div></article>)}</div>}
+            {members.length === 0 ? <div className="mt-4 rounded-lg border border-dashed border-slate-300 p-5 text-sm text-slate-600">Ainda não há colaboradores vinculados. Depois que alguém aceitar um convite, você poderá definir os acessos aqui. <Link className="font-semibold text-purple-800 underline" href="/sistema/equipe">Convidar ou gerenciar equipe</Link></div> : <div className="mt-5 space-y-5">{members.map((member) => <article key={member.user_id} className="rounded-xl border border-slate-200 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">{member.name || "Colaborador"}</h3><p className="text-sm text-slate-600">{member.email}</p></div>{savingPermissionKey.startsWith(`${member.user_id}:`) && <span className="text-sm text-slate-500" role="status">Salvando opção…</span>}</div><div className="mt-4 grid gap-4 lg:grid-cols-2">{permissionModules.map((module) => <section key={module.key} className="rounded-lg bg-slate-50 p-4"><h4 className="font-semibold">{module.title}</h4><p className="mt-1 text-xs text-slate-600">{module.description}</p><div className="mt-3 space-y-2">{module.actions.map((action) => <label key={action.key} className="flex cursor-pointer items-start gap-2 text-sm"><input type="checkbox" checked={Boolean((member.permissions[module.key] as unknown as Record<string, boolean>)[action.key])} disabled={Boolean(savingPermissionKey)} onChange={(event) => void changePermission(member, module.key, action.key, event.target.checked)} className="mt-0.5 h-4 w-4 accent-purple-700" /><span>{action.label}</span></label>)}</div></section>)}</div></article>)}</div>}
           </section>
           <section className="mt-6 flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-purple-200 bg-white p-6 shadow-sm">
             <div><h2 className="text-xl font-semibold">Dados públicos e atendimento</h2><p className="mt-1 max-w-2xl text-sm text-slate-600">Configure telefone, WhatsApp, e-mail, área atendida, formas de atendimento, logotipo e publicação da Vitrine.</p></div><Link href="/sistema/vitrine" className="rounded-lg bg-purple-700 px-5 py-3 font-semibold text-white hover:bg-purple-800">Configurar Vitrine →</Link>

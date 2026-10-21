@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
   if (previewRequested && process.env.NODE_ENV === "production") {
     return NextResponse.json(
-      { ok: false, message: "Prévia disponível somente em desenvolvimento." },
+      { ok: false, message: "O envio de solicitações de teste fica disponível somente no ambiente local." },
       { status: 404 }
     );
   }

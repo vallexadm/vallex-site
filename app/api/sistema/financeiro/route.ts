@@ -1,7 +1,10 @@
+import { hasMemberAffiliation } from "@/lib/server/member-affiliation";
+import { requireProviderPanelAccess } from "@/lib/server/provider-panel-access";
 import { NextResponse } from "next/server";
 import { parseCurrencyInput } from "@/lib/currency";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
+import { getFinanceCollaborators } from "@/lib/server/finance-collaborators";
 import { normalizeMemberPermissions, ownerPermissions } from "@/lib/team-permissions";
 
 const sources = ["vallex", "indicacao", "redes_sociais", "busca_web", "recorrente", "outros"] as const;
@@ -56,10 +59,14 @@ async function getFinanceContext(request: Request) {
     console.error("Erro ao consultar organização no financeiro:", organizationError);
     return { error: fail("Não foi possível consultar a organização.", 500) };
   }
-  if (organization) return { admin, user, organization, role: "owner" as const, permissions: ownerPermissions };
+  if (organization && !await hasMemberAffiliation(admin, user.id)) {
+    const accessError = await requireProviderPanelAccess(admin, organization.id);
+    if (accessError) return { error: accessError };
+    return { admin, user, organization, role: "owner" as const, permissions: ownerPermissions };
+  }
 
   const { data: membership, error: membershipError } = await admin
-    .from("organization_members").select("organization_id, role, permissions").eq("user_id", user.id).maybeSingle();
+    .from("organization_members").select("organization_id, role, permissions").eq("is_active", true).eq("user_id", user.id).maybeSingle();
   if (membershipError) {
     console.error("Erro ao consultar permissões financeiras:", membershipError);
     return { error: fail("Não foi possível consultar as permissões da equipe.", 500) };
@@ -68,6 +75,8 @@ async function getFinanceContext(request: Request) {
   const { data: memberOrganization, error: memberOrganizationError } = await admin
     .from("organizations").select("id, name").eq("id", membership.organization_id).maybeSingle();
   if (memberOrganizationError || !memberOrganization) return { error: fail("Não foi possível carregar a organização.", 500) };
+  const accessError = await requireProviderPanelAccess(admin, memberOrganization.id);
+  if (accessError) return { error: accessError };
   return { admin, user, organization: memberOrganization, role: "member" as const, permissions: normalizeMemberPermissions(membership.permissions) };
 }
 
@@ -134,6 +143,12 @@ export async function GET(request: Request) {
       }
       const receivables = (servicesResult.data ?? []).filter((service) => Number(service.amount_charged) > Number(service.amount_received));
       return NextResponse.json({ ok: true, permissions, receivables, pendingExpenses: expensesResult.data ?? [] });
+    }
+    let collaborators: { id: string; name: string }[] = [];
+    let collaboratorsWarning: string | null = null;
+    if (permissions.finance.manage) {
+      try { collaborators = await getFinanceCollaborators(admin, organization.id); }
+      catch { collaboratorsWarning = "Não foi possível carregar a equipe. Tente atualizar a página antes de registrar um pagamento de colaborador."; }
     }
     const month = params.get("month") ?? new Date().toISOString().slice(0, 7);
     let fromDate = params.get("from") ?? "";
@@ -208,6 +223,8 @@ export async function GET(request: Request) {
       organization_name: organization.name,
       permissions,
       provider_profile: providerProfileResult.data ?? null,
+      collaborators,
+      collaborators_warning: collaboratorsWarning,
       services: servicesResult.data ?? [],
       expenses,
       customers: customersResult.data ?? [],
@@ -334,6 +351,14 @@ export async function POST(request: Request) {
     const data = body as Record<string, unknown>;
     const recordType = data.type;
 
+    if (recordType === "walk_in_customer") {
+      const { data: customers, error } = await admin.rpc("get_or_create_walk_in_customer", { p_organization_id: organization.id });
+      if (error) return fail("Não foi possível preparar o cliente avulso. Confira se a migração financeiro_cliente_avulso_colaborador.sql foi aplicada.", 503);
+      const customer = Array.isArray(customers) ? customers[0] : customers;
+      if (!customer?.id) return fail("Não foi possível preparar o cliente avulso.", 500);
+      return NextResponse.json({ ok: true, customer: { id: customer.id, name: customer.name }, message: "Cliente avulso selecionado." });
+    }
+
     if (recordType === "service") {
       const customerId = typeof data.customer_id === "string" ? data.customer_id.trim() : "";
       const serviceName = typeof data.service_name === "string" ? data.service_name.trim() : "";
@@ -454,6 +479,8 @@ export async function POST(request: Request) {
     }
 
     if (recordType === "payment") {
+      const requestId = typeof data.request_id === "string" ? data.request_id : "";
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) return fail("Atualize a página antes de registrar o recebimento.", 400);
       const serviceRecordId = typeof data.service_record_id === "string" ? data.service_record_id.trim() : "";
       const installmentNumber = Number(data.installment_number);
       const installmentsTotal = Number(data.installments_total);
@@ -463,7 +490,8 @@ export async function POST(request: Request) {
       if (!Number.isInteger(installmentNumber) || !Number.isInteger(installmentsTotal) || installmentNumber < 1 || installmentNumber > installmentsTotal || installmentsTotal > 24) return fail("Informe uma parcela válida (de 1 a 24).", 400);
       if (!(paymentMethods as readonly string[]).includes(paymentMethod)) return fail("Selecione um meio de pagamento válido.", 400);
       if (!validDate(data.payment_date) || !Number.isFinite(amount) || amount <= 0) return fail("Informe data e valor válidos para o recebimento.", 400);
-      const { error } = await admin.rpc("record_organization_service_payment", {
+      const { error } = await admin.rpc("record_organization_service_payment_once", {
+        p_request_id: requestId,
         p_organization_id: organization.id,
         p_service_record_id: serviceRecordId,
         p_installment_number: installmentNumber,
@@ -475,6 +503,8 @@ export async function POST(request: Request) {
       });
       if (error) {
         console.error("Erro ao registrar recebimento:", error);
+        if (error.message.includes("REQUEST_PAYLOAD_CONFLICT")) return fail("Esta tentativa já foi usada com outros dados. Confira os recebimentos antes de tentar novamente.", 409);
+        if (error.code === "PGRST202") return fail("Falta aplicar a atualização SQL de proteção dos recebimentos neste ambiente.", 503);
         const message = error.message.includes("PAYMENT_EXCEEDS_BALANCE")
           ? "O valor recebido não pode ultrapassar o saldo pendente."
           : error.message.includes("PAYMENT_EXCEEDS_INSTALLMENT")
@@ -509,6 +539,14 @@ export async function POST(request: Request) {
       if (paymentStatus === "pago" && !validDate(data.expense_date)) return fail("Informe uma data válida para o pagamento.", 400);
       if (expenseType === "fixa_mensal" && (!Number.isInteger(recurrenceMonths) || recurrenceMonths < 1 || recurrenceMonths > 24)) return fail("Escolha de 1 a 24 meses para programar a conta fixa.", 400);
       if (notes.length > 2000) return fail("As observações devem ter no máximo 2.000 caracteres.", 400);
+      const collaboratorId = typeof data.collaborator_user_id === "string" ? data.collaborator_user_id.trim() : "";
+      if (category === "Serviços de colaboradores" && !collaboratorId) return fail("Selecione o colaborador que receberá o pagamento.", 400);
+      let collaborator: { id: string; name: string } | undefined;
+      if (collaboratorId) {
+        const collaborators = await getFinanceCollaborators(admin, organization.id);
+        collaborator = collaborators.find((item) => item.id === collaboratorId);
+        if (!collaborator) return fail("O colaborador selecionado não pertence à equipe deste negócio.", 400);
+      }
       const recurrenceGroupId = expenseType === "fixa_mensal" ? randomUUID() : null;
       const entries = Array.from({ length: recurrenceMonths }, (_, index) => {
         const occurrenceDueDate = monthlyDueDate(dueDate as string, index);
@@ -516,7 +554,8 @@ export async function POST(request: Request) {
         const status = isFirst ? paymentStatus : "pendente";
         return {
           organization_id: organization.id,
-          description,
+          description: collaborator ? `${collaborator.name} · ${description}`.slice(0, 200) : description,
+          ...(collaborator ? { collaborator_user_id: collaborator.id, collaborator_name: collaborator.name } : {}),
           category,
           amount,
           expense_date: status === "pago" ? data.expense_date : occurrenceDueDate,
@@ -534,7 +573,7 @@ export async function POST(request: Request) {
         .select("id, description, category, amount, expense_date, due_date, expense_type, recurrence_group_id, classification, property_type, payment_status, notes, created_at");
       if (error) {
         console.error("Erro ao registrar despesa:", error);
-        return fail("Não foi possível registrar o gasto.", 500);
+        return fail(collaborator ? "Não foi possível registrar o pagamento. Confira se a migração financeiro_cliente_avulso_colaborador.sql foi aplicada." : "Não foi possível registrar o gasto.", 500);
       }
       return NextResponse.json({ ok: true, expenses, message: expenseType === "fixa_mensal" ? `Conta fixa programada para ${recurrenceMonths} mês(es).` : "Gasto registrado no financeiro." }, { status: 201 });
     }

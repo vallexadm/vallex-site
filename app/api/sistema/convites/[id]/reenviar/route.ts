@@ -1,3 +1,4 @@
+import { sendInvitationEmail } from "@/lib/server/invitation-email";
 import { NextResponse } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
@@ -72,6 +73,21 @@ export async function POST(
       );
     }
 
+    const body = await request.json().catch(() => null);
+    if (body?.action === "send") {
+      const rawToken = typeof body.invitationToken === "string" ? body.invitationToken : "";
+      if (!/^[a-f0-9]{64}$/i.test(rawToken)) return NextResponse.json({ ok: false, message: "Gere um link antes de enviar." }, { status: 400 });
+      const hash = createHash("sha256").update(rawToken).digest("hex");
+      const { data: current, error } = await adminClient.from("organization_invitations")
+        .select("id, email").eq("id", id).eq("organization_id", organization.id)
+        .eq("status", "pending").eq("token_hash", hash).gt("expires_at", new Date().toISOString()).maybeSingle();
+      if (error) return NextResponse.json({ ok: false, message: "Não foi possível verificar o convite." }, { status: 503 });
+      if (!current) return NextResponse.json({ ok: false, message: "O link expirou, foi substituído ou o convite já foi encerrado. Gere outro link se necessário." }, { status: 409 });
+      const emailDelivery = await sendInvitationEmail(authClient, current.email, rawToken);
+      return NextResponse.json({ ok: emailDelivery.status === "accepted", emailDelivery, message: emailDelivery.message },
+        { status: emailDelivery.status === "accepted" ? 200 : 503 });
+    }
+
     const invitationToken = randomBytes(32).toString("hex");
     const tokenHash = createHash("sha256").update(invitationToken).digest("hex");
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -102,7 +118,8 @@ export async function POST(
 
     return NextResponse.json({
       ok: true,
-      message: "Novo link gerado. O link anterior foi invalidado.",
+      message: "Novo link gerado. O anterior foi invalidado. Clique em Enviar convite por e-mail ou compartilhe o link.",
+
       invitation: {
         id: invitation.id,
         email: invitation.email,
