@@ -458,7 +458,11 @@ export default function VallexAdminPage() {
                   {removed ? <>{canEditProviders && <button type="button" className="vallex-admin-secondary" disabled={busyId === provider.id} onClick={() => void restoreProviderVitrine(provider)}>{busyId === provider.id ? "Restaurando…" : "Restaurar ativo"}</button>}</> : <>
                     {profile && canEditProviders && <>
                       <button type="button" className="vallex-admin-secondary" disabled={busyId === provider.id} onClick={() => editingProviderId === provider.id ? setEditingProviderId("") : beginProviderEdit(provider)}>{editingProviderId === provider.id ? "Cancelar edição" : "Editar"}</button>
-                      <button type="button" className="vallex-admin-secondary" disabled={busyId === provider.id || (!profile.published && !profile.canRepublish)} onClick={() => void setProviderVisibility(provider, !profile.published)}>{busyId === provider.id ? "Atualizando…" : profile.published ? "Ocultar" : profile.canRepublish ? "Reexibir" : "Aguardando o prestador"}</button>
+                      {!profile.published && !profile.canRepublish ? (
+                        <span className="text-sm text-slate-400">Aguardando publicação pelo prestador. Ele pode publicar em Minha Vitrine.</span>
+                      ) : (
+                        <button type="button" className="vallex-admin-secondary" disabled={busyId === provider.id} onClick={() => void setProviderVisibility(provider, !profile.published)}>{busyId === provider.id ? "Atualizando…" : profile.published ? "Ocultar" : "Reexibir"}</button>
+                      )}
                     </>}
                     {profile && canDeleteProviders && <button type="button" className="vallex-admin-back" disabled={busyId === provider.id} onClick={() => removingProviderId === provider.id ? setRemovingProviderId("") : beginProviderRemoval(provider)}>{removingProviderId === provider.id ? "Cancelar exclusão" : "Excluir da vitrine"}</button>}
                   </>}</div></td>
