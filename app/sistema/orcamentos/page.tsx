@@ -1,5 +1,7 @@
 "use client";
 
+import ActionNotice from "@/components/ActionNotice";
+
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import SystemBrand from "@/components/SystemBrand";
@@ -109,6 +111,7 @@ function makeCostForm(item?: QuoteInternalCost): QuoteCostForm {
 }
 
 export default function OrcamentosPage() {
+  const savingQuoteRef = useRef(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
   const [role, setRole] = useState<"owner" | "member" | "">("");
@@ -263,6 +266,8 @@ export default function OrcamentosPage() {
 
  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
   event.preventDefault();
+  if (savingQuoteRef.current) return;
+  savingQuoteRef.current = true;
 
   setError("");
   setMessage("");
@@ -333,6 +338,10 @@ export default function OrcamentosPage() {
       throw new Error("O orçamento foi salvo, mas não recebemos o identificador para anexar arquivos.");
     }
 
+    // Preserve o vinculo antes do upload: uma falha de anexo deve retomar este
+    // orcamento, em vez de criar outro rascunho na proxima tentativa.
+    if (role === "owner") setEditingId(savedQuoteId);
+
     for (const file of [...arquivosSelecionados]) {
       const form = new FormData();
       form.set("finalidade", "orcamento");
@@ -352,7 +361,6 @@ export default function OrcamentosPage() {
     }
 
     if (role === "owner") {
-      setEditingId(savedQuoteId);
       await carregarAnexos(savedQuoteId, accessToken);
     } else {
       setEditingId(null);
@@ -376,6 +384,7 @@ export default function OrcamentosPage() {
     console.error("Erro ao salvar orçamento:", error);
     setError(error instanceof Error ? error.message : "Erro de comunicação ao salvar o orçamento.");
   } finally {
+    savingQuoteRef.current = false;
     setSending(false);
   }
 }
@@ -576,7 +585,7 @@ export default function OrcamentosPage() {
 
           <Link
             href="/sistema"
-            className="inline-flex items-center gap-2 rounded-lg border border-purple-300 px-5 py-3 text-sm font-medium transition hover:bg-purple-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#17002E]"
+            className="inline-flex items-center gap-2 rounded-lg border border-purple-300 px-5 py-3 text-sm font-medium transition hover:bg-purple-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#17002E]"
           >
             <span aria-hidden="true">←</span> Voltar ao painel
           </Link>
@@ -600,17 +609,9 @@ export default function OrcamentosPage() {
           </p>
         </div>
 
-        {error && (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
-            {error}
-          </div>
-        )}
+        {error && <ActionNotice message={error} error onClose={() => setError("")} />}
 
-        {message && (
-          <div className="mt-6 rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-700">
-            {message}
-          </div>
-        )}
+        {message && <ActionNotice message={message} onClose={() => setMessage("")} />}
 
         {(canCreateQuotes || (Boolean(editingId) && canEditQuotes)) ? <div className="mt-8 rounded-2xl border border-purple-100 bg-white p-7 shadow-sm">
           <h2 className="text-2xl font-semibold text-slate-950">

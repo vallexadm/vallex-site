@@ -1,3 +1,4 @@
+import { isProviderTrialExpired } from "@/lib/provider-trial";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isAsaasPeriodExpired } from "@/lib/server/asaas-billing-dates";
 
@@ -36,7 +37,8 @@ const FREE_ENTITLEMENTS: PlanEntitlements = {
 
 export async function getPlanEntitlements(
   admin: SupabaseClient,
-  organizationId: string
+  organizationId: string,
+  now = new Date()
 ): Promise<EntitlementsResult> {
   const { data: subscription, error: subscriptionError } = await admin
     .from("organization_subscriptions")
@@ -64,14 +66,14 @@ export async function getPlanEntitlements(
   if (
     isTrialing &&
     (!subscription.current_period_end ||
-      isAsaasPeriodExpired(subscription.current_period_end))
+      isProviderTrialExpired(subscription.current_period_end, now))
   ) {
     return { entitlements: FREE_ENTITLEMENTS };
   }
 
   if (
     subscription.current_period_end &&
-    isAsaasPeriodExpired(subscription.current_period_end)
+    isAsaasPeriodExpired(subscription.current_period_end, now)
   ) {
     return { entitlements: FREE_ENTITLEMENTS };
   }

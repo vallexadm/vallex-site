@@ -56,7 +56,7 @@ const plans = [
     period: "/ mês",
     users: "Até 3 usuários na equipe",
     features: [...providerPlanCopy.basic.features],
-    action: "Começar teste de 5 dias",
+    action: "Começar teste de 30 dias",
     featured: false,
   },
   {
@@ -176,7 +176,7 @@ export default function Solucoes() {
               ))}
             </div>
             <p className="plans-note">
-              Novos cadastros começam com 5 dias de teste do Basic. Sem uma
+              Novos cadastros começam com 30 dias de teste do Basic. Sem uma
               assinatura confirmada ao fim do teste, o acesso passa para o
               Free. A contratação dos planos pagos é confirmada pelo Asaas.
             </p>

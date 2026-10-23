@@ -28,6 +28,8 @@ create table if not exists public.asaas_checkout_sessions (
   plan_id uuid not null references public.plans(id),
   created_by uuid not null,
   external_reference text not null unique,
+  billing_type text not null default 'CREDIT_CARD'
+    check (billing_type in ('CREDIT_CARD', 'PIX', 'BOLETO')),
   asaas_checkout_id text unique,
   checkout_url text,
   asaas_customer_id text,

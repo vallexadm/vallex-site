@@ -74,7 +74,7 @@ export async function GET(request: Request) {
 
     const { data: members, error: membersError } = await supabaseAdmin
   .from("organization_members")
-  .select("id, user_id, role, permissions, created_at")
+  .select("id, user_id, role, permissions, is_active, created_at")
   .eq("organization_id", organization.id)
   .order("created_at", { ascending: true });
 
@@ -323,5 +323,74 @@ export async function PATCH(request: Request) {
   } catch (error) {
     console.error("Erro ao editar membro da equipe:", error);
     return NextResponse.json({ ok: false, message: "Ocorreu um erro ao atualizar o membro." }, { status: 500 });
+  }
+}
+
+
+export async function POST(request: Request) {
+  try {
+    const url = process.env.SUPABASE_URL;
+    const secret = process.env.SUPABASE_SECRET_KEY;
+    const authUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !secret || !authUrl || !anon) return NextResponse.json({ ok: false, message: "Configuração incompleta." }, { status: 503 });
+    const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+    if (!token) return NextResponse.json({ ok: false, message: "Sessão necessária." }, { status: 401 });
+    const auth = createClient(authUrl, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+    const admin = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: { user }, error: authError } = await auth.auth.getUser(token);
+    if (authError || !user) return NextResponse.json({ ok: false, message: "Sessão inválida." }, { status: 401 });
+    const body = await request.json().catch(() => null);
+    if (typeof body?.is_active !== "boolean" || typeof body?.user_id !== "string" || !/^[0-9a-f-]{36}$/i.test(body.user_id)) return NextResponse.json({ ok: false, message: "Colaborador ou situação inválidos." }, { status: 400 });
+    const { data: organization, error: orgError } = await admin.from("organizations").select("id").eq("owner_id", user.id).maybeSingle();
+    if (orgError) return NextResponse.json({ ok: false, message: "Não foi possível verificar a organização." }, { status: 503 });
+    if (!organization) return NextResponse.json({ ok: false, message: "Somente o proprietário pode alterar o acesso." }, { status: 403 });
+    const { error } = await admin.rpc("set_organization_member_access", {
+      p_organization_id: organization.id, p_actor_id: user.id,
+      p_user_id: body.user_id, p_is_active: body.is_active,
+    });
+    if (error) {
+      console.error("Erro ao alterar acesso do colaborador:", error);
+      const forbidden = /OWNER_ONLY|MEMBER_NOT_FOUND|OWNER_PROTECTED/.test(error.message);
+      return NextResponse.json({ ok: false, message: forbidden ? "Este vínculo não pode ser alterado por sua conta." : "Não foi possível alterar o acesso. Confira o SQL de bloqueio de colaboradores." }, { status: forbidden ? 403 : 503 });
+    }
+    return NextResponse.json({ ok: true, message: body.is_active ? "Acesso reativado." : "Acesso desativado. Histórico preservado." });
+  } catch (error) {
+    console.error("Erro ao alterar acesso:", error);
+    return NextResponse.json({ ok: false, message: "Não foi possível alterar o acesso." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const url = process.env.SUPABASE_URL;
+    const secret = process.env.SUPABASE_SECRET_KEY;
+    const authUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !secret || !authUrl || !anon) return NextResponse.json({ ok: false, message: "Configuração incompleta." }, { status: 503 });
+    const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+    if (!token) return NextResponse.json({ ok: false, message: "Sessão necessária." }, { status: 401 });
+    const auth = createClient(authUrl, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+    const admin = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: { user }, error: authError } = await auth.auth.getUser(token);
+    if (authError || !user) return NextResponse.json({ ok: false, message: "Sessão inválida." }, { status: 401 });
+    const body = await request.json().catch(() => null);
+    if (typeof body?.user_id !== "string" || !/^[0-9a-f-]{36}$/i.test(body.user_id)) return NextResponse.json({ ok: false, message: "Colaborador ou situação inválidos." }, { status: 400 });
+    const { data: organization, error: orgError } = await admin.from("organizations").select("id").eq("owner_id", user.id).maybeSingle();
+    if (orgError) return NextResponse.json({ ok: false, message: "Não foi possível verificar a organização." }, { status: 503 });
+    if (!organization) return NextResponse.json({ ok: false, message: "Somente o proprietário pode alterar o acesso." }, { status: 403 });
+    const { error } = await admin.rpc("remove_organization_member", {
+      p_organization_id: organization.id, p_actor_id: user.id,
+      p_user_id: body.user_id,
+    });
+    if (error) {
+      console.error("Erro ao alterar acesso do colaborador:", error);
+      const forbidden = /OWNER_ONLY|MEMBER_NOT_FOUND|OWNER_PROTECTED/.test(error.message);
+      return NextResponse.json({ ok: false, message: forbidden ? "Este vínculo não pode ser alterado por sua conta." : "Não foi possível alterar o acesso. Confira o SQL de exclusão de vínculo da equipe." }, { status: forbidden ? 403 : 503 });
+    }
+    return NextResponse.json({ ok: true, message: "Colaborador excluído da equipe. Conta e histórico preservados." });
+  } catch (error) {
+    console.error("Erro ao alterar acesso:", error);
+    return NextResponse.json({ ok: false, message: "Não foi possível alterar o acesso." }, { status: 500 });
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import SystemBrand from "@/components/SystemBrand";
 import { useRouter } from "next/navigation";
@@ -13,6 +13,7 @@ type Member = {
   name: string | null;
   phone: string | null;
   role: string;
+  is_active: boolean;
   created_at: string;
 };
 
@@ -53,6 +54,9 @@ type TeamData = {
 
 export default function EquipePage() {
   const router = useRouter();
+  const accessSavingRef = useRef(false);
+  const [accessSaving, setAccessSaving] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState("");
 
   const [team, setTeam] = useState<TeamData | null>(null);
   const [email, setEmail] = useState("");
@@ -64,6 +68,8 @@ export default function EquipePage() {
   const [fallbackCopy, setFallbackCopy] = useState<{ label: string; value: string } | null>(null);
   const [resendLinks, setResendLinks] = useState<Record<string, ResendLink>>({});
   const [resendingInvitationId, setResendingInvitationId] = useState("");
+  const [emailSendingId, setEmailSendingId] = useState("");
+  const emailSendingRef = useRef(false);
   const [revokingInvitationId, setRevokingInvitationId] = useState("");
   const [editingMemberId, setEditingMemberId] = useState("");
   const [editingMemberName, setEditingMemberName] = useState("");
@@ -225,6 +231,28 @@ export default function EquipePage() {
     return link.toString();
   }
 
+  async function sendGeneratedInvitation(invitation: Invitation) {
+    if (emailSendingRef.current) return;
+    const link = resendLinks[invitation.id]?.url;
+    if (!link) return;
+    emailSendingRef.current = true;
+    setEmailSendingId(invitation.id);
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw new Error("Faça login novamente.");
+      const response = await fetch(`/api/sistema/convites/${invitation.id}/reenviar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ action: "send", invitationToken: new URL(link).searchParams.get("token") }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível enviar o convite.");
+      setResendLinks(current => ({ ...current, [invitation.id]: { url: link, message: result.message } }));
+    } catch (error) {
+      setResendLinks(current => ({ ...current, [invitation.id]: { url: link, message: error instanceof Error ? error.message : "Falha no envio." } }));
+    } finally { emailSendingRef.current = false; setEmailSendingId(""); }
+  }
+
   async function handleGenerateResendLink(invitation: Invitation) {
     setResendingInvitationId(invitation.id);
     setResendLinks((current) => ({
@@ -250,7 +278,7 @@ export default function EquipePage() {
       link.searchParams.set("token", result.invitationToken);
       link.searchParams.set("email", invitation.email);
 
-      let linkMessage = "Novo link gerado. O anterior foi invalidado.";
+      let linkMessage = result.message ?? "Novo link gerado. O anterior foi invalidado.";
       try {
         await navigator.clipboard.writeText(link.toString());
         linkMessage += " Link copiado.";
@@ -384,6 +412,49 @@ export default function EquipePage() {
     }
   }
 
+  async function changeMemberAccess(member: Member) {
+    if (accessSavingRef.current) return;
+    const active = !member.is_active;
+    if (!window.confirm(active
+      ? `Reativar o acesso de ${member.name || "este colaborador"} com as permissões já cadastradas?`
+      : `Desativar o acesso de ${member.name || "este colaborador"}? O histórico será preservado. Atendimentos em aberto continuarão na Agenda para acompanhamento do proprietário.`)) return;
+    accessSavingRef.current = true;
+    setAccessSaving(true);
+    setError(""); setMessage("");
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error("Faça login novamente.");
+      const response = await fetch("/api/sistema/equipe", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ user_id: member.user_id, is_active: active }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível alterar o acesso.");
+      await loadTeam();
+      setMessage(result.message);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Não foi possível alterar o acesso.");
+    } finally { accessSavingRef.current = false; setAccessSaving(false); }
+  }
+
+  async function removeMember(member: Member) {
+    if (accessSavingRef.current || !window.confirm(`Excluir ${member.name || "este colaborador"} da equipe? O acesso e o vínculo serão encerrados. A conta e o histórico serão preservados. Para retornar, será necessário novo convite.`)) return;
+    accessSavingRef.current = true; setAccessSaving(true); setError(""); setMessage("");
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error("Faça login novamente.");
+      const response = await fetch("/api/sistema/equipe", { method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ user_id: member.user_id }) });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível excluir o vínculo.");
+      setSelectedMemberId(""); setEditingMemberId(""); await loadTeam(); setMessage(result.message);
+    } catch (error) { setError(error instanceof Error ? error.message : "Não foi possível excluir."); }
+    finally { accessSavingRef.current = false; setAccessSaving(false); }
+  }
+
+  const selectedMember = team?.members.find(member => member.user_id === selectedMemberId && member.role === "member");
+
   const limiteDeEquipeAtingido =
     team !== null && team.teamCapacity.availableSlots === 0;
 
@@ -428,6 +499,8 @@ export default function EquipePage() {
           </div>
         )}
 
+        {message && <p role="status" className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-700">{message}</p>}
+
         {team && (
           <>
             <div className="mt-6 rounded-xl border border-purple-200 bg-white p-6 shadow-sm">
@@ -438,10 +511,8 @@ export default function EquipePage() {
             </div>
 
             <div className="mt-6 max-w-3xl">
-              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 className="text-lg font-semibold text-slate-900">
-                  Convidar colaborador
-                </h3>
+              <details className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <summary className="cursor-pointer text-lg font-semibold text-slate-900">Novo colaborador — criar convite</summary>
 
                 <p className="mt-2 text-sm text-slate-600">
                   Informe o e-mail, o nome e o telefone de contato do colaborador.
@@ -541,18 +612,14 @@ export default function EquipePage() {
                       </label>
                     )}
                     <p className="mt-2 text-xs leading-5 text-green-900">
-                      Encaminhe o link ao colaborador. Ele deve abrir o link e entrar com a conta {invitedEmail}. O sistema não envia e-mail automaticamente. O link já leva o token; mantenha-o privado.
+                      Encaminhe o link ao colaborador. Ele deve abrir o link e entrar com a conta {invitedEmail}. O resultado da tentativa de envio por e-mail aparece na mensagem abaixo. Se necessário, encaminhe este link manualmente. O link já leva o token; mantenha-o privado.
                     </p>
                   </div>
                 )}
 
-                {message && (
-                  <p className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-700">
-                    {message}
-                  </p>
-                )}
 
-              </section>
+
+              </details>
             </div>
 
             <section className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -560,6 +627,26 @@ export default function EquipePage() {
                 Membros da organização
               </h3>
 
+              <div className="mt-4 flex flex-wrap items-end gap-3 rounded-lg bg-slate-50 p-3">
+                <label className="text-sm text-slate-700">Selecionar colaborador
+                  <select value={selectedMemberId} disabled={accessSaving || Boolean(savingMemberId)} onChange={event => { setSelectedMemberId(event.target.value); setEditingMemberId(""); }} className="mt-1 block rounded border border-slate-300 bg-white px-3 py-2">
+                    <option value="">Selecione na lista</option>
+                    {team.members.filter(member => member.role === "member").map(member => <option key={member.id} value={member.user_id}>{member.name || member.email || "Colaborador"}</option>)}
+                  </select>
+                </label>
+                {selectedMember && <>
+                  {editingMemberId === selectedMember.user_id ? <>
+                    <button type="button" disabled={Boolean(savingMemberId) || accessSaving} onClick={() => void saveMemberContact(selectedMember)} className="rounded bg-purple-700 px-3 py-2 text-sm text-white">{savingMemberId ? "Salvando..." : "Salvar"}</button>
+                    <button type="button" disabled={Boolean(savingMemberId)} onClick={() => setEditingMemberId("")} className="rounded border px-3 py-2 text-sm">Cancelar edição</button>
+                  </> : <>
+                    <button type="button" disabled={accessSaving} onClick={() => startEditingMember(selectedMember)} className="rounded border border-purple-200 px-3 py-2 text-sm text-purple-800">Editar</button>
+                    <button type="button" disabled={accessSaving} onClick={() => void changeMemberAccess(selectedMember)} className="rounded border px-3 py-2 text-sm">{selectedMember.is_active ? "Desativar acesso" : "Reativar acesso"}</button>
+                    <button type="button" disabled={accessSaving} onClick={() => void removeMember(selectedMember)} className="rounded border border-red-200 px-3 py-2 text-sm text-red-700">Excluir da equipe</button>
+                    <Link href={`/sistema/financeiro?colaborador=${encodeURIComponent(selectedMember.user_id)}#registrar-conta`} className="rounded border border-emerald-200 px-3 py-2 text-sm text-emerald-800">Registrar pagamento</Link>
+                  </>}
+                </>}
+              </div>
+              <p className="mt-2 text-xs text-slate-600">Desativar suspende o acesso temporariamente. Excluir encerra o vínculo com a equipe e preserva o histórico.</p>
               {team.members.length === 0 ? (
                 <p className="mt-4 text-sm text-slate-600">
                   Nenhum membro adicional foi cadastrado.
@@ -574,7 +661,7 @@ export default function EquipePage() {
                         <th className="px-3 py-3 font-medium">E-mail do usuário</th>
                         <th className="px-3 py-3 font-medium">Perfil</th>
                         <th className="px-3 py-3 font-medium">Desde</th>
-                        <th className="px-3 py-3 text-right font-medium">Ações</th>
+                        <th className="px-3 py-3 text-right font-medium">Situação</th>
                       </tr>
                     </thead>
 
@@ -603,16 +690,7 @@ export default function EquipePage() {
                             {formatDate(member.created_at)}
                           </td>
                           <td className="px-3 py-3 text-right">
-                            {editingMemberId === member.user_id ? (
-                              <div className="flex justify-end gap-2">
-                                <button type="button" disabled={savingMemberId === member.user_id} onClick={() => void saveMemberContact(member)} className="rounded-lg bg-purple-700 px-3 py-2 text-xs font-medium text-white hover:bg-purple-800 disabled:opacity-60">
-                                  {savingMemberId === member.user_id ? "Salvando..." : "Salvar"}
-                                </button>
-                                <button type="button" disabled={savingMemberId === member.user_id} onClick={() => setEditingMemberId("")} className="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-60">Cancelar</button>
-                              </div>
-                            ) : (
-                              <button type="button" onClick={() => startEditingMember(member)} className="rounded-lg border border-purple-200 px-3 py-2 text-xs font-medium text-purple-800 hover:bg-purple-50">Editar</button>
-                            )}
+                            <span className={`text-xs font-semibold ${member.is_active ? "text-emerald-700" : "text-red-700"}`}>{member.is_active ? "Acesso ativo" : "Acesso desativado"}</span>
                           </td>
                         </tr>
                       ))}
@@ -672,7 +750,7 @@ export default function EquipePage() {
                             <div className="flex min-w-52 flex-col items-end gap-2">
                             <button
                               type="button"
-                              disabled={resendingInvitationId === invitation.id || revokingInvitationId === invitation.id}
+                              disabled={Boolean(emailSendingId) || resendingInvitationId === invitation.id || revokingInvitationId === invitation.id}
                               onClick={() => void handleGenerateResendLink(invitation)}
                               className="rounded-lg border border-purple-200 px-3 py-2 text-xs font-medium text-purple-800 hover:bg-purple-50 disabled:opacity-60"
                             >
@@ -684,11 +762,17 @@ export default function EquipePage() {
                             </button>
                             <button
                               type="button"
-                              disabled={resendingInvitationId === invitation.id || revokingInvitationId === invitation.id}
+                              disabled={Boolean(emailSendingId) || resendingInvitationId === invitation.id || revokingInvitationId === invitation.id}
                               onClick={() => void handleCancelInvitation(invitation)}
                               className="rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
                             >
                               {revokingInvitationId === invitation.id ? "Cancelando..." : "Cancelar convite"}
+                            </button>
+                            <button type="button"
+                              disabled={!resendLinks[invitation.id]?.url || Boolean(emailSendingId) || resendingInvitationId === invitation.id || revokingInvitationId === invitation.id}
+                              onClick={() => void sendGeneratedInvitation(invitation)}
+                              className="rounded-lg bg-purple-700 px-3 py-2 text-xs font-medium text-white hover:bg-purple-800 disabled:opacity-50">
+                              {emailSendingId === invitation.id ? "Enviando..." : "Enviar convite por e-mail"}
                             </button>
                             {resendLinks[invitation.id] && (
                               <div className="mt-2 min-w-64 text-left">

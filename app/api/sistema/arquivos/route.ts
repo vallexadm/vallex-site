@@ -271,7 +271,14 @@ export async function DELETE(request: Request) {
   try {
     const auth = await contexto(request);
     if ("error" in auth) return auth.error;
-    const body = await request.json().catch(() => null) as { orcamento_id?: unknown; path?: unknown } | null;
+    const body = await request.json().catch(() => null) as { finalidade?: unknown; orcamento_id?: unknown; path?: unknown } | null;
+    if (body?.finalidade === "logo") {
+      const { data: profile, error } = await auth.admin.from("organization_public_profiles")
+        .update({ logo_url: null, updated_at: new Date().toISOString() })
+        .eq("organization_id", auth.organization.id).select("id").maybeSingle();
+      if (error || !profile) return respostaErro("Não foi possível remover a imagem da Vitrine.", 409);
+      return NextResponse.json({ ok: true, message: "Imagem removida da Vitrine." });
+    }
     const quoteId = typeof body?.orcamento_id === "string" ? body.orcamento_id : "";
     const path = typeof body?.path === "string" ? body.path : "";
     if (!/^[0-9a-f-]{36}$/i.test(quoteId) || !path.startsWith(`${auth.organization.id}/${quoteId}/`)) {

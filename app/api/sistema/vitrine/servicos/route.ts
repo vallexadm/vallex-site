@@ -1,3 +1,4 @@
+import { hasMemberAffiliation } from "@/lib/server/member-affiliation";
 import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { normalizeMemberPermissions, ownerPermissions } from "@/lib/team-permissions";
@@ -121,9 +122,9 @@ async function autenticarOwner(request: Request) {
     };
   }
 
-  if (!organization) {
+  if (!organization || await hasMemberAffiliation(clients.supabaseAdmin, user.id)) {
     const { data: membership, error: membershipError } = await clients.supabaseAdmin
-      .from("organization_members").select("organization_id, role, permissions").eq("user_id", user.id).maybeSingle();
+      .from("organization_members").select("organization_id, role, permissions").eq("is_active", true).eq("user_id", user.id).maybeSingle();
     if (membershipError) return { error: NextResponse.json({ ok: false, message: "Não foi possível consultar suas permissões." }, { status: 500 }) };
     if (!membership || membership.role !== "member") return { error: NextResponse.json({ ok: false, message: "Organização não encontrada." }, { status: 403 }) };
     const { data: memberOrganization, error: memberOrganizationError } = await clients.supabaseAdmin

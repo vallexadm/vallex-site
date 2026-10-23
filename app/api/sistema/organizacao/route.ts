@@ -1,3 +1,5 @@
+import { hasMemberAffiliation } from "@/lib/server/member-affiliation";
+import { createBasicTrialPeriod } from "@/lib/provider-trial";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { normalizeMemberPermissions, ownerPermissions } from "@/lib/team-permissions";
@@ -89,7 +91,7 @@ export async function GET(request: Request) {
     }
 
     // O proprietário tem precedência sobre qualquer associação de membro.
-    if (ownedOrganization) {
+    if (ownedOrganization && !await hasMemberAffiliation(supabaseAdmin, userId)) {
       const planResult = await getPlanEntitlements(
         supabaseAdmin,
         ownedOrganization.id
@@ -138,7 +140,7 @@ export async function GET(request: Request) {
       await supabaseAdmin
         .from("organization_members")
         .select("organization_id, role, permissions")
-        .eq("user_id", userId);
+        .eq("is_active", true).eq("user_id", userId);
 
     if (membershipError) {
       console.error("Erro ao consultar associações:", membershipError);
@@ -490,10 +492,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const trialStartedAt = new Date();
-    const trialEndsAt = new Date(
-      trialStartedAt.getTime() + 5 * 24 * 60 * 60 * 1000
-    );
+    const { startedAt: trialStartedAt, endsAt: trialEndsAt } = createBasicTrialPeriod();
     const { error: subscriptionError } = await supabaseAdmin
       .from("organization_subscriptions")
       .insert({

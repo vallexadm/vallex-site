@@ -113,7 +113,7 @@ export default function SolicitacaoForm({
       <div className="p-5">
             {previewOnlyLocal && (
               <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-5 text-amber-900">
-                Teste local: o envio será salvo como solicitação do prestador,
+                Prévia de teste: o envio será salvo como solicitação do prestador,
                 identificado como teste, sem publicar a Vitrine.
               </p>
             )}

@@ -1,5 +1,7 @@
 "use client";
 
+import ActionNotice from "@/components/ActionNotice";
+
 import {
   FormEvent,
   useCallback,
@@ -445,7 +447,7 @@ const [changingStatusId, setChangingStatusId] = useState<string | null>(
 
           <Link
             href="/sistema"
-            className="inline-flex items-center gap-2 rounded-lg border border-purple-300 px-4 py-2 text-sm font-medium transition hover:bg-purple-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#17002E]"
+            className="inline-flex items-center gap-2 rounded-lg border border-purple-300 px-4 py-2 text-sm font-medium transition hover:bg-purple-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#17002E]"
           >
             <span aria-hidden="true">←</span> Voltar ao painel
           </Link>
@@ -473,17 +475,9 @@ const [changingStatusId, setChangingStatusId] = useState<string | null>(
           </p>
         )}
 
-        {error && (
-          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {error}
-          </div>
-        )}
+        {error && <ActionNotice message={error} error onClose={() => setError("")} />}
 
-        {message && (
-          <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700">
-            {message}
-          </div>
-        )}
+        {message && <ActionNotice message={message} onClose={() => setMessage("")} />}
 
         {canManageCustomers && (
           <section className="mt-6 rounded-xl border border-purple-200 bg-white p-6 shadow-sm">

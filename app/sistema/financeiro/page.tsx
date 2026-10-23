@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import SystemBrand from "@/components/SystemBrand";
@@ -10,6 +10,7 @@ import { createClient } from "@supabase/supabase-js";
 import { calculateFuelCost, describeFuelCost, type FuelCostDetails } from "@/lib/fuel-cost";
 import { normalizeMemberPermissions, type MemberPermissions } from "@/lib/team-permissions";
 import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency";
+import { completePaymentRequest, getPaymentRequestId } from "@/lib/payment-request";
 
 type Customer = { id: string; name: string };
 type ServicePayment = {
@@ -130,7 +131,7 @@ const expenseClassificationLabels: Record<string, string> = {
   financeira: "Despesas financeiras",
 };
 const propertyTypeLabels: Record<string, string> = { alugado: "Alugado", proprio: "Próprio", nao_aplica: "Não se aplica" };
-const expenseCategories = ["Materiais e insumos", "Aluguel e espaço", "Energia elétrica", "Água", "Internet", "Transporte", "Divulgação e marketing", "Software", "Impostos e taxas", "Outros"];
+const expenseCategories = ["Serviços de colaboradores", "Materiais e insumos", "Aluguel e espaço", "Energia elétrica", "Água", "Internet", "Transporte", "Divulgação e marketing", "Software", "Impostos e taxas", "Outros"];
 
 function localDateValue() {
   const now = new Date();
@@ -218,7 +219,45 @@ function safeProviderLogoUrl(value: string | null | undefined) {
   }
 }
 
+function getPaymentInstallments(service: ServiceRecord) {
+  const serviceBalance = Math.max(0, Number(service.amount_charged) - Number(service.amount_received));
+  const scheduled = [...(service.scheduled_installments ?? [])].sort((a, b) => a.installment_number - b.installment_number);
+  const numbers = scheduled.length ? scheduled.map((item) => item.installment_number)
+    : Array.from({ length: Math.max(1, service.installments_total || 1) }, (_, index) => index + 1);
+  return numbers.map((number) => {
+    const installment = scheduled.find((item) => item.installment_number === number);
+    const received = (service.payments ?? []).filter((payment) => payment.installment_number === number)
+      .reduce((sum, payment) => sum + Number(payment.amount), 0);
+    const balance = Math.max(0, Math.round(Math.min(serviceBalance, installment ? Number(installment.amount) - received : serviceBalance) * 100) / 100);
+    return { number, dueDate: installment?.due_date, amount: installment ? Number(installment.amount) : null, received, balance };
+  });
+}
+
+function ServiceInstallments({ service }: { service: ServiceRecord }) {
+  const scheduled = [...(service.scheduled_installments ?? [])].sort((a, b) => a.installment_number - b.installment_number);
+  return <div className="mt-2 space-y-2 text-xs text-slate-500">
+    {scheduled.map((installment) => {
+      const received = (service.payments ?? []).filter((payment) => payment.installment_number === installment.installment_number)
+        .reduce((sum, payment) => sum + Number(payment.amount), 0);
+      const balance = Math.max(0, Number(installment.amount) - received);
+      return <p key={installment.id}><strong>{installment.installment_number}ª parcela</strong> · vencimento {formatDate(installment.due_date)} · {formatCurrency(Number(installment.amount))}
+        <span className="block">{balance <= 0 ? `Quitada · recebido ${formatCurrency(received)}` : received > 0 ? `Parcial · recebido ${formatCurrency(received)} · falta ${formatCurrency(balance)}` : `Pendente · falta ${formatCurrency(balance)}`}</span>
+      </p>;
+    })}
+    {(service.payments ?? []).filter((payment) => !scheduled.some((item) => item.installment_number === payment.installment_number)).map((payment) =>
+      <p key={payment.id}>{payment.installment_number === 0 ? "Entrada" : `${payment.installment_number}ª parcela`} recebida · {paymentMethodLabels[payment.payment_method] ?? "Outro"} · {formatDate(payment.payment_date)} · {formatCurrency(Number(payment.amount))}</p>
+    )}
+  </div>;
+}
+
 export default function FinanceiroPage() {
+  const paymentSavingRef = useRef(false);
+  const walkInSavingRef = useRef(false);
+  const collaboratorLinkApplied = useRef(false);
+  const [savingWalkIn, setSavingWalkIn] = useState(false);
+  const [collaborators, setCollaborators] = useState<{ id: string; name: string }[]>([]);
+  const [collaboratorsWarning, setCollaboratorsWarning] = useState("");
+  const [expenseCollaboratorId, setExpenseCollaboratorId] = useState("");
   const router = useRouter();
   const [filterMode, setFilterMode] = useState<"month" | "year" | "day" | "custom">("month");
   const [selectedMonth, setSelectedMonth] = useState(localMonthValue());
@@ -311,6 +350,21 @@ export default function FinanceiroPage() {
       setAuditError(auditResponse.ok && auditResult.ok ? "" : auditResult.message ?? "Não foi possível carregar o histórico de operações.");
       const permissions = normalizeMemberPermissions(result.permissions ?? receivablesResult.permissions);
       setCanManageFinance(permissions.finance.manage);
+      setCollaborators(result.collaborators ?? []);
+      setCollaboratorsWarning(result.collaborators_warning ?? "");
+      const requestedCollaborator = new URLSearchParams(window.location.search).get("colaborador");
+      if (requestedCollaborator && !collaboratorLinkApplied.current && permissions.finance.manage) {
+        const person = (result.collaborators ?? []).find((item: { id: string }) => item.id === requestedCollaborator);
+        if (person) {
+          collaboratorLinkApplied.current = true;
+          setExpenseCollaboratorId(person.id);
+          setExpenseCategory("Serviços de colaboradores");
+          setExpenseClassification("despesa_variavel");
+          setExpenseDescription("Pagamento de serviço");
+          setExpenseStatus("pendente");
+          window.setTimeout(() => document.getElementById("registrar-conta")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+        }
+      }
       setData({ services: result.services ?? [], receivables: receivablesResult.receivables ?? [], cashflowExpenses: receivablesResult.pendingExpenses ?? [], expenses: result.expenses ?? [], customers: result.customers ?? [], payments: result.payments ?? [], indicators: result.indicators ?? null, organizationName: result.organization_name ?? "", providerProfile: result.provider_profile ?? null });
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Não foi possível carregar o financeiro.");
@@ -514,6 +568,25 @@ export default function FinanceiroPage() {
     const serviceDirectCost = costItemDrafts.reduce((total, item) => total + (parseCurrencyInput(item.amount) || 0), 0);
   const calculatedExpenseFuelCost = calculateFuelCost(expenseFuel);
 
+  async function handleWalkInCustomer() {
+    if (walkInSavingRef.current) return;
+    walkInSavingRef.current = true; setSavingWalkIn(true); setError(""); setMessage("");
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Sessão não encontrada. Faça login novamente.");
+      const response = await fetch("/api/sistema/financeiro", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ type: "walk_in_customer" }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.customer?.id) throw new Error(result.message ?? "Não foi possível selecionar o cliente avulso.");
+      setData((current) => ({ ...current, customers: [...current.customers.filter((item) => item.id !== result.customer.id), result.customer].sort((a, b) => a.name.localeCompare(b.name, "pt-BR")) }));
+      setCustomerId(result.customer.id);
+      setMessage("Cliente avulso selecionado para esta cobrança.");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível selecionar o cliente avulso."); }
+    finally { walkInSavingRef.current = false; setSavingWalkIn(false); }
+  }
+
   async function submitRecord(event: FormEvent<HTMLFormElement>, type: "service" | "expense") {
     event.preventDefault();
     setError("");
@@ -539,6 +612,7 @@ export default function FinanceiroPage() {
       } : {
         type,
         description: expenseDescription,
+        collaborator_user_id: expenseCategory === "Serviços de colaboradores" ? expenseCollaboratorId : "",
         category: expenseCategory,
         amount: expenseAmount,
         expense_date: expenseDate,
@@ -564,7 +638,7 @@ export default function FinanceiroPage() {
         setCustomerId(""); setServiceName(""); setSource("outros"); setAmountCharged(""); setAmountReceived("0"); setInitialPaymentMethod("pix"); setInitialPaymentDate(localDateValue()); setInstallmentDrafts([{ amount: "", due_date: dateAfterDays(30) }]); setCostItemDrafts([]); setServiceNotes(""); setServiceDate(localDateValue());
       } else {
         setExpenseDescription(""); setExpenseCategory("Materiais e insumos"); setExpenseClassification("despesa_variavel"); setExpensePropertyType("nao_aplica"); setExpenseAmount(""); setExpenseFuel({ distance_km: "", fuel_type: "gasolina", price_per_liter: "", efficiency_km_per_liter: "" }); setExpenseStatus("pago"); setExpenseNotes(""); setExpenseDate(localDateValue()); setExpenseDueDate(localDateValue());
-        setExpenseType("avulsa"); setRecurrenceMonths("12");
+        setExpenseType("avulsa"); setRecurrenceMonths("12"); setExpenseCollaboratorId("");
       }
       await loadData(periodRange.from, periodRange.to);
     } catch (saveError) {
@@ -576,20 +650,14 @@ export default function FinanceiroPage() {
   }
 
   function startPayment(service: ServiceRecord, source: "services" | "receivables" = "services") {
+    if (paymentSavingRef.current) return;
     const total = Math.max(1, service.installments_total || 1);
-    const nextScheduled = (service.scheduled_installments ?? []).find((installment) => {
-      const received = (service.payments ?? []).filter((payment) => payment.installment_number === installment.installment_number).reduce((sum, payment) => sum + Number(payment.amount), 0);
-      return received < Number(installment.amount);
-    });
-    const lastInstallment = Math.max(0, ...(service.payments ?? []).map((payment) => payment.installment_number));
-    const nextNumber = nextScheduled?.installment_number ?? (lastInstallment >= total ? total : lastInstallment + 1);
-    const nextSchedule = service.scheduled_installments?.find((installment) => installment.installment_number === nextNumber);
-    const alreadyPaid = (service.payments ?? []).filter((payment) => payment.installment_number === nextNumber).reduce((sum, payment) => sum + Number(payment.amount), 0);
     setPaymentServiceId(service.id);
     setPaymentSource(source);
-    setPaymentAmount(nextSchedule ? formatCurrencyInput(Math.max(0, Number(nextSchedule.amount) - alreadyPaid)) : "");
+    // Cada baixa exige a escolha explicita; reabrir nao seleciona a proxima parcela.
+    setPaymentAmount("");
     setPaymentInstallmentsTotal(String(total));
-    setPaymentInstallment(String(nextNumber));
+    setPaymentInstallment("");
     setPaymentMethod("pix");
     setPaymentDate(localDateValue());
     setError("");
@@ -598,35 +666,52 @@ export default function FinanceiroPage() {
 
   async function submitPayment(event: FormEvent<HTMLFormElement>, service: ServiceRecord) {
     event.preventDefault();
+    event.stopPropagation();
+    if (paymentSavingRef.current) return;
+    const selected = getPaymentInstallments(service).find((item) => item.number === Number(paymentInstallment));
+    const amount = parseCurrencyInput(paymentAmount);
+    if (!selected || selected.balance <= 0 || !Number.isFinite(amount) || amount <= 0 || Math.round(amount * 100) > Math.round(selected.balance * 100)) {
+      setError("Selecione uma parcela pendente e informe um valor que não ultrapasse o saldo dela.");
+      return;
+    }
+    const submittedInstallment = selected.number;
+    const submittedAmount = paymentAmount;
+    paymentSavingRef.current = true;
     setError("");
     setMessage("");
     setSavingPayment(true);
     try {
       const token = await getToken();
       if (!token) throw new Error("Sessão não encontrada. Faça login novamente.");
+      const requestPayload = JSON.stringify([service.id, submittedInstallment, Number(paymentInstallmentsTotal), amount, paymentMethod, paymentDate]);
+      const requestId = getPaymentRequestId(requestPayload);
       const response = await fetch("/api/sistema/financeiro", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
+          request_id: requestId,
           type: "payment",
           service_record_id: service.id,
-          installment_number: Number(paymentInstallment),
+          installment_number: submittedInstallment,
           installments_total: Number(paymentInstallmentsTotal),
           payment_method: paymentMethod,
           payment_date: paymentDate,
-          amount: paymentAmount,
+          amount: submittedAmount,
         }),
       });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível registrar o recebimento.");
-      setMessage(result.message ?? "Recebimento registrado.");
+      completePaymentRequest(requestPayload);
+      setMessage(`Recebimento de ${formatCurrency(amount)} registrado somente na ${submittedInstallment}ª parcela. As demais parcelas não foram alteradas.`);
       setPaymentServiceId("");
       setPaymentSource("services");
       setPaymentAmount("");
+      setPaymentInstallment("");
       await loadData(periodRange.from, periodRange.to);
     } catch (paymentError) {
       setError(paymentError instanceof Error ? paymentError.message : "Não foi possível registrar o recebimento.");
     } finally {
+      paymentSavingRef.current = false;
       setSavingPayment(false);
     }
   }
@@ -850,11 +935,11 @@ export default function FinanceiroPage() {
             return <Fragment key={service.id}><tr className="border-b border-slate-100 align-top"><td className="px-3 py-3 font-mono text-xs font-semibold text-purple-800">{service.charge_code}</td><td className="px-3 py-3 font-medium text-slate-800">{service.customers?.name ?? "Cliente"}</td><td className="px-3 py-3 text-slate-700">{service.service_name}</td><td className="px-3 py-3 text-slate-700">{nextInstallment ? formatDate(nextInstallment.due_date) : "Sem vencimento definido"}</td><td className="px-3 py-3 text-right text-slate-700">{formatCurrency(Number(service.amount_charged))}</td><td className="px-3 py-3 text-right text-slate-700">{formatCurrency(Number(service.amount_received))}</td><td className="px-3 py-3 text-right font-semibold text-amber-800">{formatCurrency(balance)}</td><td className="px-3 py-3 text-right">{canManageFinance && <button type="button" onClick={() => paymentServiceId === service.id && paymentSource === "receivables" ? setPaymentServiceId("") : startPayment(service, "receivables")} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800">{paymentServiceId === service.id && paymentSource === "receivables" ? "Fechar" : "Registrar recebimento"}</button>}</td></tr>
               {canManageFinance && paymentServiceId === service.id && paymentSource === "receivables" && <tr className="border-b border-slate-100"><td colSpan={8} className="px-3 py-4"><form onSubmit={(event) => void submitPayment(event, service)} className="grid gap-3 rounded-lg bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-5">
                 <p className="text-sm font-semibold text-slate-800 sm:col-span-2 lg:col-span-5">Saldo deste serviço: {formatCurrency(balance)}</p>
-                <label className="text-xs font-medium text-slate-700">Valor recebido (R$)<CurrencyInput required min={0.01} max={balance} value={paymentAmount} onChange={setPaymentAmount} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label>
-                <label className="text-xs font-medium text-slate-700">Parcela<select required value={paymentInstallment} onChange={(event) => { const number = Number(event.target.value); setPaymentInstallment(event.target.value); const scheduled = service.scheduled_installments?.find((installment) => installment.installment_number === number); const received = (service.payments ?? []).filter((payment) => payment.installment_number === number).reduce((sum, payment) => sum + Number(payment.amount), 0); setPaymentAmount(scheduled ? formatCurrencyInput(Math.max(0, Number(scheduled.amount) - received)) : ""); }} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm">{Array.from({ length: Math.max(1, service.installments_total || 1) }, (_, index) => index + 1).map((number) => { const scheduled = service.scheduled_installments?.find((installment) => installment.installment_number === number); return <option key={number} value={number}>{number}ª parcela{scheduled ? ` · vence ${formatDate(scheduled.due_date)}` : ""}</option>; })}</select></label>
+                <label className="text-xs font-medium text-slate-700">Parcela<select required disabled={savingPayment} value={paymentInstallment} onChange={(event) => { setPaymentInstallment(event.target.value); const selected = getPaymentInstallments(service).find((item) => item.number === Number(event.target.value)); setPaymentAmount(selected && selected.balance > 0 ? formatCurrencyInput(selected.balance) : ""); }} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm"><option value="">Selecione a parcela</option>{getPaymentInstallments(service).map((item) => <option key={item.number} value={item.number} disabled={item.balance <= 0}>{item.number}ª parcela{item.dueDate ? ` · vence ${formatDate(item.dueDate)}` : ""}{item.balance <= 0 ? " · quitada" : ` · saldo ${formatCurrency(item.balance)}`}</option>)}</select></label>
+                <label className="text-xs font-medium text-slate-700">Valor recebido (R$)<CurrencyInput required min={0.01} disabled={savingPayment} max={getPaymentInstallments(service).find((item) => item.number === Number(paymentInstallment))?.balance ?? 0} value={paymentAmount} onChange={setPaymentAmount} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label>
                 <label className="text-xs font-medium text-slate-700">Meio de pagamento<select required value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm">{Object.entries(paymentMethodLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                 <label className="text-xs font-medium text-slate-700">Data do recebimento<input required type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label>
-                <div className="flex items-end"><button disabled={savingPayment} className="w-full rounded-lg bg-purple-700 px-3 py-2 text-sm font-semibold text-white hover:bg-purple-800 disabled:opacity-50">{savingPayment ? "Salvando…" : "Salvar recebimento"}</button></div>
+                <div className="flex items-end"><button disabled={savingPayment || !paymentInstallment} className="w-full rounded-lg bg-purple-700 px-3 py-2 text-sm font-semibold text-white hover:bg-purple-800 disabled:opacity-50">{savingPayment ? "Salvando…" : paymentInstallment ? `Registrar ${formatCurrency(parseCurrencyInput(paymentAmount) || 0)} na ${paymentInstallment}ª parcela` : "Selecione a parcela"}</button></div>
               </form></td></tr>}
             </Fragment>;
           })}</tbody></table></div>}
@@ -878,6 +963,10 @@ export default function FinanceiroPage() {
               <label className="text-sm font-medium text-slate-700 sm:col-span-2">Cliente
                 <select required value={customerId} onChange={(event) => setCustomerId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900"><option value="">Selecione um cliente</option>{data.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select>
               </label>
+              <div className="sm:col-span-2">
+                <button type="button" disabled={savingWalkIn || savingService} onClick={() => void handleWalkInCustomer()} className="rounded-lg border border-purple-200 px-3 py-2 text-sm font-semibold text-purple-800 disabled:opacity-50">{savingWalkIn ? "Preparando…" : "Usar cliente avulso"}</button>
+                <p className="mt-2 text-xs text-slate-500">Para cobranças pontuais sem identificação. Para acompanhar retornos e dívidas individuais, selecione um cliente cadastrado.</p>
+              </div>
               <label className="text-sm font-medium text-slate-700 sm:col-span-2">Serviço realizado
                 <input required minLength={2} maxLength={200} value={serviceName} onChange={(event) => setServiceName(event.target.value)} placeholder="Ex.: consulta previdenciária" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900" />
               </label>
@@ -927,7 +1016,7 @@ export default function FinanceiroPage() {
               </label>
             </div>
             <button disabled={savingService || !data.customers.length} className="mt-5 rounded-lg bg-purple-700 px-5 py-3 font-semibold text-white hover:bg-purple-800 disabled:opacity-50">{savingService ? "Salvando…" : "Registrar serviço"}</button>
-            {!data.customers.length && <p className="mt-3 text-sm text-amber-700">Cadastre um cliente antes de registrar o serviço.</p>}
+            {!data.customers.length && <p className="mt-3 text-sm text-amber-700">Selecione um cliente cadastrado ou use o botão Cliente avulso.</p>}
           </form>
 
           <form id="registrar-conta" onSubmit={(event) => void submitRecord(event, "expense")} className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -938,8 +1027,18 @@ export default function FinanceiroPage() {
                 <input required minLength={2} maxLength={200} value={expenseDescription} onChange={(event) => setExpenseDescription(event.target.value)} placeholder={expenseCategory === "Materiais e insumos" ? "Ex.: fiação, tomadas ou material de limpeza" : "Ex.: conta de energia, aluguel do escritório"} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900" />
               </label>
               <label className="text-sm font-medium text-slate-700">Categoria
-                <select value={expenseCategory} onChange={(event) => { const nextCategory = event.target.value; setExpenseCategory(nextCategory); setExpenseAmount(nextCategory === "Transporte" ? String(calculateFuelCost(expenseFuel)) : ""); if (!["Aluguel e espaço", "Energia elétrica", "Água", "Internet"].includes(nextCategory)) setExpensePropertyType("nao_aplica"); }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900">{expenseCategories.map((category) => <option key={category}>{category}</option>)}</select>
+                <select value={expenseCategory} onChange={(event) => { const nextCategory = event.target.value; setExpenseCategory(nextCategory); if (nextCategory === "Serviços de colaboradores") { setExpenseStatus("pendente"); setExpenseClassification("despesa_variavel"); } else { setExpenseCollaboratorId(""); } setExpenseAmount(nextCategory === "Transporte" ? String(calculateFuelCost(expenseFuel)) : ""); if (!["Aluguel e espaço", "Energia elétrica", "Água", "Internet"].includes(nextCategory)) setExpensePropertyType("nao_aplica"); }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900">{expenseCategories.map((category) => <option key={category}>{category}</option>)}</select>
               </label>
+              {expenseCategory === "Serviços de colaboradores" && <div className="sm:col-span-2">
+                <label className="text-sm font-medium text-slate-700">Colaborador
+                  <select required value={expenseCollaboratorId} onChange={(event) => { setExpenseCollaboratorId(event.target.value); setExpenseStatus("pendente"); if (!expenseDescription) setExpenseDescription("Pagamento de serviço"); }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5">
+                    <option value="">Selecione um colaborador</option>{collaborators.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+                  </select>
+                </label>
+                {collaboratorsWarning && <p role="alert" className="mt-2 text-sm text-amber-800">{collaboratorsWarning}</p>}
+                {!collaboratorsWarning && collaborators.length === 0 && <p className="mt-2 text-sm text-slate-500">Nenhum colaborador vinculado. Cadastre a equipe e conclua o aceite do convite.</p>}
+                <p className="mt-2 text-xs text-slate-500">Informe o serviço na descrição e o valor combinado. Este lançamento entra nas despesas gerais; não repita um custo já lançado no serviço.</p>
+              </div>}
               <label className="text-sm font-medium text-slate-700">Classificar como
                 <select value={expenseClassification} onChange={(event) => setExpenseClassification(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900">{Object.entries(expenseClassificationLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
               </label>
@@ -997,7 +1096,7 @@ export default function FinanceiroPage() {
               <td className="px-3 py-3 font-mono text-xs font-semibold text-purple-800">{service.charge_code}</td>
               <td className="px-3 py-3 text-slate-700">{formatDate(service.service_date)}</td>
               <td className="px-3 py-3 text-slate-700">{service.customers?.name ?? "Cliente"}</td>
-              <td className="px-3 py-3 text-slate-700">{service.service_name}{service.scheduled_installments?.length > 0 && <div className="mt-2 space-y-1 text-xs text-slate-500">{service.scheduled_installments.map((installment) => { const received = (service.payments ?? []).filter((payment) => payment.installment_number === installment.installment_number).reduce((sum, payment) => sum + Number(payment.amount), 0); return <p key={installment.id}>{installment.installment_number}ª parcela · vence {formatDate(installment.due_date)} · {formatCurrency(Number(installment.amount))}{received > 0 ? ` · recebido ${formatCurrency(received)}` : " · pendente"}</p>; })}</div>}{service.payments?.length > 0 && <div className="mt-1 space-y-1 text-xs text-slate-500">{service.payments.map((payment) => <p key={payment.id}>{payment.installment_number === 0 ? "Entrada" : `${payment.installment_number}ª parcela`} recebida · {paymentMethodLabels[payment.payment_method] ?? "Outro"} · {formatDate(payment.payment_date)} · {formatCurrency(Number(payment.amount))}</p>)}</div>}</td>
+              <td className="px-3 py-3 text-slate-700">{service.service_name}<ServiceInstallments service={service} /></td>
               <td className="px-3 py-3 text-slate-700">{sourceLabels[service.source] ?? "Outro"}</td>
               <td className="px-3 py-3 text-right text-slate-700">{formatCurrency(Number(service.amount_charged))}</td>
               <td className="px-3 py-3 text-right text-slate-700">{formatCurrency(Number(service.amount_received))}</td>
@@ -1013,11 +1112,11 @@ export default function FinanceiroPage() {
             </tr>
             {canManageFinance && paymentServiceId === service.id && paymentSource === "services" && <tr key={`${service.id}-payment`} className="border-b border-slate-100"><td colSpan={12} className="px-3 py-4"><form onSubmit={(event) => void submitPayment(event, service)} className="grid gap-3 rounded-lg bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-5">
               <p className="text-sm font-semibold text-slate-800 sm:col-span-2 lg:col-span-5">Saldo deste serviço: {formatCurrency(Math.max(0, Number(service.amount_charged) - Number(service.amount_received)))}</p>
-              <label className="text-xs font-medium text-slate-700">Valor recebido (R$)<CurrencyInput required min={0.01} max={Number(service.amount_charged) - Number(service.amount_received)} value={paymentAmount} onChange={setPaymentAmount} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label>
-              <label className="text-xs font-medium text-slate-700">Parcela<select required value={paymentInstallment} onChange={(event) => { const number = Number(event.target.value); setPaymentInstallment(event.target.value); const scheduled = service.scheduled_installments?.find((installment) => installment.installment_number === number); const received = (service.payments ?? []).filter((payment) => payment.installment_number === number).reduce((sum, payment) => sum + Number(payment.amount), 0); setPaymentAmount(scheduled ? formatCurrencyInput(Math.max(0, Number(scheduled.amount) - received)) : ""); }} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm">{Array.from({ length: Number(paymentInstallmentsTotal) }, (_, index) => index + 1).map((number) => { const scheduled = service.scheduled_installments?.find((installment) => installment.installment_number === number); return <option key={number} value={number}>{number}ª parcela{scheduled ? ` · vence ${formatDate(scheduled.due_date)}` : ""}</option>; })}</select></label>
+              <label className="text-xs font-medium text-slate-700">Parcela<select required disabled={savingPayment} value={paymentInstallment} onChange={(event) => { setPaymentInstallment(event.target.value); const selected = getPaymentInstallments(service).find((item) => item.number === Number(event.target.value)); setPaymentAmount(selected && selected.balance > 0 ? formatCurrencyInput(selected.balance) : ""); }} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm"><option value="">Selecione a parcela</option>{getPaymentInstallments(service).map((item) => <option key={item.number} value={item.number} disabled={item.balance <= 0}>{item.number}ª parcela{item.dueDate ? ` · vence ${formatDate(item.dueDate)}` : ""}{item.balance <= 0 ? " · quitada" : ` · saldo ${formatCurrency(item.balance)}`}</option>)}</select></label>
+              <label className="text-xs font-medium text-slate-700">Valor recebido (R$)<CurrencyInput required min={0.01} disabled={savingPayment} max={getPaymentInstallments(service).find((item) => item.number === Number(paymentInstallment))?.balance ?? 0} value={paymentAmount} onChange={setPaymentAmount} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label>
               <label className="text-xs font-medium text-slate-700">Meio de pagamento<select required value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm">{Object.entries(paymentMethodLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
               <label className="text-xs font-medium text-slate-700">Data do recebimento<input required type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} className="mt-1 w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm" /></label>
-              <div className="flex items-end"><button disabled={savingPayment} className="w-full rounded-lg bg-purple-700 px-3 py-2 text-sm font-semibold text-white hover:bg-purple-800 disabled:opacity-50">{savingPayment ? "Salvando…" : "Salvar parcela"}</button></div>
+              <div className="flex items-end"><button disabled={savingPayment || !paymentInstallment} className="w-full rounded-lg bg-purple-700 px-3 py-2 text-sm font-semibold text-white hover:bg-purple-800 disabled:opacity-50">{savingPayment ? "Salvando…" : paymentInstallment ? `Registrar ${formatCurrency(parseCurrencyInput(paymentAmount) || 0)} na ${paymentInstallment}ª parcela` : "Selecione a parcela"}</button></div>
             </form></td></tr>}
             </Fragment>;
           })}</tbody></table></div>}

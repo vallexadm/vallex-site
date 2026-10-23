@@ -12,15 +12,25 @@ export default function AceitarConvitePage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [accepted, setAccepted] = useState(false);
+  const [acceptedContext, setAcceptedContext] = useState<{ userId: string; organizationId: string } | null>(null);
   const [accountEmail, setAccountEmail] = useState("");
   const [invitedEmail, setInvitedEmail] = useState("");
   const [password, setPassword] = useState("");
   const [creatingAccount, setCreatingAccount] = useState(false);
+  const [awaitingEmailConfirmation, setAwaitingEmailConfirmation] = useState(false);
   const [acceptedLegal, setAcceptedLegal] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
+      const authHash = new URLSearchParams(window.location.hash.slice(1));
+      const authError = authHash.get("error") || params.get("error");
+      if (authError) {
+        setError("Não foi possível validar o link de acesso. Ele pode ter expirado ou já ter sido utilizado. Solicite um novo e-mail ao proprietário e abra somente o mais recente. Se já possui senha, entre na sua conta para aceitar o convite ainda vigente.");
+        // Remove a falha da URL, preservando os parâmetros do convite.
+        window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+      }
+
       const tokenFromLink = params.get("token") ?? "";
       const emailFromLink = params.get("email") ?? "";
 
@@ -33,6 +43,21 @@ export default function AceitarConvitePage() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  async function openCollaboratorPanel() {
+    setError(""); setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!user || !session || user.id !== acceptedContext?.userId) throw new Error("A conta conectada mudou. Entre novamente com o e-mail do colaborador.");
+      const response = await fetch("/api/sistema/organizacao", { headers: { Authorization: `Bearer ${session.access_token}` } });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível verificar seu vínculo.");
+      if (result.role !== "member" || result.organization.id !== acceptedContext.organizationId) throw new Error("O painel retornou outro perfil ou organização. O acesso foi interrompido para preservar o vínculo de colaborador.");
+      router.replace("/sistema"); router.refresh();
+    } catch (error) { setError(error instanceof Error ? error.message : "Não foi possível abrir o painel."); }
+    finally { setLoading(false); }
+  }
 
   function loginUrl() {
     const next = `${window.location.pathname}${window.location.search}`;
@@ -74,6 +99,7 @@ export default function AceitarConvitePage() {
         return;
       }
 
+      setAcceptedContext({ userId: result.userId, organizationId: result.organization.id });
       setAccepted(true);
       setMessage(
         `Convite aceito! Você agora faz parte da organização ${result.organization.name}.`
@@ -98,6 +124,21 @@ export default function AceitarConvitePage() {
     await acceptWithToken(session.access_token);
   }
 
+  async function continueAfterConfirmation() {
+    setError("");
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      router.push(loginUrl());
+      return;
+    }
+    if (session.user.email?.toLowerCase() !== invitedEmail.trim().toLowerCase()) {
+      setError("Entre com o e-mail convidado para continuar como colaborador.");
+      return;
+    }
+    setAccountEmail(session.user.email ?? "");
+    await acceptWithToken(session.access_token);
+  }
+
   async function handleCreateAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -114,7 +155,7 @@ export default function AceitarConvitePage() {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
-        options: { data: {
+        options: { emailRedirectTo: `${window.location.origin}${window.location.pathname}${window.location.search}`, data: {
           terms_version: "2026-10-17-v2",
           privacy_notice_version: "2026-10-17-v2",
           terms_accepted_at: new Date().toISOString(),
@@ -130,7 +171,9 @@ export default function AceitarConvitePage() {
         return;
       }
 
-      setMessage("Conta criada. Confirme o e-mail enviado pelo sistema e depois entre por este mesmo link para concluir a entrada na equipe.");
+      setAwaitingEmailConfirmation(true);
+      setPassword("");
+      setMessage("Conta criada. Confirme seu e-mail e clique em Já confirmei meu e-mail — continuar. Se necessário, entraremos na sua conta antes de concluir o aceite da equipe.");
     } catch (signUpError) {
       setError(signUpError instanceof Error ? signUpError.message : "Não foi possível criar a conta.");
     } finally {
@@ -189,7 +232,10 @@ export default function AceitarConvitePage() {
 
         {!accepted ? (
           <>
-          {!accountEmail && invitedEmail && (
+          {awaitingEmailConfirmation && (
+            <button type="button" disabled={loading} onClick={() => void continueAfterConfirmation()} className="mt-4 w-full rounded-lg bg-purple-700 px-4 py-3 font-semibold text-white hover:bg-purple-800 disabled:opacity-60">Já confirmei meu e-mail — continuar</button>
+          )}
+          {!accountEmail && invitedEmail && !awaitingEmailConfirmation && (
             <form onSubmit={handleCreateAccount} className="mt-6 space-y-3 rounded-lg border border-purple-100 bg-purple-50 p-4">
               <h2 className="font-semibold text-slate-900">Primeiro acesso? Crie sua conta de colaborador</h2>
               <label htmlFor="invite-signup-email" className="block text-sm font-medium text-slate-700">E-mail convidado</label>
@@ -228,7 +274,7 @@ export default function AceitarConvitePage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !accountEmail}
               className="w-full rounded-lg bg-purple-700 px-4 py-3 font-medium text-white transition hover:bg-purple-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? "Validando convite..." : invitationToken ? "Aceitar convite" : "Validar token"}
@@ -238,10 +284,11 @@ export default function AceitarConvitePage() {
         ) : (
           <button
             type="button"
-            onClick={() => router.replace("/sistema")}
+            disabled={loading}
+            onClick={() => void openCollaboratorPanel()}
             className="mt-6 w-full rounded-lg bg-purple-700 px-4 py-3 font-medium text-white transition hover:bg-purple-800"
           >
-            Acessar painel
+            Acessar painel do colaborador
           </button>
         )}
       </section>
