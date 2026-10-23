@@ -21,6 +21,7 @@ export default function SistemaLayout({
   const pathname = usePathname();
   const router = useRouter();
   const [access, setAccess] = useState<AccessState | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (pathsWithoutPanel.has(pathname)) return;
@@ -41,6 +42,10 @@ export default function SistemaLayout({
           headers: { Authorization: `Bearer ${token}` },
           cache: "no-store",
         });
+        if (response.status === 401) {
+          router.replace("/sistema/login?motivo=sessao-expirada");
+          return;
+        }
         const result = await response.json();
 
         if (
@@ -91,7 +96,7 @@ export default function SistemaLayout({
     return () => {
       cancelled = true;
     };
-  }, [pathname, router]);
+  }, [pathname, router, attempt]);
 
   if (pathsWithoutPanel.has(pathname)) {
     return pathname === "/sistema/planos" ? (
@@ -110,30 +115,26 @@ export default function SistemaLayout({
   }
 
   if (access.status === "error") {
+    function retryAccess() {
+      setAccess(null);
+      setAttempt((value) => value + 1);
+    }
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100 px-6 text-slate-700">
-        <section className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <h1 className="text-xl font-semibold">Não foi possível verificar seu plano</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            Tente novamente. Se o problema continuar, consulte os planos ou entre em contato com o suporte.
-          </p>
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="rounded-lg bg-purple-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-800"
-            >
-              Tentar novamente
-            </button>
-            <a
-              href="/sistema/planos"
-              className="rounded-lg border border-purple-200 px-4 py-2.5 text-sm font-semibold text-purple-800 transition hover:bg-purple-50"
-            >
-              Ver planos
-            </a>
-          </div>
-        </section>
-      </main>
+      <ProviderLogoutBar>
+        <main className="flex min-h-screen items-center justify-center bg-slate-100 px-6 text-slate-700">
+          <section role="alert" className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <h1 className="text-xl font-semibold">Não foi possível verificar seu acesso</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              Não conseguimos consultar sua conta agora. Isso não significa que seu plano venceu. Tente novamente ou entre em contato com a VALLEX.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <button type="button" onClick={retryAccess} className="rounded-lg bg-purple-700 px-4 py-2.5 text-sm font-semibold text-white">Tentar novamente</button>
+              <button type="button" onClick={() => { if (pathname === "/sistema") retryAccess(); else router.replace("/sistema"); }} className="rounded-lg border border-purple-200 px-4 py-2.5 text-sm font-semibold text-purple-800">Voltar ao painel</button>
+              <a href="/contato" className="rounded-lg border border-purple-200 px-4 py-2.5 text-sm font-semibold text-purple-800">Falar com a VALLEX</a>
+            </div>
+          </section>
+        </main>
+      </ProviderLogoutBar>
     );
   }
 

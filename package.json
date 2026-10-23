@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "prebuild": "node scripts/clean-turbopack-cache.mjs",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "test:webhook-auth": "node --test tests/asaas-webhook-auth.test.mjs",
