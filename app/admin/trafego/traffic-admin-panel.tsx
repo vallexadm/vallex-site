@@ -62,6 +62,7 @@ export default function TrafficAdminPanel() {
       if (!response.ok || !result.ok) throw new Error(result.message ?? "Não foi possível carregar o módulo de tráfego.");
       const next: Data = { plans: result.plans ?? [], leads: result.leads ?? [], archivedLeads: result.archivedLeads ?? [], campaigns: result.campaigns ?? [], activity: result.activity ?? [] };
       setData(next);
+      setCampaignForm((current) => current.leadId || !next.leads.length ? current : { ...current, leadId: next.leads[0].id });
       setLeadDrafts(Object.fromEntries(next.leads.map((lead) => [lead.id, { status: lead.status, serviceValue: moneyInput(lead.service_value), mediaBudget: moneyInput(lead.media_budget), responsibleName: lead.responsible_name ?? "", facebookUrl: lead.facebook_url ?? "", instagramUrl: lead.instagram_url ?? "", event: "" }])));
       setCampaignDrafts(Object.fromEntries(next.campaigns.map((campaign) => [campaign.id, { status: campaign.status, amountSpent: moneyInput(campaign.amount_spent), impressions: numberInput(campaign.impressions), clicks: numberInput(campaign.clicks), leadsGenerated: numberInput(campaign.leads_generated), conversions: numberInput(campaign.conversions), notes: campaign.notes ?? "" }])));
     } catch (loadError) { setError(loadError instanceof Error ? loadError.message : "Falha ao carregar dados."); }
@@ -69,7 +70,6 @@ export default function TrafficAdminPanel() {
   }, []);
 
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
-  useEffect(() => { if (!campaignForm.leadId && data.leads.length) setCampaignForm((current) => current.leadId ? current : { ...current, leadId: data.leads[0].id }); }, [campaignForm.leadId, data.leads]);
 
   async function requestApi(method: "PATCH" | "POST" | "DELETE", payload: Record<string, unknown>, busyKey: string): Promise<boolean> {
     setSaving(busyKey); setError(""); setNotice("");

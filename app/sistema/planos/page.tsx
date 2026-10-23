@@ -28,10 +28,13 @@ function PlanosContent() {
   const searchParams = useSearchParams();
   const [data, setData] = useState<PlanData | null>(null);
   const [loading, setLoading] = useState(true), [error, setError] = useState(""), [notice, setNotice] = useState(""), [submitting, setSubmitting] = useState("");
+  const [billingType, setBillingType] = useState<"CREDIT_CARD" | "PIX" | "BOLETO">("CREDIT_CARD");
+  const [billingDocument, setBillingDocument] = useState("");
   const paymentMessages: Record<string, string> = {
     retorno: "Você voltou do checkout. A assinatura só será ativada quando o Asaas confirmar o pagamento.",
     cancelado: "Checkout cancelado. Você pode iniciar uma nova contratação quando quiser.",
     expirado: "O checkout expirou. Você pode gerar um novo link de pagamento.",
+    aguardando: "Aguardando a confirmação do pagamento pelo Asaas. O plano será liberado após a confirmação.",
   };
   const message = paymentMessages[searchParams.get("pagamento") ?? ""] ?? "";
   const panelAccessMessage = searchParams.get("acesso") === "painel"
@@ -57,10 +60,14 @@ function PlanosContent() {
   async function checkout(planCode: string) {
     setError(""); setSubmitting(planCode);
     try {
+      const document = billingDocument.replace(/\D/g, "");
+      if (billingType !== "CREDIT_CARD" && ![11, 14].includes(document.length)) {
+        throw new Error("Informe um CPF ou CNPJ com 11 ou 14 números para gerar a cobrança.");
+      }
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) { router.replace("/sistema/login"); return; }
-      const response = await fetch("/api/sistema/asaas/checkout", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ planCode }) });
+      const response = await fetch("/api/sistema/asaas/checkout", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ planCode, billingType, document }) });
       const responseText = await response.text();
       let result: { ok?: boolean; message?: string; checkoutUrl?: unknown };
       try {
@@ -128,6 +135,22 @@ function PlanosContent() {
           {data.current.subscriptionSyncPending && <p className="mt-2 text-sm text-amber-700">O checkout foi pago, mas o ID da assinatura ainda não foi associado. Sincronize a assinatura para habilitar o cancelamento.</p>}
           {data.current.cancellationPending && <p className="mt-2 text-sm text-slate-600">Seu acesso permanece ativo até o fim do período já pago.</p>}
         </div>}
+        {data.plans.some((plan) => plan.monthlyPrice > 0) && <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="font-semibold text-slate-900">Forma de pagamento dos planos</h3>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <label className="text-sm font-medium text-slate-700">Forma de pagamento
+              <select value={billingType} onChange={(event) => setBillingType(event.target.value as "CREDIT_CARD" | "PIX" | "BOLETO")} className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-100">
+                <option value="CREDIT_CARD">Cartão de crédito · renovação automática</option>
+                <option value="PIX">Pix · pagamento manual mensal</option>
+                <option value="BOLETO">Boleto · pagamento manual mensal</option>
+              </select>
+            </label>
+            {billingType !== "CREDIT_CARD" && <label className="text-sm font-medium text-slate-700">CPF ou CNPJ do responsável pelo pagamento
+              <input value={billingDocument} onChange={(event) => setBillingDocument(event.target.value)} inputMode="numeric" autoComplete="off" maxLength={18} placeholder="Somente para emitir Pix ou boleto" className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-100" />
+            </label>}
+          </div>
+          {billingType !== "CREDIT_CARD" && <p className="mt-3 text-sm text-slate-600">O Asaas emitirá uma cobrança a cada mês. Pague pelo link e o plano será ativado ou renovado após a confirmação do pagamento. Não haverá débito automático por Pix.</p>}
+        </div>}
         <div className="mt-8 grid gap-5 md:grid-cols-3">{data.plans.map((plan) => {
           const current = data.current?.code === plan.code && (data.current.status === "active" || data.current.status === "trialing");
           const paid = plan.monthlyPrice > 0;
@@ -140,7 +163,7 @@ function PlanosContent() {
             <p className="mt-2 text-sm leading-6 text-slate-600">{copy.description}</p>
             <p className="mt-4 text-3xl font-bold text-slate-900">{money.format(plan.monthlyPrice)}<span className="text-base font-normal text-slate-500"> / mês</span></p>
             <p className="mt-3 text-sm text-slate-600">{plan.code.toLowerCase() === "free" ? "1 usuário na equipe." : `Até ${plan.maxUsers} ${plan.maxUsers === 1 ? "usuário" : "usuários"} na equipe.`}</p>
-            {paid && <p className="mt-2 text-sm text-slate-600">Cobrança recorrente mensal pelo Asaas, paga com cartão de crédito.</p>}
+            {paid && <p className="mt-2 text-sm text-slate-600">{billingType === "CREDIT_CARD" ? "Renovação mensal automática pelo cartão de crédito via Asaas." : `Cobrança mensal via ${billingType === "PIX" ? "Pix" : "boleto"}. Cada parcela deverá ser paga manualmente; o acesso depende da confirmação do Asaas.`}</p>}
             <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-600">
               {copy.features.map((feature) => <li key={feature}>{feature}</li>)}
             </ul>

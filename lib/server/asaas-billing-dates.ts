@@ -17,6 +17,11 @@ function formatDate(year: number, month: number, day: number) {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+export function currentAsaasDueDate(from = new Date()) {
+  const { year, month, day } = datePartsInBusinessTimeZone(from);
+  return formatDate(year, month, day);
+}
+
 function nextMonthDate(year: number, month: number, day: number) {
   const nextMonth = month === 12 ? 1 : month + 1;
   const nextYear = month === 12 ? year + 1 : year;
