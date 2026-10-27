@@ -1996,7 +1996,14 @@ a {
 .vallex-admin-access { max-width: 560px; margin: 8vh auto; padding: clamp(24px, 5vw, 40px); }
 .vallex-admin-access h1 { margin: 10px 0; }
 .vallex-admin-access p { margin: 0 0 22px; color: #c2ccda; line-height: 1.6; }
-.vallex-admin-access .vallex-admin-back { margin-left: 8px; }
+.vallex-admin-access-actions { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.vallex-admin-access-actions > * { width: 100%; min-height: 48px; text-align: center; }
+.vallex-admin-access .vallex-admin-back { margin: 0; }
+.vallex-admin-access-links { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 20px; margin: 22px 0; padding-top: 18px; border-top: 1px solid #343d52; }
+.vallex-admin-access-links > * { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; border: 0; padding: 6px 0; background: transparent; color: #c2ccda; font: inherit; font-size: .85rem; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; }
+.vallex-admin-access-links > *:hover { color: #e9d5ff; }
+.vallex-admin-access-links > *:focus-visible { outline: 2px solid #c084fc; outline-offset: 4px; border-radius: 4px; }
+.vallex-admin-access-links > *:disabled { cursor: wait; opacity: .6; }
 
 .vallex-admin-chart-section { overflow: hidden; }
 .vallex-admin-chart-heading { align-items: center; }
@@ -2129,7 +2136,7 @@ a {
   .vallex-admin-support-top { flex-direction: column; }
   .vallex-admin-status, .vallex-admin-status select { width: 100%; }
   .vallex-admin-search input { width: 100%; }
-  .vallex-admin-access .vallex-admin-back { margin: 8px 0 0; }
+  .vallex-admin-access .vallex-admin-back { margin: 0; }
 }
 
 .traffic-hero { background: radial-gradient(ellipse at 85% 18%, #5B168F 0%, transparent 45%), linear-gradient(120deg, #17002E, #32005D); }

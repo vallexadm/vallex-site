@@ -1,4 +1,5 @@
 "use client";
+import { endCurrentSession } from "@/lib/end-current-session";
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -169,8 +170,8 @@ export default function SistemaPage() {
   }, [role]);
 
   async function handleLogout() {
-    await supabase.auth.signOut();
-    router.replace("/sistema/login");
+    try { await endCurrentSession(supabase.auth); window.location.replace("/sistema/login"); }
+    catch (err) { setContextError(err instanceof Error ? err.message : "Não foi possível sair."); }
   }
 
   async function handleCreateOrganization(event: FormEvent<HTMLFormElement>) {
