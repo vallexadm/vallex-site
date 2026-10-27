@@ -1,7 +1,9 @@
 "use client";
+import { endCurrentSession } from "@/lib/end-current-session";
 
 import Link from "next/link";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import ActionNotice from "@/components/ActionNotice";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { SUPPORT_TOOLS, supportOriginLabel } from "@/lib/support-tools";
 import MetricsDashboard, { type MetricData } from "./metrics-dashboard";
@@ -77,6 +79,9 @@ export default function VallexAdminPage() {
   const [error, setError] = useState("");
   const [accessDenied, setAccessDenied] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [sessionEmail, setSessionEmail] = useState("");
+  const loadSequence = useRef(0);
+  const checkedToken = useRef("");
 
   const refreshMetrics = useCallback(async () => {
     setMetricsRefreshing(true);
@@ -108,28 +113,29 @@ export default function VallexAdminPage() {
   }, [accessDenied, refreshMetrics]);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    const { data } = await supabase.auth.getSession();
-    const accessToken = data.session?.access_token;
-    if (!accessToken) {
-      setAccessDenied(true);
-      setLoading(false);
-      return;
-    }
-
-    const headers = { Authorization: `Bearer ${accessToken}` };
+    const requestId = ++loadSequence.current;
+    setLoading(true); setError("");
+    let authorized = false;
     try {
+      const { data } = await supabase.auth.getSession();
+      if (requestId !== loadSequence.current) return;
+      const accessToken = data.session?.access_token;
+      checkedToken.current = accessToken ?? "";
+      setSessionEmail(data.session?.user.email ?? "");
+      if (!accessToken) { setAccessDenied(true); return; }
+      const headers = { Authorization: `Bearer ${accessToken}` };
       const accessResponse = await fetch("/api/admin/access", { headers, cache: "no-store" });
       const accessResult = await accessResponse.json();
-      if (!accessResponse.ok || (!accessResult.isAdmin && !accessResult.isStaff)) {
-        setAccessDenied(true);
-        setLoading(false);
+      if (requestId !== loadSequence.current) return;
+      if (!accessResponse.ok || !accessResult.ok || (!accessResult.isAdmin && !accessResult.isStaff)) {
+        setAccessDenied(true); setContacts([]); setProviders([]); setPermissions({}); setIsOwner(false); setMetricData(null);
+        if (!accessResponse.ok && accessResponse.status !== 401 && accessResponse.status !== 403) setError("Não foi possível verificar o acesso administrativo agora. Tente verificar novamente.");
         return;
       }
+      authorized = true;
+      setAccessDenied(false);
       const grants = accessResult.permissions ?? {};
-      setPermissions(grants);
-      setIsOwner(accessResult.isAdmin === true);
+      setPermissions(grants); setIsOwner(accessResult.isAdmin === true);
       const [contactsResponse, providersResponse, trafficResponse, salesResponse] = await Promise.all([
         accessResult.isAdmin || grants.support?.view ? fetch("/api/contatos", { headers, cache: "no-store" }) : Promise.resolve(null),
         accessResult.isAdmin || grants.providers?.view ? fetch("/api/admin/prestadores", { headers, cache: "no-store" }) : Promise.resolve(null),
@@ -137,35 +143,50 @@ export default function VallexAdminPage() {
         accessResult.isAdmin || grants.sales?.view ? fetch("/api/admin/vendas/resumo", { headers, cache: "no-store" }) : Promise.resolve(null),
       ]);
       const [contactsResult, providersResult, trafficResult, salesResult] = await Promise.all([
-        contactsResponse ? contactsResponse.json() : null,
-        providersResponse ? providersResponse.json() : null,
-        trafficResponse?.ok ? trafficResponse.json() : null,
-        salesResponse?.ok ? salesResponse.json() : null,
+        contactsResponse ? contactsResponse.json() : null, providersResponse ? providersResponse.json() : null,
+        trafficResponse?.ok ? trafficResponse.json() : null, salesResponse?.ok ? salesResponse.json() : null,
       ]);
+      if (requestId !== loadSequence.current) return;
       if (contactsResponse && (!contactsResponse.ok || !contactsResult?.ok)) throw new Error(contactsResult?.message ?? "Não foi possível carregar o suporte.");
       if (providersResponse && (!providersResponse.ok || !providersResult?.ok)) throw new Error(providersResult?.message ?? "Não foi possível carregar os prestadores.");
-      setContacts(contactsResult?.contatos ?? []);
-      setProviders(providersResult?.providers ?? []);
-      setTrafficSummary(trafficResult?.ok ? trafficResult : null);
-      setSalesSummary(salesResult?.ok ? salesResult.summary : null);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Falha ao carregar os dados administrativos.");
-    } finally {
-      setLoading(false);
-    }
+      setContacts(contactsResult?.contatos ?? []); setProviders(providersResult?.providers ?? []);
+      setTrafficSummary(trafficResult?.ok ? trafficResult : null); setSalesSummary(salesResult?.ok ? salesResult.summary : null);
+    } catch (err) {
+      if (requestId !== loadSequence.current) return;
+      if (!authorized) setAccessDenied(true);
+      setError(err instanceof Error ? err.message : "Falha ao consultar acesso administrativo.");
+    } finally { if (requestId === loadSequence.current) setLoading(false); }
   }, []);
+
+  useEffect(() => {
+    const sequence = loadSequence;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        loadSequence.current++; checkedToken.current = "";
+        setSessionEmail(""); setAccessDenied(true); setLoading(false); setContacts([]); setProviders([]); setMetricData(null); setPermissions({}); setIsOwner(false);
+      } else if (event !== "INITIAL_SESSION" && session?.access_token !== checkedToken.current) {
+        // Executa fora do callback do SDK para nao disputar o lock de autenticacao.
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => void loadData(), 0);
+      }
+    });
+    return () => { subscription.unsubscribe(); if (timer) clearTimeout(timer); sequence.current++; };
+  }, [loadData]);
 
   useEffect(() => { const timer = window.setTimeout(() => { void loadData(); }, 0); return () => window.clearTimeout(timer); }, [loadData]);
 
   async function handleLogout() {
-    setSigningOut(true);
-    const { error: signOutError } = await supabase.auth.signOut();
-    if (signOutError) {
+    if (signingOut) return;
+    loadSequence.current++;
+    setSigningOut(true); setError("");
+    try {
+      await endCurrentSession(supabase.auth);
+      window.location.replace("/sistema/login?next=%2Fadmin");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível sair. Tente novamente.");
       setSigningOut(false);
-      setError("Não foi possível encerrar a sessão. Tente novamente.");
-      return;
     }
-    window.location.replace("/sistema/login");
   }
 
   const visibleContacts = useMemo(() => {
@@ -363,11 +384,15 @@ export default function VallexAdminPage() {
         </div>
         <div className="flex flex-wrap gap-3">
           <Link className="vallex-admin-primary" href="/sistema/login?next=%2Fadmin">Entrar como equipe VALLEX</Link>
+          <button type="button" className="vallex-admin-back" onClick={() => void loadData()}>Verificar acesso ao administrativo</button>
+          {sessionEmail && <Link className="vallex-admin-back" href="/sistema">Ir para o painel do prestador</Link>}
           <button className="vallex-admin-back" type="button" onClick={() => void handleLogout()} disabled={signingOut}>
             {signingOut ? "Saindo…" : "Sair da conta atual"}
           </button>
           <Link className="vallex-admin-back" href="/">Voltar ao site</Link>
         </div>
+        {sessionEmail && <p className="mt-4 text-sm text-slate-300">Conta conectada: {sessionEmail}. O acesso administrativo depende da liberação da VALLEX neste ambiente.</p>}
+        {error && <ActionNotice inline error message={error} onClose={() => setError("")} />}
       </div>
     </main>
   );

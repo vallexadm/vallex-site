@@ -31,3 +31,11 @@ Cliente acompanha um atendimento previamente criado na agenda; agendamento publi
 
 ## Validacao
 33 testes Node (estados, autorizacao, privacidade, versao, vinculo, planos e regressao) passaram. 14 cenarios em PostgreSQL 17.6 real passaram, incluindo duas conexoes concorrentes, sobreposicao, intervalo, adjacencia, profissionais distintos, mesmo profissional entre organizacoes, cancelamento, historico/versao, legado sem termino, privacidade de tabelas, reaplicacao e rollback por conflito legado. Lint e tipos aprovados; build webpack concluiu 77 paginas. Os testes usam dados ficticios em container sem rede e sem portas publicadas; nenhuma migracao aplicada em Supabase ou alteracao em atendimento real nesta entrega.
+
+## Complemento de acesso e senha — 27/10/2026
+- Usuario confirmou PIX e boleto aprovados no preview apos corrigir as variaveis Asaas.
+- Login com sessao existente mostra atalho ao administrativo somente apos confirmacao da API; outras contas recebem atalho ao painel do prestador e opcao de trocar conta.
+- Administracao revalida trocas/renovacoes da sessao sem conceder privilegios locais; a tela negada oferece nova verificacao e erro de saida visivel.
+- Logout usa escopo local e verifica se o SDK removeu a sessao, mesmo quando houve erro remoto. Nunca confirma saida se a sessao continua presente ou nao pode ser verificada. Nao limpa todo o armazenamento nem encerra os outros dispositivos.
+- Olhinho acessivel para login, cadastro, redefinicao, convite e equipe; senha inicialmente oculta; alternancia nao envia formulario nem altera validacao/autocomplete.
+- 34 testes focados de sessao/acesso, agenda e vinculo passaram; lint sem avisos e build webpack aprovados. Nao exige nova migracao alem da agenda ja incluida; homologacao manual de login/logout no preview pendente.

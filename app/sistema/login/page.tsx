@@ -1,4 +1,6 @@
 "use client";
+import SessionPanelLink from "@/components/SessionPanelLink";
+import PasswordInput from "@/components/PasswordInput";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -230,6 +232,8 @@ export default function LoginPage() {
           <div className="mt-4 flex justify-center"><Link href={`/sistema/equipe/cadastro${email.trim() ? `?email=${encodeURIComponent(email.trim().toLowerCase())}` : ""}`} className="button button-primary w-full sm:w-auto">Criar conta da equipe VALLEX</Link></div>
         </div>}
 
+        {mode === "login" && <SessionPanelLink />}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === "signup" && (
             <>
@@ -302,9 +306,9 @@ export default function LoginPage() {
             >
               Senha
             </label>
-            <input
+            <PasswordInput key={mode}
               id="password"
-              type="password"
+
               autoComplete={
                 mode === "login" ? "current-password" : "new-password"
               }

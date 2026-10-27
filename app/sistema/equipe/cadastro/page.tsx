@@ -1,4 +1,5 @@
 "use client";
+import PasswordInput from "@/components/PasswordInput";
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
@@ -55,7 +56,7 @@ export default function CadastroEquipePage() {
           <input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2.5" placeholder="pessoa@vallex.com.br" />
         </label>
         <label className="grid gap-1 text-sm font-medium text-slate-700">Senha
-          <input required type="password" minLength={6} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2.5" placeholder="Mínimo de 6 caracteres" />
+          <PasswordInput required  minLength={6} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2.5" placeholder="Mínimo de 6 caracteres" />
         </label>
         <label className="flex items-start gap-2 text-sm leading-5 text-slate-600">
           <input type="checkbox" required checked={acceptedLegal} onChange={(event) => setAcceptedLegal(event.target.checked)} className="mt-1 accent-violet-700" />

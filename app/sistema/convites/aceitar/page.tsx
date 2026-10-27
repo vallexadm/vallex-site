@@ -1,4 +1,6 @@
 "use client";
+import { endCurrentSession } from "@/lib/end-current-session";
+import PasswordInput from "@/components/PasswordInput";
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -65,8 +67,8 @@ export default function AceitarConvitePage() {
   }
 
   async function switchAccount() {
-    await supabase.auth.signOut();
-    router.replace(loginUrl());
+    try { await endCurrentSession(supabase.auth); window.location.replace(loginUrl()); }
+    catch (err) { setError(err instanceof Error ? err.message : "Não foi possível trocar de conta."); }
   }
 
   async function acceptWithToken(accessToken: string, rawToken = invitationToken) {
@@ -241,7 +243,7 @@ export default function AceitarConvitePage() {
               <label htmlFor="invite-signup-email" className="block text-sm font-medium text-slate-700">E-mail convidado</label>
               <input id="invite-signup-email" type="email" readOnly value={invitedEmail} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-700" />
               <label htmlFor="invite-signup-password" className="block text-sm font-medium text-slate-700">Crie uma senha</label>
-              <input id="invite-signup-password" type="password" autoComplete="new-password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900" placeholder="Mínimo de 6 caracteres" />
+              <PasswordInput id="invite-signup-password"  autoComplete="new-password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900" placeholder="Mínimo de 6 caracteres" />
               <label className="flex items-start gap-2 text-sm leading-5 text-slate-600">
                 <input type="checkbox" required checked={acceptedLegal} onChange={(event) => setAcceptedLegal(event.target.checked)} className="mt-1 accent-violet-700" />
                 <span>Tenho 18 anos ou mais, li e aceito os <a className="font-semibold text-violet-700 underline" href="/termos" target="_blank" rel="noopener noreferrer">Termos de Uso</a> e li a <a className="font-semibold text-violet-700 underline" href="/privacidade" target="_blank" rel="noopener noreferrer">Política de Privacidade</a>.</span>
