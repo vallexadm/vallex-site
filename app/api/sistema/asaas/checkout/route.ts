@@ -506,7 +506,7 @@ export async function POST(request: Request) {
 },
           items: [
             {
-              name: "Plano " + plan.name + " - ServiçoFácil",
+              name: ("Plano " + plan.name.trim()).slice(0, 30),
               description: `Assinatura mensal do plano ${plan.name} - ServiçoFácil.`,
               quantity: 1,
               value: Number(plan.monthly_price),
@@ -536,8 +536,8 @@ export async function POST(request: Request) {
       });
       const detail = checkout?.errors?.map((item) => item.description).filter(Boolean).join("; ");
 const message = process.env.NODE_ENV === "development" && detail
-  ? "Asaas Sandbox rejeitou o checkout: " + detail
-  : "O Asaas não conseguiu criar o checkout. Confira a configuração do Sandbox e tente novamente.";
+  ? "O Asaas rejeitou o checkout: " + detail
+  : "Não foi possível abrir o pagamento. Tente novamente ou entre em contato com a VALLEX.";
 return responseError(message, 502);
     }
 

@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {createRequire} from 'node:module';
+import test from 'node:test';
+const require=createRequire(import.meta.url),ts=require('typescript');
+const source=await readFile(new URL('../app/api/sistema/asaas/checkout/route.ts',import.meta.url),'utf8');
+const ast=ts.createSourceFile('route.ts',source,ts.ScriptTarget.Latest,true);
+let expression;function visit(n){if(ts.isPropertyAssignment(n)&&n.name.getText(ast)==='name'&&n.initializer.getText(ast).includes('plan.name'))expression=n.initializer.getText(ast);ts.forEachChild(n,visit);}visit(ast);
+assert.ok(expression);const itemName=new Function('plan',`return ${expression};`);
+test('nomes reais dos planos respeitam limite de 30 do Asaas',()=>{for(const name of ['Basic','Professional','Profissional','Enterprise']){const value=itemName({name});assert.ok(value.length<=30);assert.ok(value.includes(name));}});
+test('nome inesperadamente longo nao ultrapassa limite nem fica vazio',()=>{assert.equal(itemName({name:'Professional '.repeat(10)}).length,30);assert.equal(itemName({name:' Basic '}),'Plano Basic');});
+test('Basic e Professional continuam identificaveis como planos distintos',()=>{assert.notEqual(itemName({name:'Basic'}),itemName({name:'Professional'}));});

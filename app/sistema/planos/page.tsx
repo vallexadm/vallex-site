@@ -149,6 +149,7 @@ function PlanosContent() {
               <input value={billingDocument} onChange={(event) => setBillingDocument(event.target.value)} inputMode="numeric" autoComplete="off" maxLength={18} placeholder="Somente para emitir Pix ou boleto" className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-100" />
             </label>}
           </div>
+          <p className="mt-3 text-sm text-slate-600">Escolha a forma de pagamento acima antes de contratar o plano. A página do Asaas abrirá somente com a opção escolhida. Para trocar, volte a esta tela e selecione outra forma.</p>
           {billingType !== "CREDIT_CARD" && <p className="mt-3 text-sm text-slate-600">O Asaas emitirá uma cobrança a cada mês. Pague pelo link e o plano será ativado ou renovado após a confirmação do pagamento. Não haverá débito automático por Pix.</p>}
         </div>}
         <div className="mt-8 grid gap-5 md:grid-cols-3">{data.plans.map((plan) => {
