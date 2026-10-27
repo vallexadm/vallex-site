@@ -51,8 +51,8 @@ export async function resolvePlatformAdmin(request: Request): Promise<
   if (isOwner) return { ok: true, context: { userId: data.user.id, isOwner, permissions: ownerPermissions(), supabase } };
 
   const { data: member, error: memberError } = await supabase.from("platform_admin_members").select("permissions,is_active").eq("user_id", data.user.id).maybeSingle();
-  if (memberError) return { ok: false, response: NextResponse.json({ ok: false, code: "ACCESS_SCHEMA_REQUIRED", message: "A tabela de acessos administrativos ainda não foi criada no Supabase de teste." }, { status: 503 }) };
-  if (!member?.is_active) return { ok: false, response: NextResponse.json({ ok: false, message: "Esta conta não tem acesso ao painel administrativo." }, { status: 403 }) };
+  if (memberError) return { ok: false, response: NextResponse.json({ ok: false, code: "ACCESS_SCHEMA_REQUIRED", message: "Não foi possível consultar as permissões administrativas. Verifique a configuração do servidor e a tabela de acessos neste ambiente." }, { status: 503 }) };
+  if (!member?.is_active) return { ok: false, response: NextResponse.json({ ok: false, message: "Esta conta não tem permissão administrativa neste ambiente. Entre com outra conta ou peça à VALLEX para conferir sua liberação." }, { status: 403 }) };
   return { ok: true, context: { userId: data.user.id, isOwner: false, permissions: normalizePlatformPermissions(member.permissions), supabase } };
 }
 

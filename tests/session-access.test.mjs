@@ -32,3 +32,21 @@ const adminSource=await readFile(new URL('../app/admin/page.tsx',import.meta.url
 const callbackCode=ts.transpileModule('const load = '+callback,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
 test('nova verificacao libera tela antes negada apenas apos autorizacao',async()=>{const result={};const setters=['setLoading','setError','setSessionEmail','setAccessDenied','setContacts','setProviders','setPermissions','setIsOwner','setMetricData','setTrafficSummary','setSalesSummary'];const deps={loadSequence:{current:0},checkedToken:{current:''},supabase:{auth:{getSession:async()=>({data:{session:{access_token:'fixture',user:{email:'teste'}}}})}},fetch:async url=>Response.json(url==='/api/admin/access'?{ok:true,isAdmin:true,permissions:{}}:{ok:true})};for(const setter of setters)deps[setter]=value=>result[setter]=value;await new Function(...Object.keys(deps),callbackCode+';return load();')(...Object.values(deps));assert.equal(result.setAccessDenied,false);assert.equal(result.setIsOwner,true);assert.equal(result.setLoading,false);});
 test('falha de consulta administrativa nao fica escondida em tela negada',async()=>{const result={};const setters=['setLoading','setError','setSessionEmail','setAccessDenied','setContacts','setProviders','setPermissions','setIsOwner','setMetricData','setTrafficSummary','setSalesSummary'];const deps={loadSequence:{current:0},checkedToken:{current:''},supabase:{auth:{getSession:async()=>{throw new Error('falha de rede')}}},fetch:async()=>{throw new Error('nao consultar')}};for(const setter of setters)deps[setter]=value=>result[setter]=value;await new Function(...Object.keys(deps),callbackCode+';return load();')(...Object.values(deps));assert.equal(result.setAccessDenied,true);assert.equal(result.setLoading,false);assert.match(result.setError,/falha de rede/);});
+const accessRouteCode = await compile('app/api/admin/access/route.ts');
+for (const status of [401,403,503]) test(`API administrativa preserva erro ${status} e motivo em vez de simular prestador`,async()=>{
+ const expected=Response.json({ok:false,message:'Motivo verificável',code:'ACCESS_SCHEMA_REQUIRED'},{status});const exports={};
+ new Function('exports','require',accessRouteCode)(exports,name=>name==='next/server'?{NextResponse:Response}:{resolvePlatformAdmin:async()=>({ok:false,response:expected})});
+ const response=await exports.GET(new Request('https://example.invalid/api/admin/access'));
+ assert.equal(response.status,status);assert.equal((await response.json()).message,'Motivo verificável');
+});
+test('API administrativa retorna privilegios conferidos pelo mesmo resolvedor dos modulos',async()=>{
+ for(const isOwner of [true,false]){const exports={},permissions={providers:{view:true}};
+ new Function('exports','require',accessRouteCode)(exports,name=>name==='next/server'?{NextResponse:Response}:{resolvePlatformAdmin:async()=>({ok:true,context:{isOwner,permissions}})});
+ const response=await exports.GET(new Request('https://example.invalid/api/admin/access'));const result=await response.json();assert.deepEqual(result,{ok:true,isAdmin:isOwner,isStaff:!isOwner,permissions});assert.equal(response.headers.get('cache-control'),'private, no-store');}
+});
+test('tela negada exibe motivo da API junto a acao sem carregar dados administrativos',async()=>{
+ const result={};let requests=0;const setters=['setLoading','setError','setSessionEmail','setAccessDenied','setContacts','setProviders','setPermissions','setIsOwner','setMetricData','setTrafficSummary','setSalesSummary'];
+ const deps={loadSequence:{current:0},checkedToken:{current:''},supabase:{auth:{getSession:async()=>({data:{session:{access_token:'fixture',user:{email:'teste'}}}})}},fetch:async()=>{requests++;return Response.json({ok:false,message:'Conta sem liberação no teste'},{status:403});}};
+ for(const setter of setters)deps[setter]=value=>result[setter]=value;
+ await new Function(...Object.keys(deps),callbackCode+';return load();')(...Object.values(deps));assert.equal(result.setAccessDenied,true);assert.equal(result.setError,'Conta sem liberação no teste');assert.equal(result.setIsOwner,false);assert.equal(requests,1);
+});

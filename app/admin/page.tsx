@@ -129,7 +129,7 @@ export default function VallexAdminPage() {
       if (requestId !== loadSequence.current) return;
       if (!accessResponse.ok || !accessResult.ok || (!accessResult.isAdmin && !accessResult.isStaff)) {
         setAccessDenied(true); setContacts([]); setProviders([]); setPermissions({}); setIsOwner(false); setMetricData(null);
-        if (!accessResponse.ok && accessResponse.status !== 401 && accessResponse.status !== 403) setError("Não foi possível verificar o acesso administrativo agora. Tente verificar novamente.");
+        setError(accessResult.message ?? (accessResponse.status === 401 ? "Sua sessão expirou. Entre novamente." : "Esta conta não tem permissão administrativa neste ambiente. Confira a conta conectada e sua liberação."));
         return;
       }
       authorized = true;
@@ -382,17 +382,19 @@ export default function VallexAdminPage() {
           <h2 className="font-semibold text-slate-100">Primeiro acesso?</h2>
           <p className="mb-0 mt-2 text-sm text-slate-300">Peça ao proprietário para cadastrar seu nome, cargo e e-mail. Depois, crie sua conta pelo link interno da equipe usando esse mesmo e-mail. A conta de prestador não libera o Administrativo VALLEX.</p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <Link className="vallex-admin-primary" href="/sistema/login?next=%2Fadmin">Entrar como equipe VALLEX</Link>
-          <button type="button" className="vallex-admin-back" onClick={() => void loadData()}>Verificar acesso ao administrativo</button>
-          {sessionEmail && <Link className="vallex-admin-back" href="/sistema">Ir para o painel do prestador</Link>}
-          <button className="vallex-admin-back" type="button" onClick={() => void handleLogout()} disabled={signingOut}>
-            {signingOut ? "Saindo…" : "Sair da conta atual"}
-          </button>
-          <Link className="vallex-admin-back" href="/">Voltar ao site</Link>
+        <div className="vallex-admin-access-actions">
+          {sessionEmail ? <>
+            <button type="button" className="vallex-admin-primary" onClick={() => void loadData()}>Tentar abrir o administrativo</button>
+            <Link className="vallex-admin-back" href="/sistema/login?next=%2Fadmin">Entrar com outra conta</Link>
+          </> : <Link className="vallex-admin-primary" href="/sistema/login?next=%2Fadmin">Entrar como equipe VALLEX</Link>}
+        </div>
+        {error && <ActionNotice inline error message={error} onClose={() => setError("")} />}
+        <div className="vallex-admin-access-links" aria-label="Outras opções de acesso">
+          {sessionEmail && <Link href="/sistema">Painel do prestador</Link>}
+          <Link href="/">Voltar ao site</Link>
+          {sessionEmail && <button type="button" onClick={() => void handleLogout()} disabled={signingOut}>{signingOut ? "Saindo…" : "Sair da conta"}</button>}
         </div>
         {sessionEmail && <p className="mt-4 text-sm text-slate-300">Conta conectada: {sessionEmail}. O acesso administrativo depende da liberação da VALLEX neste ambiente.</p>}
-        {error && <ActionNotice inline error message={error} onClose={() => setError("")} />}
       </div>
     </main>
   );
