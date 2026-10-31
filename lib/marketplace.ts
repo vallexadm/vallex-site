@@ -39,5 +39,7 @@ export function filterMarketplace(providers: PublicProvider[], filters: Marketpl
 }
 
 export function marketplaceFiltersFromParams(params: URLSearchParams): MarketplaceFilters {
-  return { search: params.get("buscar") ?? "", location: params.get("localidade") ?? "", category: params.get("categoria") ?? "all", mode: params.get("atendimento") ?? "", sort: params.get("ordem") === "za" ? "za" : "az" };
+  const category = params.get("categoria") ?? "all";
+  const location = params.get("localidade") ?? "";
+  return { search: params.get("buscar") ?? "", location: location === "todas" ? "" : location, category: marketplaceCategories.some(item => item.id === category) ? category : "all", mode: params.get("atendimento") ?? "", sort: params.get("ordem") === "za" ? "za" : "az" };
 }

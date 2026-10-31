@@ -24,3 +24,7 @@ test('ordenacao nao altera a lista original e suporta nomes Z a A',()=>{
 test('querystring preserva filtros e normaliza ordenacao desconhecida',()=>{
  assert.deepEqual(marketplaceFiltersFromParams(new URLSearchParams('buscar=barbeiro&categoria=beleza&localidade=Goi%C3%A2nia&atendimento=presencial&ordem=novo')), {search:'barbeiro',category:'beleza',location:'Goiânia',mode:'presencial',sort:'az'});
 });
+
+test('link antigo de todas as localidades e categoria desconhecida mantem catalogo acessivel',()=>{
+ const result=marketplaceFiltersFromParams(new URLSearchParams('localidade=todas&categoria=inexistente'));assert.equal(result.location,'');assert.equal(result.category,'all');assert.equal(filterMarketplace([fixture('publico')],result).length,1);
+});
