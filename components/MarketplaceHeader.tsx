@@ -18,6 +18,7 @@ export default function MarketplaceHeader({ initialSearch = "", initialLocation 
   function close() { dialog.current?.close(); }
   function restore() { document.body.style.overflow = overflow.current; opener.current?.focus(); }
   function open() {
+    dialog.current?.querySelectorAll("details").forEach(group => { group.open = false; });
     overflow.current = document.body.style.overflow;
     dialog.current?.showModal();
     document.body.style.overflow = "hidden";
@@ -40,7 +41,7 @@ export default function MarketplaceHeader({ initialSearch = "", initialLocation 
     <dialog id="vallex-site-menu" ref={dialog} className={styles.drawer} aria-labelledby="vallex-menu-title" onClose={restore} onClick={event => { if (event.target === event.currentTarget) close(); }}>
       <div className={styles.drawerTop}><h2 id="vallex-menu-title">Explore a VALLEX<small>Serviços, soluções e oportunidades</small></h2><button autoFocus type="button" className={styles.iconButton} aria-label="Fechar menu" onClick={close}><Icon name="close" /></button></div>
       <nav aria-label="Navegação principal" className={styles.drawerNav} onClick={event => { if ((event.target as Element).closest("a")) close(); }}>
-        {siteConfig.navigation.map(item => item.children ? <details key={item.href} open className={styles.menuGroup}><summary><Icon name={navIcons[item.href]} />{item.label}</summary><div>{item.children.map(child => <Link key={child.href} href={child.href}>{child.label}</Link>)}</div></details> : <Link key={item.href} href={item.href} className={pathname === item.href ? styles.activeLink : undefined} aria-current={pathname === item.href ? "page" : undefined}><Icon name={navIcons[item.href]} />{item.label}</Link>)}
+        {siteConfig.navigation.map(item => item.children ? <details key={item.href} className={styles.menuGroup}><summary><Icon name={navIcons[item.href]} />{item.label}</summary><div>{item.children.map(child => <Link key={child.href} href={child.href}>{child.label}</Link>)}</div></details> : <Link key={item.href} href={item.href} className={pathname === item.href ? styles.activeLink : undefined} aria-current={pathname === item.href ? "page" : undefined}><Icon name={navIcons[item.href]} />{item.label}</Link>)}
         <div className={styles.menuSecondary}><Link href="/catalogo">Todos os prestadores</Link><Link href="/faq">Perguntas frequentes</Link><Link href="/privacidade">Privacidade</Link><Link href="/termos">Termos de uso</Link></div>
         <div className={styles.menuAccounts}><Link className={styles.primaryButton} href="/sistema/login"><Icon name="user" />Acessar minha conta</Link><Link href="/admin">Administração VALLEX</Link></div>
       </nav>
