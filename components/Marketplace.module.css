@@ -20,3 +20,9 @@
 @media(prefers-reduced-motion:reduce){.card,.cardMedia img{transition:none}.card:hover{transform:none}}
 
 .iconButton svg,.searchButton svg{width:22px;height:22px;min-width:22px;flex-shrink:0}
+
+/* A ação de conta mantém contraste também sob o hover dos links do menu. */
+.drawer .menuAccounts .primaryButton{background:#8000cb;color:#fff!important;transition:background-color .18s ease,box-shadow .18s ease,transform .18s ease}
+.drawer .menuAccounts .primaryButton svg{color:currentColor}
+.drawer .menuAccounts .primaryButton:hover,.drawer .menuAccounts .primaryButton:focus-visible{background:#6300a0;color:#fff!important;box-shadow:0 5px 14px rgb(99 0 160 / 22%);transform:translateY(-1px)}
+@media(prefers-reduced-motion:reduce){.drawer .menuAccounts .primaryButton{transition:none}.drawer .menuAccounts .primaryButton:hover,.drawer .menuAccounts .primaryButton:focus-visible{transform:none}}
