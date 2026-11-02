@@ -7,12 +7,12 @@ async function build(request:Request,id:string){
   const c=await providerContext(request);if("error" in c)return {error:c.error};
   if(c.role!=="owner"||!c.permissions.quotes.view)return {error:proFail("Somente o proprietário pode compartilhar esta proposta.",403)};
   if(!c.plan.canGenerateQuotePdf)return {error:proFail("Orçamentos em PDF estão disponíveis no Professional.",403)};
-  const {data:q,error}=await c.admin.from("orcamentos").select("id,titulo,descricao,valor,validade_ate,observacoes,status,customers(name)").eq("id",id).eq("organization_id",c.organization.id).maybeSingle();
+  const {data:q,error}=await c.admin.from("orcamentos").select("id,titulo,descricao,valor,validade_ate,observacoes,status,customers(name,phone,address)").eq("id",id).eq("organization_id",c.organization.id).maybeSingle();
   if(error||!q)return {error:proFail("Orçamento não encontrado nesta organização.",404)};
   const {data:f,error:profileError}=await c.admin.from("provider_fiscal_profiles").select("legal_name,tax_id,address,email,phone").eq("organization_id",c.organization.id).maybeSingle();
   if(profileError)return {error:proFail("Não foi possível consultar a identificação do prestador.",503)};
   const customer=Array.isArray(q.customers)?q.customers[0]:q.customers;
-  const bytes=await generateQuotePdf({provider:{name:f?.legal_name||c.organization.name,taxId:f?.tax_id,address:f?.address,email:f?.email,phone:f?.phone},customer:customer?.name||"Cliente",title:q.titulo,description:q.descricao,amount:Number(q.valor),validUntil:q.validade_ate,notes:q.observacoes,status:q.status});
+  const bytes=await generateQuotePdf({provider:{name:f?.legal_name||c.organization.name,taxId:f?.tax_id,address:f?.address,email:f?.email,phone:f?.phone},customer:customer?.name||"Cliente",customerPhone:customer?.phone,customerAddress:customer?.address,title:q.titulo,description:q.descricao,amount:Number(q.valor),validUntil:q.validade_ate,notes:q.observacoes,status:q.status});
   return {c,bytes};
 }
 export async function GET(request:Request,{params}:{params:Promise<{id:string}>}){
