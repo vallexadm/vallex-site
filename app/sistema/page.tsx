@@ -31,6 +31,7 @@ export default function SistemaPage() {
   const [businessType, setBusinessType] = useState("");
   const [role, setRole] = useState("");
   const [professionalAccess, setProfessionalAccess] = useState(false);
+  const [planSummary,setPlanSummary]=useState("");
   const [isVallexAdmin, setIsVallexAdmin] = useState(false);
   const [modulePermissions, setModulePermissions] = useState<MemberPermissions>(defaultMemberPermissions);
   const [contextError, setContextError] = useState("");
@@ -113,6 +114,8 @@ export default function SistemaPage() {
     setOrganizationName(result.organization.name);
     setBusinessType(result.organization.business_type ?? "");
     setRole(result.role);
+    if(result.role==="owner"){try{const r=await fetch("/api/sistema/asaas/plans",{headers:{Authorization:`Bearer ${accessToken}`},cache:"no-store"});const b=await r.json();if(r.ok&&b.current)setPlanSummary(b.current.code==="basic"?"Basic gratuito · Sem vencimento":b.current.currentPeriodEnd?"Profissional · Acesso até "+new Date(b.current.currentPeriodEnd).toLocaleDateString("pt-BR",{timeZone:"America/Sao_Paulo"}):"Profissional · Sem data de vencimento definida");}catch{}}
+
     setProfessionalAccess(["professional", "enterprise"].includes(result.plan?.code));
     setModulePermissions(normalizeMemberPermissions(result.permissions?.modules));
   } catch {
@@ -392,6 +395,7 @@ export default function SistemaPage() {
     </strong>
   </p>
 )}
+        {planSummary&&<p className="mt-4 rounded-lg border border-purple-200 bg-white px-4 py-3 text-sm font-semibold text-purple-800">Plano: {planSummary}</p>}
         {role === "owner" && (
           <section aria-labelledby="owner-dashboard-heading" className="mt-8">
             <div className="flex flex-wrap items-end justify-between gap-3">
