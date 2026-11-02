@@ -43,7 +43,7 @@ registerHooks({
   load(url,context,next){if(url==='trial:db')return {format:'module',source:'export const createClient = (...args) => globalThis.trialClient(...args);',shortCircuit:true};return next(url,context);}
 });
 const moduleAt=file=>import(pathToFileURL(path.join(root,file)).href);
-const {BASIC_TRIAL_DAYS,BASIC_TRIAL_LABEL,createBasicTrialPeriod,isProviderTrialExpired}=await moduleAt('lib/provider-trial.ts');
+const {isProviderTrialExpired}=await moduleAt('lib/provider-trial.ts');
 const {getPlanEntitlements}=await moduleAt('lib/server/plan-entitlements.ts');
 const {requireProviderPanelAccess}=await moduleAt('lib/server/provider-panel-access.ts');
 const {POST:createOrganization}=await moduleAt('app/api/sistema/organizacao/route.ts');
@@ -54,10 +54,6 @@ for(const name of ['SUPABASE_URL','NEXT_PUBLIC_SUPABASE_URL'])process.env[name]=
 for(const name of ['SUPABASE_SECRET_KEY','NEXT_PUBLIC_SUPABASE_ANON_KEY'])process.env[name]='fixture-only';
 function request(method='GET',payload){return new Request('https://trial.invalid/api',{method,headers:{Authorization:'Bearer fixture','Content-Type':'application/json'},...(payload?{body:JSON.stringify(payload)}:{})});}
 
-test('Basic começa com exatamente 365 dias corridos',()=>{
-  assert.equal(BASIC_TRIAL_DAYS,365);assert.equal(createBasicTrialPeriod(start).endsAt.toISOString(),end);
-  assert.equal(createBasicTrialPeriod(start).startedAt.toISOString(),start.toISOString());
-});
 test('teste expira no instante do vencimento, sem estender até o fim do dia',()=>{
   assert.equal(isProviderTrialExpired(end,new Date('2027-10-21T13:44:59.999Z')),false);
   assert.equal(isProviderTrialExpired(end,new Date(end)),true);
@@ -66,13 +62,13 @@ test('teste expira no instante do vencimento, sem estender até o fim do dia',()
 test('teste sem data ou com data inválida não libera recursos',()=>{
   for(const value of [null,undefined,'','invalid'])assert.equal(isProviderTrialExpired(value,start),true);
 });
-test('Basic em teste libera gestão antes do vencimento e aplica Free depois',async()=>{
+test('Basic legado em teste mantém gestão sem prazo e sem recursos Pro',async()=>{
   subscription={plan_id:'basic-plan',status:'trialing',current_period_end:end};
   const before=await getPlanEntitlements(globalThis.trialClient(),organization.id,start);
   assert.equal(before.entitlements.code,'basic');assert.equal(before.entitlements.canAccessPanel,true);assert.equal(before.entitlements.maxServices,5);
   const expired=await getPlanEntitlements(globalThis.trialClient(),organization.id,new Date(end));
-  assert.equal(expired.entitlements.code,'free');assert.equal(expired.entitlements.canAccessPanel,false);
-  assert.equal(expired.entitlements.canViewRequests,true);assert.equal(expired.entitlements.maxServices,1);
+  assert.equal(expired.entitlements.code,'basic');assert.equal(expired.entitlements.canAccessPanel,true);
+  assert.equal(expired.entitlements.canViewRequests,true);assert.equal(expired.entitlements.maxServices,5);assert.equal(expired.entitlements.canGenerateQuotePdf,false);
 });
 test('Basic pago e Professional pago continuam ativos sem alteração de duração',async()=>{
   for(const planId of ['basic-plan','pro-plan']){
@@ -82,13 +78,13 @@ test('Basic pago e Professional pago continuam ativos sem alteração de duraç�
     assert.equal(result.entitlements.code,planId==='basic-plan'?'basic':'professional');
   }
 });
-test('novo negócio recebe Basic trialing de 365 dias, sem contratar cobrança',async()=>{
+test('novo negócio recebe Basic ativo sem vencimento nem cobrança',async()=>{
   existingOrganization=false;calls=[];
   const response=await createOrganization(request('POST',{name:'Negócio de teste',business_type:'Manutenção'}));
   assert.equal(response.status,201);
   const saved=calls.find(c=>c.table==='organization_subscriptions'&&c.op==='insert').payload;
-  assert.equal(saved.plan_id,'basic-plan');assert.equal(saved.status,'trialing');assert.equal(saved.billing_provider,'manual');
-  assert.equal(new Date(saved.current_period_end)-new Date(saved.current_period_start),365*24*60*60*1000);
+  assert.equal(saved.plan_id,'basic-plan');assert.equal(saved.status,'active');assert.equal(saved.billing_provider,'manual');
+  assert.equal(saved.current_period_end,null);
 });
 test('repetir configuração não reinicia nem renova o teste',async()=>{
   existingOrganization=true;calls=[];
@@ -96,32 +92,32 @@ test('repetir configuração não reinicia nem renova o teste',async()=>{
   assert.equal(response.status,200);assert.equal((await response.json()).alreadyConfigured,true);
   assert.equal(calls.some(c=>c.op!=='read'),false);
 });
-test('lista de planos apresenta Free quando o teste venceu',async()=>{
+test('lista de planos apresenta Basic gratuito para teste legado vencido',async()=>{
   existingOrganization=true;subscription={plan_id:'basic-plan',status:'trialing',current_period_end:'2020-01-01T13:45:00Z'};
   const response=await getPlans(request());assert.equal(response.status,200);
-  const body=await response.json();assert.equal(body.current.code,'free');assert.equal(body.current.currentPeriodEnd,null);
+  const body=await response.json();assert.equal(body.current.code,'basic');assert.equal(body.current.currentPeriodEnd,null);
 });
-test('bloqueio central nega gestão após expiração e não altera registros',async()=>{
+test('Basic mantém gestão após vencimento legado sem alterar registros',async()=>{
   subscription={plan_id:'basic-plan',status:'trialing',current_period_end:'2020-01-01T13:45:00Z'};calls=[];
-  const response=await requireProviderPanelAccess(globalThis.trialClient(),organization.id);assert.equal(response.status,402);
+  const response=await requireProviderPanelAccess(globalThis.trialClient(),organization.id);assert.equal(response,null);
   assert.equal(calls.some(c=>c.op!=='read'),false);
 });
-for(const route of ['agenda','financeiro','clientes','orcamentos']){
-  test(`API de ${route} rejeita consulta e gravação com teste vencido`,async()=>{
-    existingOrganization=true;subscription={plan_id:'basic-plan',status:'trialing',current_period_end:'2020-01-01T13:45:00Z'};calls=[];
-    const api=await moduleAt(`app/api/sistema/${route}/route.ts`);
-    assert.equal((await api.GET(request())).status,402);
-    assert.equal((await api.POST(request('POST',{}))).status,402);
-    assert.equal(calls.some(c=>c.op!=='read'),false);
-  });
-}
-test('mensagens de adesão usam o prazo central de um ano sem prometer testes antigos',async()=>{
-  assert.equal(BASIC_TRIAL_LABEL,'1 ano (365 dias)');
-  for(const file of ['app/sistema/page.tsx','app/sistema/planos/page.tsx','app/solucoes/page.tsx','app/termos/page.tsx']){
-    const source=await readFile(path.join(root,file),'utf8');assert.match(source,/BASIC_TRIAL_LABEL/);assert.doesNotMatch(source,/(?:30|5|cinco) dias (?:de teste|grátis)/);
-  }
-});
 
-test('365 dias mantém duração exata ao atravessar ano bissexto sem alterar o início',()=>{
- const leapStart=new Date('2027-11-01T13:45:00Z');const period=createBasicTrialPeriod(leapStart);assert.equal(period.endsAt.toISOString(),'2028-10-31T13:45:00.000Z');assert.equal(leapStart.toISOString(),'2027-11-01T13:45:00.000Z');
+for(const planId of ['basic-plan','pro-plan'])test(`recursos profissionais exigem plano Pro: ${planId}`,async()=>{
+ subscription={plan_id:planId,status:'active',current_period_end:'2099-01-01T00:00:00Z'};
+ const result=await getPlanEntitlements(globalThis.trialClient(),organization.id,start);
+ assert.equal(result.entitlements.canGenerateQuotePdf,planId==='pro-plan');
+ assert.equal(result.entitlements.canManageFiscalNotes,planId==='pro-plan');
+ assert.equal(result.entitlements.canPublishPortfolio,planId==='pro-plan');
+ assert.equal(result.entitlements.canCollectReviews,planId==='pro-plan');
+});
+test('Pro vencido retorna ao Basic gratuito sem liberar extras',async()=>{
+ subscription={plan_id:'pro-plan',status:'active',current_period_end:'2020-01-01T00:00:00Z'};
+ const {entitlements}=await getPlanEntitlements(globalThis.trialClient(),organization.id,start);
+ assert.equal(entitlements.code,'basic');assert.equal(entitlements.canAccessPanel,true);assert.equal(entitlements.canCollectReviews,false);
+});
+test('textos atuais anunciam Basic gratuito sem prazo',async()=>{
+ for(const file of ['app/sistema/page.tsx','app/sistema/planos/page.tsx','app/solucoes/page.tsx','app/termos/page.tsx']){
+ const source=await readFile(path.join(root,file),'utf8');assert.match(source,/Basic gratuito|Basic é gratuito/);assert.doesNotMatch(source,/BASIC_TRIAL_LABEL/);
+ }
 });

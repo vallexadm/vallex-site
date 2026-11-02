@@ -1,3 +1,4 @@
+import ProviderShowcase from "@/components/ProviderShowcase";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -224,7 +225,7 @@ Gostaria de saber mais sobre seus valores e condições de atendimento local, po
 
           <div className="flex flex-col items-end gap-2">
             <Link
-              href="/#providers-heading"
+              href="/#prestadores"
               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-xs font-semibold text-slate-700 transition hover:bg-slate-50 sm:text-sm"
             >
               ← Voltar aos prestadores
@@ -232,6 +233,7 @@ Gostaria de saber mais sobre seus valores e condições de atendimento local, po
           </div>
         </div>
       </header>
+      <ProviderShowcase slug={profile.slug} />
 
       <section className="mx-auto max-w-5xl px-6 py-12">
         <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">

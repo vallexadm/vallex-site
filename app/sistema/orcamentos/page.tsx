@@ -1,5 +1,6 @@
 "use client";
 
+import ProQuoteActions from "@/components/ProQuoteActions";
 import ActionNotice from "@/components/ActionNotice";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -1036,6 +1037,7 @@ export default function OrcamentosPage() {
               Excluir
             </button>}
           </div>
+          {role === "owner" && <ProQuoteActions id={orcamento.id} phone={orcamento.customers?.phone} />}
         </td>
       </tr>
     ))}

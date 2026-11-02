@@ -1,5 +1,4 @@
 "use client";
-import { BASIC_TRIAL_LABEL } from "@/lib/provider-trial";
 import { endCurrentSession } from "@/lib/end-current-session";
 
 import { FormEvent, useEffect, useState } from "react";
@@ -266,6 +265,7 @@ export default function SistemaPage() {
           <h2 className="mt-2 text-3xl font-bold text-slate-900">
             Configure sua área de prestador
           </h2>
+
           <p className="mt-3 max-w-2xl text-slate-600">
             Confirme os dados do seu negócio. Em seguida, você poderá configurar
             a Vitrine pública e cadastrar seus serviços.
@@ -314,8 +314,7 @@ export default function SistemaPage() {
             </div>
 
             <p className="text-sm text-slate-500">
-              Sua área começa com {BASIC_TRIAL_LABEL} grátis do plano Basic, sem cobrança.
-              Depois do teste, a conta volta ao Free. A Vitrine será criada
+              Sua área começa no plano Basic gratuito, sem prazo de uso e sem cobrança. A Vitrine será criada
               como não publicada; você decide quando torná-la pública.
             </p>
 
@@ -433,6 +432,7 @@ export default function SistemaPage() {
 </div>
 )}
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {role === "owner" && <Link href="/sistema/profissional" className="group flex flex-col justify-between gap-6 rounded-xl border border-purple-200 bg-white p-6 shadow-sm transition hover:border-purple-500 hover:shadow-lg"><div><p className="text-xs font-bold uppercase tracking-wide text-purple-700">Professional</p><h3 className="mt-2 text-lg font-semibold text-slate-900">PDF, notas, fotos e avaliações</h3><p className="mt-2 text-sm text-slate-600">Prepare propostas em PDF, registre NFS-e e valorize sua Vitrine.</p></div><span className="font-semibold text-purple-700">Conhecer recursos →</span></Link>}
   {[
   {
     title: "Clientes",

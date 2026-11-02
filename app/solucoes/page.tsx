@@ -1,4 +1,3 @@
-import { BASIC_TRIAL_LABEL } from "@/lib/provider-trial";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -39,25 +38,14 @@ const providerBenefits = [
 
 const plans = [
   {
-    code: "FREE",
-    name: providerPlanCopy.free.title,
-    description: providerPlanCopy.free.description,
-    price: "R$ 0",
-    period: "/ mês",
-    users: "1 usuário na equipe",
-    features: [...providerPlanCopy.free.features],
-    action: "Criar conta e testar",
-    featured: false,
-  },
-  {
     code: "BASIC",
     name: providerPlanCopy.basic.title,
     description: providerPlanCopy.basic.description,
-    price: "R$ 49,70",
-    period: "/ mês",
+    price: "Gratuito",
+    period: "sem prazo de uso",
     users: "Até 3 usuários na equipe",
     features: [...providerPlanCopy.basic.features],
-    action: `Começar teste de ${BASIC_TRIAL_LABEL}`,
+    action: "Começar gratuitamente",
     featured: false,
   },
   {
@@ -177,9 +165,7 @@ export default function Solucoes() {
               ))}
             </div>
             <p className="plans-note">
-              Novos cadastros começam com {BASIC_TRIAL_LABEL} de teste do Basic. Sem uma
-              assinatura confirmada ao fim do teste, o acesso passa para o
-              Free. A contratação dos planos pagos é confirmada pelo Asaas.
+              O Basic é gratuito e não tem prazo de uso. O Professional é opcional e adiciona PDF de orçamento, registro de NFS-e, galeria e avaliações de atendimentos concluídos. A assinatura paga depende da confirmação do Asaas.
             </p>
           </div>
         </section>

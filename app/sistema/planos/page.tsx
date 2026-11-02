@@ -1,5 +1,4 @@
 "use client";
-import { BASIC_TRIAL_LABEL } from "@/lib/provider-trial";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import SystemBrand from "@/components/SystemBrand";
@@ -39,7 +38,7 @@ function PlanosContent() {
   };
   const message = paymentMessages[searchParams.get("pagamento") ?? ""] ?? "";
   const panelAccessMessage = searchParams.get("acesso") === "painel"
-    ? "No Free, você pode publicar 1 serviço na Vitrine, consultar solicitações e falar com o cliente pelo WhatsApp. Basic amplia o catálogo para 5 serviços e libera a gestão do negócio; Professional permite 10 serviços, exportação CSV e mais usuários."
+    ? "O Basic é gratuito, sem vencimento, com 5 serviços e todas as ferramentas de gestão. Professional amplia os limites e libera recursos exclusivos."
     : "";
   useEffect(() => {
     async function load() {
@@ -171,7 +170,7 @@ function PlanosContent() {
             </ul>
             <div className="mt-auto space-y-3 pt-6">
               {current ? <>
-                <button disabled className="w-full rounded-lg border border-slate-300 px-4 py-3 font-semibold text-slate-500">{data.current?.status === "trialing" ? "Teste Basic ativo" : "Plano atual"}</button>
+                <button disabled className="w-full rounded-lg border border-slate-300 px-4 py-3 font-semibold text-slate-500">{plan.code === "basic" ? "Basic gratuito, sem vencimento" : "Plano atual"}</button>
                 {data.current?.canCancel && <button onClick={() => {
                   const endDate = data.current?.currentPeriodEnd
                     ? new Date(data.current.currentPeriodEnd).toLocaleDateString("pt-BR")
@@ -194,7 +193,7 @@ function PlanosContent() {
             </div>
           </article>;
         })}</div>
-        <p className="mt-6 text-sm text-slate-500">Novas organizações começam com {BASIC_TRIAL_LABEL} de teste do Basic. Sem uma assinatura confirmada ao fim do teste, o acesso passa para o Free. O retorno do checkout não confirma o pagamento; a contratação dos planos pagos depende da confirmação do Asaas.</p>
+        <p className="mt-6 text-sm text-slate-500">O Basic é gratuito e não vence. O Professional adiciona recursos exclusivos e depende de assinatura confirmada. O retorno do checkout não confirma o pagamento; a contratação dos planos pagos depende da confirmação do Asaas.</p>
       </>}
     </section>
   </main>;
