@@ -1,4 +1,5 @@
 "use client";
+import RouteEstimate from "@/components/RouteEstimate";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import SystemBrand from "@/components/SystemBrand";
@@ -120,9 +121,10 @@ function AppointmentCard({ appointment: a, team, manager, canUpdate, next, index
     {a.customers?.phone && <p className="mt-1 text-sm">Telefone: {a.customers.phone}</p>}{a.customers?.address && <p className="mt-1 text-sm">Endereço: {a.customers.address}</p>}
     {a.details && <p className="mt-2 whitespace-pre-wrap text-sm">Orientações internas: {a.details}</p>}
     <p className="mt-2 text-sm text-slate-600">Intervalo posterior reservado: {a.buffer_minutes} minutos.</p>
-    {a.status === "on_way" && <p className="mt-2 font-medium">{a.arrival_estimate_at ? `Chegada estimada: ${format(a.arrival_estimate_at)} (manual).` : "Previsão de chegada ainda não informada."}</p>}
+    {a.status === "on_way" && <p className="mt-2 font-medium">{a.arrival_estimate_at ? `Chegada estimada: ${format(a.arrival_estimate_at)} (confirmada pelo prestador).` : "Previsão de chegada ainda não informada."}</p>}
     {late && <p role="alert" className="mt-3 rounded-lg bg-amber-50 p-3 text-amber-900">A chegada estimada, somada à duração prevista e ao intervalo, alcança o próximo atendimento deste profissional. Revise os horários e avise os clientes; a agenda não remarca automaticamente.</p>}
     {canUpdate && active && <div className="mt-4"><div className="flex flex-wrap gap-2">{(["arrived", "in_progress", "completed", "no_show"] as AppointmentStatus[]).filter(status => canTransition(a.status, status, manager)).map(status => <button key={status} disabled={busy} className={button} onClick={() => { if (status !== "no_show" || window.confirm("Confirmar que o cliente não compareceu?")) void mutate({ action: "status", status }, "Situação atualizada. O acompanhamento do cliente mostrará a alteração."); }}>{appointmentLabels[status]}</button>)}</div>
+      {["scheduled", "on_way"].includes(a.status) && <RouteEstimate agenda destination={a.customers?.address||""} onApply={(_km,minutes)=>setEta(minutes)}/> }
       {["scheduled", "on_way"].includes(a.status) && <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={event => { event.preventDefault(); void mutate({ action: "status", status: "on_way", eta_minutes: eta }, "Previsão manual de chegada atualizada no acompanhamento."); }}><label className="text-sm">Chegada estimada daqui a (minutos)<input required type="number" min={1} max={480} value={eta} onChange={event => setEta(Number(event.target.value))} className={field} /></label><button disabled={busy} className={button}>{a.status === "on_way" ? "Atualizar previsão" : "Iniciar deslocamento"}</button></form>}
     </div>}
     <div className="mt-4 flex flex-wrap gap-2">

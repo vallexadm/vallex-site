@@ -1,4 +1,5 @@
 "use client";
+import RouteEstimate from "@/components/RouteEstimate";
 
 import ProQuoteActions from "@/components/ProQuoteActions";
 import ActionNotice from "@/components/ActionNotice";
@@ -760,7 +761,7 @@ export default function OrcamentosPage() {
                           <input required minLength={2} maxLength={200} value={item.description} onChange={(event) => updateItem({ description: event.target.value })} placeholder={item.category === "transporte" ? "Ex.: Deslocamento até o cliente" : "Ex.: Material ou taxa"} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
                         </label>
 
-                        {item.category === "transporte" ? <>
+                        {item.category === "transporte" ? <><div className="md:col-span-2"><RouteEstimate onApply={km=>updateItem({distance_km:String(km)})}/></div>
                           <label className="text-sm font-medium text-slate-700">Distância total do percurso (km, incluindo retorno)
                             <input required type="number" min="0.1" step="0.1" value={item.distance_km} onChange={(event) => updateItem({ distance_km: event.target.value })} placeholder="Ex.: 24" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
                           </label>
@@ -773,7 +774,7 @@ export default function OrcamentosPage() {
                           <label className="text-sm font-medium text-slate-700">Consumo médio (km/L)
                             <input required type="number" min="0.1" step="0.1" value={item.efficiency_km_per_liter} onChange={(event) => updateItem({ efficiency_km_per_liter: event.target.value })} placeholder="Ex.: 10,5" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
                           </label>
-                          </div></details><p className="self-end rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-950 md:col-span-2">Custo estimado do combustível: <strong>{formatCurrency(calculatedFuel)}</strong></p>
+                          </div></details><p className="self-end rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-950 md:col-span-2">{Number(item.efficiency_km_per_liter.replace(",","."))>0&&Number(item.efficiency_km_per_liter.replace(",","."))<2&&<span className="mb-2 block font-semibold text-red-700">Consumo incomum: confira os km/L do veículo. Exemplo: 10 km/L, e não 0,1.</span>}Custo estimado do combustível: <strong>{formatCurrency(calculatedFuel)}</strong></p>
                         </> : <label className="text-sm font-medium text-slate-700">Valor (R$)
                           <CurrencyInput required min={0.01} value={item.amount} onChange={(amount) => updateItem({ amount })} placeholder="Ex.: 35,00" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
                         </label>}

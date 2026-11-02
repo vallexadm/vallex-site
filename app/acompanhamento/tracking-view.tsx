@@ -38,7 +38,7 @@ export default function TrackingView() {
       <p className="mt-5 rounded-xl bg-purple-50 p-4 text-lg font-semibold text-purple-800">{appointmentLabels[appointment.status]}</p>
       {appointment.status === "on_way" && <p className="mt-4">{appointment.arrivalEstimateAt ? new Date(appointment.arrivalEstimateAt) > new Date(checkedAt) ? `Chegada estimada: ${format(appointment.arrivalEstimateAt)}.` : "A previsão anterior já passou. Aguarde uma atualização do prestador." : "O prestador está a caminho e ainda não informou uma previsão de chegada."}</p>}
       <p className="mt-4 text-sm text-slate-600">Última alteração pelo prestador: {format(appointment.updatedAt)}.</p>
-      <p className="mt-3 text-sm text-slate-500">A previsão é informada manualmente e pode mudar. Esta página não rastreia a localização do profissional. Atualização automática a cada 30 segundos enquanto estiver aberta.</p>
+      <p className="mt-3 text-sm text-slate-500">A previsão é confirmada pelo prestador e pode usar uma estimativa de rota. Pode mudar conforme o trânsito. Esta página não rastreia a localização do profissional. Atualização automática a cada 30 segundos enquanto estiver aberta.</p>
     </div>}
     <button type="button" onClick={() => setAttempt(value => value+1)} className="mt-6 rounded-lg bg-purple-700 px-4 py-3 font-semibold text-white">Atualizar acompanhamento</button>
     <p className="mt-5 text-xs text-slate-500">Este link dá acesso ao acompanhamento. Compartilhe apenas com as pessoas envolvidas no atendimento.</p>
