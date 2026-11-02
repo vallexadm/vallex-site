@@ -479,7 +479,7 @@ export default function OrcamentosPage() {
       }
       const validadeTexto = orcamento.validade_ate ? `\nVálido até: ${formatDate(orcamento.validade_ate)}` : "";
       const resumo = orcamento.descricao?.trim().slice(0, 350);
-      const texto = `Olá, ${orcamento.customers?.name ?? "tudo bem"}! Segue o orçamento: ${orcamento.titulo}\nValor: ${formatCurrency(orcamento.valor)}${validadeTexto}${resumo ? `\n\nDetalhes: ${resumo}${orcamento.descricao && orcamento.descricao.length > 350 ? "…" : ""}` : ""}${anexosTexto}\n\nEm caso de dúvidas, estou à disposição.`;
+      const texto = `Olá, ${orcamento.customers?.name ?? "tudo bem"}! Segue nossa proposta de serviço: ${orcamento.titulo.replace(/^orçamento\s*[-:–]?\s*/i, "")}\nValor: ${formatCurrency(orcamento.valor)}${validadeTexto}${resumo ? `\n\nDescrição da proposta:\n${resumo.replace(/Pedido do cliente:/i, "\n\nSolicitação original do cliente:")}${orcamento.descricao && orcamento.descricao.length > 350 ? "…" : ""}` : ""}${anexosTexto}\n\nEm caso de dúvidas, estou à disposição.`;
       const phone = (orcamento.customers?.phone ?? "").replace(/\D/g, "");
       const phoneWithCountry = phone.length === 10 || phone.length === 11 ? `55${phone}` : phone;
       const whatsappUrl = `https://wa.me/${phoneWithCountry}?text=${encodeURIComponent(texto)}`;
