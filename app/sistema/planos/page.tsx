@@ -1,4 +1,5 @@
 "use client";
+import { BASIC_TRIAL_LABEL } from "@/lib/provider-trial";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import SystemBrand from "@/components/SystemBrand";
@@ -193,7 +194,7 @@ function PlanosContent() {
             </div>
           </article>;
         })}</div>
-        <p className="mt-6 text-sm text-slate-500">Novas organizações começam com 30 dias de teste do Basic. Sem uma assinatura confirmada ao fim do teste, o acesso passa para o Free. O retorno do checkout não confirma o pagamento; a contratação dos planos pagos depende da confirmação do Asaas.</p>
+        <p className="mt-6 text-sm text-slate-500">Novas organizações começam com {BASIC_TRIAL_LABEL} de teste do Basic. Sem uma assinatura confirmada ao fim do teste, o acesso passa para o Free. O retorno do checkout não confirma o pagamento; a contratação dos planos pagos depende da confirmação do Asaas.</p>
       </>}
     </section>
   </main>;

@@ -1,4 +1,5 @@
-export const BASIC_TRIAL_DAYS = 30;
+export const BASIC_TRIAL_DAYS = 365;
+export const BASIC_TRIAL_LABEL = "1 ano (365 dias)";
 
 export function createBasicTrialPeriod(startedAt = new Date()) {
   return {

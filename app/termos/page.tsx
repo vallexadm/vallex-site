@@ -1,3 +1,4 @@
+import { BASIC_TRIAL_LABEL } from "@/lib/provider-trial";
 import Link from "next/link";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
@@ -98,7 +99,7 @@ export default function TermosPage() {
                 contratação. Os planos pagos têm cobrança recorrente mensal,
                 processada pelo Asaas. Ao contratar, você autoriza a cobrança
                 mensal do preço então exibido até cancelar a renovação. Novas
-                organizações começam com 30 dias de teste do Basic; sem uma
+                organizações começam com {BASIC_TRIAL_LABEL} de teste do Basic; sem uma
                 assinatura paga confirmada ao final, o acesso passa ao plano
                 Free.
               </p>

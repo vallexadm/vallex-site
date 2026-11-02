@@ -1,4 +1,5 @@
 "use client";
+import { BASIC_TRIAL_LABEL } from "@/lib/provider-trial";
 import { endCurrentSession } from "@/lib/end-current-session";
 
 import { FormEvent, useEffect, useState } from "react";
@@ -313,7 +314,7 @@ export default function SistemaPage() {
             </div>
 
             <p className="text-sm text-slate-500">
-              Sua área começa com 30 dias grátis do plano Basic, sem cobrança.
+              Sua área começa com {BASIC_TRIAL_LABEL} grátis do plano Basic, sem cobrança.
               Depois do teste, a conta volta ao Free. A Vitrine será criada
               como não publicada; você decide quando torná-la pública.
             </p>

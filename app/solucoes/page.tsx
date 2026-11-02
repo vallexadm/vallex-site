@@ -1,3 +1,4 @@
+import { BASIC_TRIAL_LABEL } from "@/lib/provider-trial";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -56,7 +57,7 @@ const plans = [
     period: "/ mês",
     users: "Até 3 usuários na equipe",
     features: [...providerPlanCopy.basic.features],
-    action: "Começar teste de 30 dias",
+    action: `Começar teste de ${BASIC_TRIAL_LABEL}`,
     featured: false,
   },
   {
@@ -176,7 +177,7 @@ export default function Solucoes() {
               ))}
             </div>
             <p className="plans-note">
-              Novos cadastros começam com 30 dias de teste do Basic. Sem uma
+              Novos cadastros começam com {BASIC_TRIAL_LABEL} de teste do Basic. Sem uma
               assinatura confirmada ao fim do teste, o acesso passa para o
               Free. A contratação dos planos pagos é confirmada pelo Asaas.
             </p>

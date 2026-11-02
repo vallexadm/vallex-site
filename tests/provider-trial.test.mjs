@@ -43,25 +43,25 @@ registerHooks({
   load(url,context,next){if(url==='trial:db')return {format:'module',source:'export const createClient = (...args) => globalThis.trialClient(...args);',shortCircuit:true};return next(url,context);}
 });
 const moduleAt=file=>import(pathToFileURL(path.join(root,file)).href);
-const {BASIC_TRIAL_DAYS,createBasicTrialPeriod,isProviderTrialExpired}=await moduleAt('lib/provider-trial.ts');
+const {BASIC_TRIAL_DAYS,BASIC_TRIAL_LABEL,createBasicTrialPeriod,isProviderTrialExpired}=await moduleAt('lib/provider-trial.ts');
 const {getPlanEntitlements}=await moduleAt('lib/server/plan-entitlements.ts');
 const {requireProviderPanelAccess}=await moduleAt('lib/server/provider-panel-access.ts');
 const {POST:createOrganization}=await moduleAt('app/api/sistema/organizacao/route.ts');
 const {GET:getPlans}=await moduleAt('app/api/sistema/asaas/plans/route.ts');
 const start=new Date('2026-10-21T13:45:00Z');
-const end='2026-11-20T13:45:00.000Z';
+const end='2027-10-21T13:45:00.000Z';
 for(const name of ['SUPABASE_URL','NEXT_PUBLIC_SUPABASE_URL'])process.env[name]='https://trial.invalid';
 for(const name of ['SUPABASE_SECRET_KEY','NEXT_PUBLIC_SUPABASE_ANON_KEY'])process.env[name]='fixture-only';
 function request(method='GET',payload){return new Request('https://trial.invalid/api',{method,headers:{Authorization:'Bearer fixture','Content-Type':'application/json'},...(payload?{body:JSON.stringify(payload)}:{})});}
 
-test('Basic começa com exatamente 30 dias corridos',()=>{
-  assert.equal(BASIC_TRIAL_DAYS,30);assert.equal(createBasicTrialPeriod(start).endsAt.toISOString(),end);
+test('Basic começa com exatamente 365 dias corridos',()=>{
+  assert.equal(BASIC_TRIAL_DAYS,365);assert.equal(createBasicTrialPeriod(start).endsAt.toISOString(),end);
   assert.equal(createBasicTrialPeriod(start).startedAt.toISOString(),start.toISOString());
 });
 test('teste expira no instante do vencimento, sem estender até o fim do dia',()=>{
-  assert.equal(isProviderTrialExpired(end,new Date('2026-11-20T13:44:59.999Z')),false);
+  assert.equal(isProviderTrialExpired(end,new Date('2027-10-21T13:44:59.999Z')),false);
   assert.equal(isProviderTrialExpired(end,new Date(end)),true);
-  assert.equal(isProviderTrialExpired(end,new Date('2026-11-20T13:45:00.001Z')),true);
+  assert.equal(isProviderTrialExpired(end,new Date('2027-10-21T13:45:00.001Z')),true);
 });
 test('teste sem data ou com data inválida não libera recursos',()=>{
   for(const value of [null,undefined,'','invalid'])assert.equal(isProviderTrialExpired(value,start),true);
@@ -82,13 +82,13 @@ test('Basic pago e Professional pago continuam ativos sem alteração de duraç�
     assert.equal(result.entitlements.code,planId==='basic-plan'?'basic':'professional');
   }
 });
-test('novo negócio recebe Basic trialing de 30 dias, sem contratar cobrança',async()=>{
+test('novo negócio recebe Basic trialing de 365 dias, sem contratar cobrança',async()=>{
   existingOrganization=false;calls=[];
   const response=await createOrganization(request('POST',{name:'Negócio de teste',business_type:'Manutenção'}));
   assert.equal(response.status,201);
   const saved=calls.find(c=>c.table==='organization_subscriptions'&&c.op==='insert').payload;
   assert.equal(saved.plan_id,'basic-plan');assert.equal(saved.status,'trialing');assert.equal(saved.billing_provider,'manual');
-  assert.equal(new Date(saved.current_period_end)-new Date(saved.current_period_start),30*24*60*60*1000);
+  assert.equal(new Date(saved.current_period_end)-new Date(saved.current_period_start),365*24*60*60*1000);
 });
 test('repetir configuração não reinicia nem renova o teste',async()=>{
   existingOrganization=true;calls=[];
@@ -115,8 +115,13 @@ for(const route of ['agenda','financeiro','clientes','orcamentos']){
     assert.equal(calls.some(c=>c.op!=='read'),false);
   });
 }
-test('mensagens de adesão informam 30 dias e não prometem cinco',async()=>{
+test('mensagens de adesão usam o prazo central de um ano sem prometer testes antigos',async()=>{
+  assert.equal(BASIC_TRIAL_LABEL,'1 ano (365 dias)');
   for(const file of ['app/sistema/page.tsx','app/sistema/planos/page.tsx','app/solucoes/page.tsx','app/termos/page.tsx']){
-    const source=await readFile(path.join(root,file),'utf8');assert.match(source,/30 dias/);assert.doesNotMatch(source,/(?:5|cinco) dias (?:de teste|grátis)/);
+    const source=await readFile(path.join(root,file),'utf8');assert.match(source,/BASIC_TRIAL_LABEL/);assert.doesNotMatch(source,/(?:30|5|cinco) dias (?:de teste|grátis)/);
   }
+});
+
+test('365 dias mantém duração exata ao atravessar ano bissexto sem alterar o início',()=>{
+ const leapStart=new Date('2027-11-01T13:45:00Z');const period=createBasicTrialPeriod(leapStart);assert.equal(period.endsAt.toISOString(),'2028-10-31T13:45:00.000Z');assert.equal(leapStart.toISOString(),'2027-11-01T13:45:00.000Z');
 });
