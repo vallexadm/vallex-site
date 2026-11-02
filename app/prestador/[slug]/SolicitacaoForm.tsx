@@ -343,6 +343,7 @@ export default function SolicitacaoForm({
               </button>
             )}
           </div>
+        {sucesso && <ActionNotice inline message="Solicitação enviada. O prestador recebeu seu pedido e entrará em contato." onClose={()=>setSucesso(false)}/>}
         </form>
       </div>
     </details>
