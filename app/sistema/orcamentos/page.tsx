@@ -113,6 +113,8 @@ function makeCostForm(item?: QuoteInternalCost): QuoteCostForm {
 
 export default function OrcamentosPage() {
   const savingQuoteRef = useRef(false);
+  const fuelKey = useRef("");
+  function newCost(){const row=makeCostForm();try{const saved=JSON.parse(localStorage.getItem(fuelKey.current)||"null");if(saved)return {...row,fuel_type:saved.fuel_type==="etanol"?"etanol" as const:"gasolina" as const,price_per_liter:String(saved.price_per_liter||""),efficiency_km_per_liter:String(saved.efficiency_km_per_liter||"")};}catch{}return row;}
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
   const [role, setRole] = useState<"owner" | "member" | "">("");
@@ -191,6 +193,7 @@ export default function OrcamentosPage() {
       data: { session },
     } = await supabase.auth.getSession();
 
+    fuelKey.current=session?.user.id?`vallex-fuel-${session.user.id}`:"";
     return session?.access_token ?? "";
   }
 
@@ -735,14 +738,14 @@ export default function OrcamentosPage() {
                   <h3 className="font-semibold text-slate-900">Custos internos do prestador</h3>
                   <p className="mt-1 text-sm text-slate-600">Esses itens e cálculos ficam só no painel. O cliente recebe apenas o valor final do orçamento.</p>
                 </div>
-                <button type="button" onClick={() => setCustosInternos((current) => [...current, makeCostForm()])} disabled={custosInternos.length >= 30} className="rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-900 disabled:opacity-50">Adicionar custo</button>
+                <button type="button" onClick={() => setCustosInternos((current) => [...current, newCost()])} disabled={custosInternos.length >= 30} className="rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-900 disabled:opacity-50">Adicionar custo</button>
               </div>
 
               <div className="mt-4 space-y-4">
                 {custosInternos.map((item, index) => {
                   const fuelDetails: FuelCostDetails = { distance_km: item.distance_km, fuel_type: item.fuel_type, price_per_liter: item.price_per_liter, efficiency_km_per_liter: item.efficiency_km_per_liter };
                   const calculatedFuel = calculateFuelCost(fuelDetails);
-                  const updateItem = (changes: Partial<QuoteCostForm>) => setCustosInternos((current) => current.map((row) => row.id === item.id ? { ...row, ...changes } : row));
+                  const updateItem = (changes: Partial<QuoteCostForm>) => { const next={...item,...changes}; if(next.category==="transporte"&&fuelKey.current){try{localStorage.setItem(fuelKey.current,JSON.stringify({fuel_type:next.fuel_type,price_per_liter:next.price_per_liter,efficiency_km_per_liter:next.efficiency_km_per_liter}));}catch{}}setCustosInternos(current=>current.map(row=>row.id===item.id?next:row));};
                   return (
                     <div key={item.id} className="rounded-lg border border-amber-200 bg-white p-4">
                       <div className="grid gap-4 md:grid-cols-2">
@@ -756,10 +759,10 @@ export default function OrcamentosPage() {
                         </label>
 
                         {item.category === "transporte" ? <>
-                          <label className="text-sm font-medium text-slate-700">Distância total (km)
+                          <label className="text-sm font-medium text-slate-700">Distância total do percurso (km, incluindo retorno)
                             <input required type="number" min="0.1" step="0.1" value={item.distance_km} onChange={(event) => updateItem({ distance_km: event.target.value })} placeholder="Ex.: 24" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
                           </label>
-                          <label className="text-sm font-medium text-slate-700">Combustível
+                          <details className="md:col-span-2 rounded-lg border p-3" open={!item.price_per_liter||!item.efficiency_km_per_liter}><summary className="cursor-pointer text-sm font-medium">Configuração do veículo e combustível</summary><p className="my-2 text-xs text-slate-500">Informe uma vez. Os dados serão lembrados nesta conta e neste navegador. Atualize quando trocar de veículo ou abastecer.</p><div className="grid gap-4 md:grid-cols-2"><label className="text-sm font-medium text-slate-700">Combustível
                             <select value={item.fuel_type} onChange={(event) => updateItem({ fuel_type: event.target.value as FuelCostDetails["fuel_type"] })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"><option value="gasolina">Gasolina</option><option value="etanol">Etanol (álcool)</option></select>
                           </label>
                           <label className="text-sm font-medium text-slate-700">Preço por litro (R$)
@@ -768,7 +771,7 @@ export default function OrcamentosPage() {
                           <label className="text-sm font-medium text-slate-700">Consumo médio (km/L)
                             <input required type="number" min="0.1" step="0.1" value={item.efficiency_km_per_liter} onChange={(event) => updateItem({ efficiency_km_per_liter: event.target.value })} placeholder="Ex.: 10,5" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
                           </label>
-                          <p className="self-end rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-950 md:col-span-2">Custo estimado do combustível: <strong>{formatCurrency(calculatedFuel)}</strong></p>
+                          </div></details><p className="self-end rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-950 md:col-span-2">Custo estimado do combustível: <strong>{formatCurrency(calculatedFuel)}</strong></p>
                         </> : <label className="text-sm font-medium text-slate-700">Valor (R$)
                           <CurrencyInput required min={0.01} value={item.amount} onChange={(amount) => updateItem({ amount })} placeholder="Ex.: 35,00" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" />
                         </label>}
