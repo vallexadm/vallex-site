@@ -1,4 +1,5 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
 import { endCurrentSession } from "@/lib/end-current-session";
 import PasswordInput from "@/components/PasswordInput";
 
@@ -221,15 +222,11 @@ export default function AceitarConvitePage() {
         )}
 
         {message && (
-          <div className="mt-5 rounded-lg border border-green-300 bg-green-50 p-4 text-sm text-green-800">
-            {message}
-          </div>
+          <ActionNotice message={message} onClose={()=>setMessage("")}/>
         )}
 
         {error && (
-          <div className="mt-5 rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700">
-            {error}
-          </div>
+          <ActionNotice message={error} error onClose={()=>setError("")}/>
         )}
 
         {!accepted ? (

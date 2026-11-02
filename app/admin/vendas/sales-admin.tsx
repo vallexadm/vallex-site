@@ -1,4 +1,5 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
 import PhoneInput from "@/components/PhoneInput";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
@@ -136,7 +137,7 @@ export default function SalesAdmin() {
     </section>
     <section className="vallex-admin-section">
       <div className="vallex-admin-section-heading"><div><span className="vallex-admin-eyebrow">Relacionamento comercial</span><h2>Clientes e oportunidades</h2><p>Registre o negócio, o nicho, o produto VALLEX de interesse, valores e o histórico de cada negociação.</p></div>{canCreate && <button type="button" className="vallex-admin-primary" onClick={startNew}>+ Cadastrar cliente</button>}</div>
-      {error && <p className="vallex-admin-error" role="alert">{error}</p>}{message && <p className="traffic-admin-notice" role="status">{message}</p>}
+      {error && <ActionNotice message={error} error onClose={()=>setError("")}/>}{message && <ActionNotice message={message} onClose={()=>setMessage("")}/>}
       {formOpen && <form onSubmit={(event) => void submit(event)} className="vallex-sales-form mb-6 rounded-2xl border border-violet-200 bg-slate-50 p-5">
         <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-semibold">{editingId ? "Editar cliente ou oportunidade" : "Novo cliente ou oportunidade"}</h3><button type="button" className="vallex-admin-back" onClick={() => setFormOpen(false)}>Fechar</button></div>
         <div className="grid min-w-0 gap-4 md:grid-cols-3">

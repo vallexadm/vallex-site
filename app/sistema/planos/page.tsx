@@ -1,4 +1,5 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import SystemBrand from "@/components/SystemBrand";
@@ -126,7 +127,7 @@ function PlanosContent() {
   return <main className="min-h-screen bg-slate-100">
     <header className="bg-[#17002E] px-6 py-5 text-white"><div className="mx-auto flex max-w-6xl items-center justify-between"><SystemBrand /><Link href="/sistema" className="inline-flex items-center gap-2 rounded-lg border border-purple-300 px-4 py-2 text-sm font-medium transition hover:bg-purple-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#17002E]"><span aria-hidden="true">←</span> Voltar ao painel</Link></div></header>
     <section className="mx-auto max-w-6xl px-6 py-10"><p className="text-sm text-slate-500">Gestão da organização</p><h2 className="mt-2 text-3xl font-bold text-slate-900">Planos e assinatura</h2><p className="mt-3 text-slate-600">Escolha o plano que acompanha o crescimento da sua empresa.</p>
-      {message && <p role="status" className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-900">{message}</p>}{panelAccessMessage && <p role="status" className="mt-6 rounded-xl border border-purple-200 bg-purple-50 p-4 text-purple-900">{panelAccessMessage}</p>}{notice && <p role="status" className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-green-800">{notice}</p>}{error && <p role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">{error}</p>}
+      {message && <p role="status" className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-900">{message}</p>}{panelAccessMessage && <p role="status" className="mt-6 rounded-xl border border-purple-200 bg-purple-50 p-4 text-purple-900">{panelAccessMessage}</p>}{notice && <ActionNotice message={notice} onClose={()=>setNotice("")}/>}{error && <ActionNotice message={error} error onClose={()=>setError("")}/>}
       {loading ? <p className="mt-8 rounded-xl bg-white p-6 text-slate-600">Carregando planos...</p> : data && <>
         {data.current && <div className="mt-6 rounded-xl border border-purple-200 bg-white p-4 text-slate-700">
           <p>Plano atual: <strong>{data.current.name}</strong> · Status: <strong>{data.current.status === "trialing" ? "teste grátis" : data.current.cancellationPending ? "renovação cancelada" : data.current.status}</strong>

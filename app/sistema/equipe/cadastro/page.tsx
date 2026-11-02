@@ -1,4 +1,5 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
 import PasswordInput from "@/components/PasswordInput";
 
 import Link from "next/link";
@@ -62,8 +63,8 @@ export default function CadastroEquipePage() {
           <input type="checkbox" required checked={acceptedLegal} onChange={(event) => setAcceptedLegal(event.target.checked)} className="mt-1 accent-violet-700" />
           <span>Tenho 18 anos ou mais, li e aceito os <Link className="font-semibold text-violet-700 underline" href="/termos" target="_blank" rel="noopener noreferrer">Termos de Uso</Link> e li a <Link className="font-semibold text-violet-700 underline" href="/privacidade" target="_blank" rel="noopener noreferrer">Política de Privacidade</Link>.</span>
         </label>
-        {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</p>}
-        {message && <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-900" role="status">{message}</p>}
+        {error && <ActionNotice message={error} error onClose={()=>setError("")}/>}
+        {message && <ActionNotice message={message} onClose={()=>setMessage("")}/>}
         <button type="submit" disabled={loading} className="vallex-admin-primary w-full">{loading ? "Criando conta…" : "Criar conta da equipe"}</button>
       </form>
       <p className="mt-5 text-sm text-slate-600">Use exatamente o e-mail que o administrador cadastrou. Após criar a conta, aguarde a liberação do acesso.</p>

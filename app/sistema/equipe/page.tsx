@@ -1,4 +1,5 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
 import PhoneInput from "@/components/PhoneInput";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -495,12 +496,10 @@ export default function EquipePage() {
         </p>
 
         {error && (
-          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {error}
-          </div>
+          <ActionNotice message={error} error onClose={()=>setError("")}/>
         )}
 
-        {message && <p role="status" className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-700">{message}</p>}
+        {message && <ActionNotice message={message} onClose={()=>setMessage("")}/>}
 
         {team && (
           <>

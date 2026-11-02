@@ -1,4 +1,5 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
 import { endCurrentSession } from "@/lib/end-current-session";
 
 import { useEffect, useState } from "react";
@@ -195,12 +196,7 @@ function ProviderLogoutBar({ children }: Readonly<{ children: React.ReactNode }>
         </div>
       </div>
       {error && (
-        <p
-          role="alert"
-          className="border-b border-red-200 bg-red-50 px-4 py-2 text-right text-sm text-red-700"
-        >
-          {error}
-        </p>
+        <ActionNotice message={error} error onClose={()=>setError("")}/>
       )}
       {children}
     </>

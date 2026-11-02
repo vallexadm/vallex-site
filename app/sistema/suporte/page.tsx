@@ -1,4 +1,5 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
 import PhoneInput from "@/components/PhoneInput";
 
 import Link from "next/link";
@@ -120,8 +121,8 @@ export default function SistemaSuportePage() {
         <p className="text-sm font-medium text-violet-700">ATENDIMENTO VALLEX</p>
         <h1 className="mt-2 text-3xl font-bold">Como podemos ajudar?</h1>
         <p className="mt-2 max-w-2xl text-slate-600">Escolha a ferramenta relacionada à sua dúvida. A solicitação será identificada com seu negócio e plano para a equipe encaminhar corretamente.</p>
-        {error && <p role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{error}</p>}
-        {notice && <p role="status" className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">{notice}</p>}
+        {error && <ActionNotice message={error} error onClose={()=>setError("")}/>}
+        {notice && <ActionNotice message={notice} onClose={()=>setNotice("")}/>}
         <form onSubmit={submit} className="mt-7 space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Negócio</p><p className="mt-1 font-semibold">{loading ? "Carregando…" : context?.organization?.name ?? "Conta conectada"}</p></div>

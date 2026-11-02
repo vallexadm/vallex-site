@@ -1,4 +1,5 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
 import SessionPanelLink from "@/components/SessionPanelLink";
 import PasswordInput from "@/components/PasswordInput";
 
@@ -382,12 +383,7 @@ export default function LoginPage() {
         )}
 
         {message && (
-          <p
-            role="status"
-            className="mt-5 rounded-lg bg-slate-100 p-3 text-sm text-slate-700"
-          >
-            {message}
-          </p>
+          <ActionNotice message={message} onClose={()=>setMessage("")}/>
         )}
 
       </section>

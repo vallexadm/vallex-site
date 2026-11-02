@@ -1,8 +1,9 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+
 import { supabase } from "@/lib/supabase/client";
 
 type Permissions = Record<string, Record<string, boolean>>;
@@ -139,11 +140,11 @@ export default function AdminAcessosPage() {
   }
 
   return <main className="vallex-admin-page"><div className="vallex-admin-shell">
-    {copiedLinkId && typeof document !== "undefined" && createPortal(<div className="rounded-lg border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-900 shadow-lg" style={{ position: "fixed", top: 16, left: "50%", zIndex: 10000, transform: "translateX(-50%)" }} role="status" aria-live="polite">✓ Link de cadastro da equipe copiado</div>, document.body)}
+    {copiedLinkId && <ActionNotice message="Link de cadastro da equipe copiado." onClose={()=>setCopiedLinkId("")}/>}
     <header className="vallex-admin-header"><div><Link href="/admin" className="vallex-admin-brand">VALLEX <span>ADMINISTRAÇÃO</span></Link><h1>Equipe e permissões</h1><p>Cadastre sócios e funcionários, informe o cargo e escolha o que cada pessoa pode consultar ou alterar.</p></div><div className="vallex-admin-header-actions"><button type="button" className="vallex-admin-primary" onClick={addMember}>+ Adicionar pessoa</button><Link href="/admin" className="vallex-admin-back">Voltar ao admin</Link></div></header>
     <div className="vallex-admin-section">
       <p className="vallex-admin-muted">Esta área é para sócios e funcionários da VALLEX, não para prestadores. Cadastre aqui o nome, o cargo e o e-mail que a pessoa usará para criar a conta no sistema; ela deve se cadastrar com esse mesmo e-mail. A VALLEX confere o vínculo automaticamente ao abrir a página. Se a conta ainda não existir, use Verificar conta depois do cadastro. Quando aparecer como vinculada, clique em Editar dados, marque Ativar acesso e salve. O cargo identifica a função; as permissões por área continuam sendo definidas separadamente abaixo.</p>
-      {error && <p className="vallex-admin-error" role="alert">{error}</p>}{message && <p className="traffic-admin-notice" role="status">{message}</p>}
+      {error && <ActionNotice message={error} error onClose={()=>setError("")}/>}{message && <ActionNotice message={message} onClose={()=>setMessage("")}/>}
       {loading ? <p className="vallex-admin-empty">Carregando cadastros…</p> : <div className="space-y-5">{members.map((member) => {
         const draft = drafts[member.id] ?? draftFrom(member);
         const canEdit = editing[member.id] === true;

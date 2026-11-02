@@ -437,7 +437,7 @@ export default function VallexAdminPage() {
           ))}
         </nav>
 
-        {error && <p className="vallex-admin-error" role="alert">{error}</p>}
+        {error && <ActionNotice message={error} error onClose={()=>setError("")}/>}
 
         {tab === "overview" && <>
           <section className="vallex-admin-metrics" aria-label="Indicadores da plataforma">
@@ -460,7 +460,7 @@ export default function VallexAdminPage() {
 
         {tab === "providers" && <section className="vallex-admin-section">
           <div className="vallex-admin-section-heading"><div><span className="vallex-admin-eyebrow">Base ServiçoFácil</span><h2>Prestadores da VALLEX</h2><p>Organize os perfis ativos e os removidos da vitrine. A exclusão registra o motivo e preserva a conta e os serviços do prestador.</p></div></div>
-          {providerMessage && <p className="traffic-admin-notice" role="status">{providerMessage}</p>}
+          {providerMessage && <ActionNotice message={providerMessage} onClose={()=>setProviderMessage("")}/>}
           <div className="vallex-admin-subtabs" aria-label="Lista de prestadores">
             <button type="button" className={providerListMode === "active" ? "is-active" : ""} onClick={() => setProviderListMode("active")}>Ativos ({activeProviders.length})</button>
             <button type="button" className={providerListMode === "excluded" ? "is-active" : ""} onClick={() => setProviderListMode("excluded")}>Excluídos ({excludedProviders.length})</button>
