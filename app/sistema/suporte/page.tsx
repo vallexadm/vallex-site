@@ -1,4 +1,5 @@
 "use client";
+import PhoneInput from "@/components/PhoneInput";
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
@@ -138,7 +139,7 @@ export default function SistemaSuportePage() {
             <textarea required minLength={10} maxLength={3000} rows={6} value={description} onChange={(event) => setDescription(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-3 font-normal focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-200" placeholder="Conte o que aconteceu e quais passos você já tentou." />
           </label>
           <label className="block text-sm font-semibold">WhatsApp ou telefone para retorno
-            <input required type="tel" minLength={8} maxLength={30} value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-3 font-normal focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-200" placeholder="(62) 99999-9999" />
+            <PhoneInput required type="tel" minLength={8} maxLength={30} value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-3 font-normal focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-200" placeholder="(62) 99999-9999" />
           </label>
           <p className="text-xs leading-5 text-slate-500">A equipe receberá esta solicitação como enviada pelo acesso do prestador, junto com o plano atual e a ferramenta escolhida.</p>
           <button type="submit" disabled={loading || sending} className="inline-flex min-h-12 items-center justify-center rounded-lg bg-purple-700 px-6 font-semibold text-white transition hover:bg-purple-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60">{sending ? "Enviando…" : "Enviar solicitação"}</button>

@@ -1,4 +1,5 @@
 "use client";
+import PhoneInput from "@/components/PhoneInput";
 
 import { FormEvent, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
@@ -168,7 +169,7 @@ export default function SolicitacaoForm({
                 Telefone *
               </label>
 
-              <input
+              <PhoneInput
                 id={`telefone-${serviceId}`}
                 value={telefone}
                 onChange={(event) =>

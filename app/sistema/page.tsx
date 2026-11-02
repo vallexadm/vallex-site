@@ -30,6 +30,7 @@ export default function SistemaPage() {
   const [organizationName, setOrganizationName] = useState("");
   const [businessType, setBusinessType] = useState("");
   const [role, setRole] = useState("");
+  const [professionalAccess, setProfessionalAccess] = useState(false);
   const [isVallexAdmin, setIsVallexAdmin] = useState(false);
   const [modulePermissions, setModulePermissions] = useState<MemberPermissions>(defaultMemberPermissions);
   const [contextError, setContextError] = useState("");
@@ -112,6 +113,7 @@ export default function SistemaPage() {
     setOrganizationName(result.organization.name);
     setBusinessType(result.organization.business_type ?? "");
     setRole(result.role);
+    setProfessionalAccess(["professional", "enterprise"].includes(result.plan?.code));
     setModulePermissions(normalizeMemberPermissions(result.permissions?.modules));
   } catch {
     setContextError("Erro ao consultar os dados da organização.");
@@ -432,7 +434,7 @@ export default function SistemaPage() {
 </div>
 )}
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {role === "owner" && <Link href="/sistema/profissional" className="group flex flex-col justify-between gap-6 rounded-xl border border-purple-200 bg-white p-6 shadow-sm transition hover:border-purple-500 hover:shadow-lg"><div><p className="text-xs font-bold uppercase tracking-wide text-purple-700">Professional</p><h3 className="mt-2 text-lg font-semibold text-slate-900">PDF, notas, fotos e avaliações</h3><p className="mt-2 text-sm text-slate-600">Prepare propostas em PDF, registre NFS-e e valorize sua Vitrine.</p></div><span className="font-semibold text-purple-700">Conhecer recursos →</span></Link>}
+          {role === "owner" && (professionalAccess ? <Link href="/sistema/profissional" className="group flex flex-col justify-between gap-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-purple-500 hover:shadow-lg"><div><h3 className="text-lg font-semibold text-slate-900">Documentos e Vitrine</h3><p className="mt-2 text-sm text-slate-600">Orçamentos em PDF, registro de NFS-e, fotos e avaliações.</p></div><span className="font-semibold text-purple-700">Acessar recursos →</span></Link> : <section className="flex flex-col justify-between gap-6 rounded-xl border border-slate-200 bg-slate-50 p-6 shadow-sm"><div><h3 className="text-lg font-semibold text-slate-600">Documentos e Vitrine</h3><p className="mt-2 text-sm text-slate-500">Orçamentos em PDF, registro de NFS-e, fotos e avaliações.</p></div><p className="text-sm font-medium text-slate-500">Exclusivo do plano Profissional · Indisponível no Basic</p></section>)}
   {[
   {
     title: "Clientes",

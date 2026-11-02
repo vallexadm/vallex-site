@@ -1,4 +1,5 @@
 "use client";
+import PhoneInput from "@/components/PhoneInput";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabase/client";
@@ -143,7 +144,7 @@ export default function SalesAdmin() {
           <label className="grid gap-1 text-sm font-medium">Empresa / nome comercial<input maxLength={160} className="rounded-lg border border-slate-300 px-3 py-2" value={form.company_name ?? ""} onChange={(event) => setForm({ ...form, company_name: event.target.value })} /></label>
           <label className="grid gap-1 text-sm font-medium">Nicho de atuação<input maxLength={120} placeholder="Ex.: barbearia, alimentação, refrigeração" className="rounded-lg border border-slate-300 px-3 py-2" value={form.niche ?? ""} onChange={(event) => setForm({ ...form, niche: event.target.value })} /></label>
           <label className="grid gap-1 text-sm font-medium">E-mail<input type="email" maxLength={180} className="rounded-lg border border-slate-300 px-3 py-2" value={form.email ?? ""} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
-          <label className="grid gap-1 text-sm font-medium">Telefone / WhatsApp<input maxLength={40} className="rounded-lg border border-slate-300 px-3 py-2" value={form.phone ?? ""} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
+          <label className="grid gap-1 text-sm font-medium">Telefone / WhatsApp<PhoneInput maxLength={40} className="rounded-lg border border-slate-300 px-3 py-2" value={form.phone ?? ""} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,90px)] gap-3"><label className="grid min-w-0 gap-1 text-sm font-medium">Cidade<input maxLength={100} className="rounded-lg border border-slate-300 px-3 py-2" value={form.city ?? ""} onChange={(event) => setForm({ ...form, city: event.target.value })} /></label><label className="grid min-w-0 gap-1 text-sm font-medium">UF<input maxLength={2} className="rounded-lg border border-slate-300 px-3 py-2 uppercase" value={form.state ?? ""} onChange={(event) => setForm({ ...form, state: event.target.value.toUpperCase() })} /></label></div>
           <label className="grid gap-1 text-sm font-medium">Produto VALLEX<select className="vallex-sales-select rounded-lg border border-slate-300 px-3 py-2" value={form.product} onChange={(event) => setForm({ ...form, product: event.target.value })}>{products.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
           <label className="grid gap-1 text-sm font-medium">Plano / escopo desejado<input maxLength={180} placeholder="Ex.: Crescimento, Basic, site de agendamento" className="rounded-lg border border-slate-300 px-3 py-2" value={form.product_scope ?? ""} onChange={(event) => setForm({ ...form, product_scope: event.target.value })} /></label>

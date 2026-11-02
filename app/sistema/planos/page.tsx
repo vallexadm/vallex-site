@@ -158,7 +158,7 @@ function PlanosContent() {
           const copy = getProviderPlanCopy(plan.code);
           const reactivatingExpiredPlan =
             paid && data.current?.code === plan.code && data.current.status !== "active" && data.current.status !== "trialing";
-          return <article key={plan.id} className={"flex flex-col rounded-2xl border bg-white p-6 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-purple-500 hover:shadow-lg focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-100 " + (current ? "border-purple-400 ring-2 ring-purple-100" : "border-slate-200")}>
+          return <article key={plan.id} className={"flex flex-col rounded-2xl border bg-white p-6 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-purple-500 hover:shadow-lg focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-100 " + "border-slate-200"}>
             <p className="text-sm font-semibold uppercase tracking-wide text-purple-700">{plan.name}</p>
             <h3 className="mt-3 text-xl font-semibold leading-snug text-slate-900">{copy.title}</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">{copy.description}</p>

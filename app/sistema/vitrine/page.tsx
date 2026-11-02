@@ -1,4 +1,5 @@
 "use client";
+import PhoneInput from "@/components/PhoneInput";
 
 import ActionNotice from "@/components/ActionNotice";
 
@@ -934,7 +935,7 @@ async function excluirServico(service: VitrineService) {
                   Telefone
                 </label>
 
-                <input
+                <PhoneInput
                   id="phone"
                   value={phone}
                   onChange={(event) =>
@@ -959,7 +960,7 @@ async function excluirServico(service: VitrineService) {
                   WhatsApp
                 </label>
 
-                <input
+                <PhoneInput
                   id="whatsapp"
                   value={whatsapp}
                   onChange={(event) =>
