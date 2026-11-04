@@ -12,13 +12,18 @@ export default function CustomerAccess() {
   const [sentTo, setSentTo] = useState("");
   const [code, setCode] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+  const [emailSaved, setEmailSaved] = useState(false);
+  const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
     void supabase.auth.getUser().then(({ data }) => {
-      if (active) setConfirmed(Boolean(data.user?.phone && data.user.phone_confirmed_at));
+      if (active) {
+        setConfirmed(Boolean(data.user?.phone && data.user.phone_confirmed_at));
+        setEmailSaved(Boolean(data.user?.user_metadata.contact_email));
+      }
     });
     return () => { active = false; };
   }, []);
@@ -36,6 +41,7 @@ export default function CustomerAccess() {
           return;
         }
         setConfirmed(true);
+        setEmailSaved(Boolean(result.data.user.user_metadata.contact_email));
       } else {
         if (!/^[1-9][0-9]9[0-9]{8}$/.test(phone)) {
           setError("Informe um celular brasileiro com DDD e 11 dígitos.");
@@ -58,16 +64,46 @@ export default function CustomerAccess() {
     }
   }
 
+  async function saveEmail(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const { error } = await supabase.auth.updateUser({ data: { contact_email: email.trim() } });
+      if (error) {
+        setError("Não foi possível salvar o e-mail. Confira o endereço e tente novamente.");
+        return;
+      }
+      setEmailSaved(true);
+    } catch {
+      setError("Não foi possível concluir agora. Tente novamente em instantes.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-10">
       <section className="mx-auto max-w-md rounded-xl border bg-white p-6 shadow-sm">
         <Link href="/app" className="text-sm font-semibold text-purple-700">← Voltar à busca</Link>
         <h1 className="mt-4 text-2xl font-bold">Área do cliente</h1>
-        {confirmed ? (
+        {confirmed && emailSaved ? (
           <>
             <p role="status" className="mt-4 rounded-lg bg-green-50 p-4 text-green-800">Celular confirmado. Sua conta está pronta.</p>
             <Link href="/app" className="mt-4 inline-block rounded-lg bg-purple-700 px-4 py-3 font-semibold text-white">Buscar serviços</Link>
           </>
+        ) : confirmed ? (
+          <form onSubmit={saveEmail} className="mt-4 space-y-4">
+            <p className="text-sm text-slate-600">Celular confirmado. Informe um e-mail de contato para concluir o cadastro.</p>
+            <label className="block font-medium">E-mail
+              <input className={field} type="email" autoComplete="email" required maxLength={254} value={email} onChange={event => setEmail(event.target.value)} />
+            </label>
+            <button disabled={busy} className="w-full rounded-lg bg-purple-700 px-4 py-3 font-semibold text-white disabled:opacity-60">
+              {busy ? "Aguarde…" : "Concluir cadastro"}
+            </button>
+            {error && <ActionNotice inline error message={error} onClose={() => setError("")} />}
+          </form>
         ) : (
           <form onSubmit={submit} className="mt-4 space-y-4">
             <p className="text-sm text-slate-600">{sentTo ? "Digite o código de seis dígitos enviado para " + sentTo + "." : "Crie sua conta ou entre com um código enviado por SMS."}</p>
