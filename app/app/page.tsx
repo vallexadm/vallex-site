@@ -27,9 +27,12 @@ export default async function AppHome({ searchParams }: {
       <header className="bg-[#17002e] px-4 py-4 text-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <SystemBrand />
+          <nav aria-label="Acessos do app" className="flex flex-wrap gap-2">
+          <Link href="/app/cliente" className="rounded-lg bg-purple-700 px-4 py-2 text-sm font-semibold">Área do cliente</Link>
           <Link href="/sistema" className="rounded-lg border border-purple-300 px-4 py-2 text-sm font-semibold">
             Área do prestador
           </Link>
+          </nav>
         </div>
       </header>
       <MarketplaceHome compact providers={providers} initialFilters={marketplaceFiltersFromParams(query)} />
