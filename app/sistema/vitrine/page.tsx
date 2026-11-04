@@ -1303,7 +1303,7 @@ async function excluirServico(service: VitrineService) {
           htmlFor="service_display_order"
           className="mb-2 block text-sm font-medium text-gray-700"
         >
-          Ordem de exibição
+          Posição na Vitrine
         </label>
 
         <input
@@ -1318,6 +1318,7 @@ async function excluirServico(service: VitrineService) {
           }
           className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
         />
+        <p className="mt-1 text-xs text-slate-500">A posição 1 é o serviço principal. Ao ocupar uma posição, os demais são reorganizados.</p>
       </div>
 
       <div className="flex items-end">
@@ -1445,7 +1446,7 @@ async function excluirServico(service: VitrineService) {
                   </span>
 
                   <span className="text-gray-500">
-                    Ordem: {service.display_order}
+                    {service.display_order === 1 ? "Serviço principal · posição 1" : `Posição: ${service.display_order}`}
                   </span>
                 </div>
               </div>
