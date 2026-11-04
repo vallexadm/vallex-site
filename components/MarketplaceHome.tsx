@@ -9,7 +9,7 @@ import styles from "./Marketplace.module.css";
 
 const modes: Record<string,string> = { domicilio: "Em domicílio", presencial: "No local", online: "Online" };
 
-export default function MarketplaceHome({ providers, initialFilters }: { providers: PublicProvider[]; initialFilters: MarketplaceFilters }) {
+export default function MarketplaceHome({ providers, initialFilters, compact = false }: { providers: PublicProvider[]; initialFilters: MarketplaceFilters; compact?: boolean }) {
   const [filters,setFilters] = useState(initialFilters);
   useEffect(() => { const sync = () => setFilters(marketplaceFiltersFromParams(new URLSearchParams(window.location.search))); window.addEventListener("popstate",sync); return () => window.removeEventListener("popstate",sync); },[]);
   function update(next: Partial<MarketplaceFilters>) {
@@ -24,11 +24,11 @@ export default function MarketplaceHome({ providers, initialFilters }: { provide
   const active = Boolean(filters.search || filters.location || filters.mode || filters.category !== "all");
   return <main className={styles.home}>
     <nav className={styles.categories} aria-label="Categorias de prestadores">{marketplaceCategories.map(category => <button type="button" key={category.id} aria-pressed={filters.category === category.id} className={filters.category === category.id ? styles.selectedCategory : undefined} onClick={() => update({category:category.id})}><Icon name={category.icon} /><span>{category.label}</span></button>)}</nav>
-    <section className={styles.hero} aria-labelledby="marketplace-title">
+    {!compact && <section className={styles.hero} aria-labelledby="marketplace-title">
       <div className={styles.heroCopy}><span className={styles.eyebrow}>SERVIÇOS QUE APROXIMAM PESSOAS</span><h1 id="marketplace-title">Encontre o profissional certo,<br /><em>perto de você.</em></h1><p>Conheça prestadores, explore serviços e fale diretamente com quem pode ajudar.</p><a href="#prestadores" className={styles.heroLink}>Encontre seu prestador <Icon name="arrow" /></a></div>
-    </section>
+    </section>}
     <section id="prestadores" className={styles.directory} aria-labelledby="marketplace-results-title">
-      <div className={styles.directoryHeading}><div><span className={styles.eyebrow}>VITRINES PÚBLICAS</span><h2 id="marketplace-results-title">Prestadores para o que você precisa</h2><p>Explore os perfis publicados e conheça os serviços de cada profissional.</p></div><Link href="/catalogo" className={styles.textLink}>Catálogo completo <Icon name="arrow" /></Link></div>
+      <div className={styles.directoryHeading}><div><span className={styles.eyebrow}>VITRINES PÚBLICAS</span>{compact ? <h1 id="marketplace-results-title">Buscar serviços</h1> : <h2 id="marketplace-results-title">Prestadores para o que você precisa</h2>}<p>Explore os perfis publicados e conheça os serviços de cada profissional.</p></div><Link href="/catalogo" className={styles.textLink}>Catálogo completo <Icon name="arrow" /></Link></div>
       <div className={styles.filters}>
         <label>Buscar serviço ou prestador<input type="search" value={filters.search} onChange={event => update({search:event.target.value})} placeholder="Nome, atividade ou serviço" maxLength={160} /></label>
         <label>Cidade ou região<input value={filters.location} onChange={event => update({location:event.target.value})} placeholder="Todas as regiões" maxLength={120} /></label>
@@ -52,6 +52,6 @@ export default function MarketplaceHome({ providers, initialFilters }: { provide
       })}</div> : <div className={styles.empty}><Icon name="search" /><h3>{active ? "Nenhum prestador com esses filtros" : "As primeiras vitrines estão chegando"}</h3><p>{active ? "Tente outra categoria, serviço ou região para ampliar sua busca." : "Os prestadores aparecerão aqui assim que publicarem suas Vitrines."}</p>{active ? <button className={styles.primaryButton} type="button" onClick={() => update({search:"",location:"",category:"all",mode:""})}>Ver todos os prestadores</button> : <Link className={styles.primaryButton} href="/sistema/login?cadastro=1">Quero divulgar meus serviços</Link>}</div>}
       <p className={styles.directoryNote}>As regiões, serviços e formas de atendimento são informados por cada prestador.</p>
     </section>
-    <section className={styles.providerInvite}><div><span className={styles.eyebrow}>SEU TRABALHO MERECE SER ENCONTRADO</span><h2>Você presta serviços?</h2><p>Conheça o ServiçoFácil e crie a Vitrine do seu negócio.</p></div><Link className={styles.primaryButton} href="/sistema/login?cadastro=1">Sou prestador <Icon name="arrow" /></Link><Link className={styles.textLink} href="/solucoes#para-prestadores">Conhecer a plataforma</Link></section>
+    {!compact && <section className={styles.providerInvite}><div><span className={styles.eyebrow}>SEU TRABALHO MERECE SER ENCONTRADO</span><h2>Você presta serviços?</h2><p>Conheça o ServiçoFácil e crie a Vitrine do seu negócio.</p></div><Link className={styles.primaryButton} href="/sistema/login?cadastro=1">Sou prestador <Icon name="arrow" /></Link><Link className={styles.textLink} href="/solucoes#para-prestadores">Conhecer a plataforma</Link></section>}
   </main>;
 }
