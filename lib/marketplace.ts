@@ -17,6 +17,13 @@ export function normalizeMarketplace(value: string) {
 
 export type MarketplaceFilters = { search: string; location: string; category: string; mode: string; sort: string };
 
+export function compareProviderRatings(a: PublicProvider, b: PublicProvider) {
+  return (b.rating?.average ?? 0) - (a.rating?.average ?? 0)
+    || (b.rating?.count ?? 0) - (a.rating?.count ?? 0)
+    || a.display_name.localeCompare(b.display_name, "pt-BR")
+    || a.id.localeCompare(b.id);
+}
+
 export function filterMarketplace(providers: PublicProvider[], filters: MarketplaceFilters) {
   const search = normalizeMarketplace(filters.search);
   const location = normalizeMarketplace(filters.location);
@@ -33,13 +40,17 @@ export function filterMarketplace(providers: PublicProvider[], filters: Marketpl
     if (category && category.id !== "all" && !category.terms.some(term => activity.includes(term))) return false;
     return true;
   });
-  return matches.sort((a,b) => filters.sort === "za"
-    ? b.display_name.localeCompare(a.display_name, "pt-BR")
-    : a.display_name.localeCompare(b.display_name, "pt-BR"));
+  return matches.sort((a, b) => {
+    const byName = a.display_name.localeCompare(b.display_name, "pt-BR");
+    if (filters.sort === "az") return byName;
+    if (filters.sort === "za") return -byName;
+    return compareProviderRatings(a, b);
+  });
 }
 
 export function marketplaceFiltersFromParams(params: URLSearchParams): MarketplaceFilters {
+  const sort = params.get("ordem");
   const category = params.get("categoria") ?? "all";
   const location = params.get("localidade") ?? "";
-  return { search: params.get("buscar") ?? "", location: location === "todas" ? "" : location, category: marketplaceCategories.some(item => item.id === category) ? category : "all", mode: params.get("atendimento") ?? "", sort: params.get("ordem") === "za" ? "za" : "az" };
+  return { search: params.get("buscar") ?? "", location: location === "todas" ? "" : location, category: marketplaceCategories.some(item => item.id === category) ? category : "all", mode: params.get("atendimento") ?? "", sort: sort === "az" || sort === "za" ? sort : "rating" };
 }

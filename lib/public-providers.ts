@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
+import { loadProviderRatings, type ProviderRating } from "./provider-ratings";
+
 export type PublicProviderService = {
   id: string;
   name: string;
@@ -22,6 +24,7 @@ export type PublicProvider = {
   is_published: boolean;
   is_preview: boolean;
   services: PublicProviderService[];
+  rating?: ProviderRating | null;
 };
 
 export async function loadPublicProviders(): Promise<PublicProvider[]> {
@@ -49,8 +52,9 @@ export async function loadPublicProviders(): Promise<PublicProvider[]> {
   if (!profiles?.length) return [];
 
   const organizationIds = profiles.map((profile) => profile.organization_id);
-  const [{ data: organizations, error: organizationsError }, { data: services, error: servicesError }] = await Promise.all([
+  const [{ data: organizations, error: organizationsError }, ratings, { data: services, error: servicesError }] = await Promise.all([
     admin.from("organizations").select("id,business_type").in("id", organizationIds),
+    loadProviderRatings(admin, organizationIds),
     admin
       .from("vitrine_services")
       .select("id,organization_id,name,description,price,display_order,is_published")
@@ -73,6 +77,7 @@ export async function loadPublicProviders(): Promise<PublicProvider[]> {
     ...profile,
     business_type: (organizations ?? []).find((organization) => organization.id === profile.organization_id)?.business_type ?? null,
     is_preview: false,
+    rating: ratings ? ratings.get(profile.organization_id) ?? null : undefined,
     services: (services ?? []).filter((service) => service.organization_id === profile.organization_id),
   }));
 }

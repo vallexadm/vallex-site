@@ -9,18 +9,19 @@ export async function GET(request:Request){
  try{
   const c=await providerContext(request);if("error" in c)return c.error;
   if(c.role!=="owner")return proFail("Esta área é do proprietário.",403);
-  if(!c.plan.canManageFiscalNotes)return NextResponse.json({ok:true,plan:c.plan,profile:null,photos:[],notes:[],reviews:[],appointments:[]},{headers:noStore});
+  if(!c.plan.canManageFiscalNotes)return NextResponse.json({ok:true,plan:c.plan,profile:null,photos:[],notes:[],reviews:[],appointments:[],services:[]},{headers:noStore});
   const results=await Promise.all([
    c.admin.from("provider_fiscal_profiles").select("*").eq("organization_id",c.organization.id).maybeSingle(),
    c.admin.from("provider_portfolio").select("id,caption,file_path,created_at").eq("organization_id",c.organization.id).order("created_at",{ascending:false}),
    c.admin.from("provider_fiscal_notes").select("*").eq("organization_id",c.organization.id).order("issued_on",{ascending:false}).limit(100),
    c.admin.from("provider_reviews").select("id,author_name,rating,comment,created_at").eq("organization_id",c.organization.id).order("created_at",{ascending:false}).limit(100),
-   c.admin.from("organization_appointments").select("id,title,starts_at").eq("organization_id",c.organization.id).eq("status","completed").order("starts_at",{ascending:false}).limit(100)
+   c.admin.from("organization_appointments").select("id,title,starts_at").eq("organization_id",c.organization.id).eq("status","completed").order("starts_at",{ascending:false}).limit(100),
+   c.admin.from("vitrine_services").select("id,name").eq("organization_id",c.organization.id).eq("is_published",true).order("display_order")
   ]);
   if(results.some(r=>r.error))return proFail("Não foi possível carregar os recursos. Tente novamente em instantes.",503);
   const photos=await Promise.all((results[1].data||[]).map(async row=>{const link=await c.admin.storage.from("vallex-pro").createSignedUrl(row.file_path,600);return {...row,url:link.data?.signedUrl};}));
   const notes=await Promise.all((results[2].data||[]).map(async row=>{const link=await c.admin.storage.from("vallex-pro").createSignedUrl(row.file_path,600);return {...row,url:link.data?.signedUrl};}));
-  return NextResponse.json({ok:true,plan:c.plan,profile:results[0].data,photos,notes,reviews:results[3].data,appointments:results[4].data},{headers:noStore});
+  return NextResponse.json({ok:true,plan:c.plan,profile:results[0].data,photos,notes,reviews:results[3].data,appointments:results[4].data,services:results[5].data},{headers:noStore});
  }catch{return proFail("Não foi possível consultar os recursos profissionais.",500);}
 }
 export async function POST(request:Request){
@@ -44,10 +45,14 @@ export async function POST(request:Request){
     if(!uuid(body.appointmentId))return proFail("Selecione um atendimento concluído.");
     const a=await c.admin.from("organization_appointments").select("id").eq("id",body.appointmentId).eq("organization_id",c.organization.id).eq("status","completed").maybeSingle();
     if(a.error||!a.data)return proFail("O atendimento deve estar concluído nesta organização.",404);
+    if(!uuid(body.serviceId))return proFail("Selecione o serviço realizado.");
+    const service=await c.admin.from("vitrine_services").select("id").eq("id",body.serviceId).eq("organization_id",c.organization.id).eq("is_published",true).maybeSingle();
+    if(service.error)return proFail("Não foi possível consultar o serviço.",503);
+    if(!service.data)return proFail("Selecione um serviço publicado da sua Vitrine.",400);
     const current=await c.admin.from("provider_review_invites").select("id,used_at").eq("appointment_id",a.data.id).eq("organization_id",c.organization.id).maybeSingle();
     if(current.error)return proFail("Não foi possível consultar o convite.",503);
     if(current.data?.used_at)return proFail("Este atendimento já recebeu avaliação.",409);
-    const token=randomBytes(32).toString("hex"),row={organization_id:c.organization.id,appointment_id:a.data.id,token_hash:createHash("sha256").update(token).digest("hex"),expires_at:new Date(Date.now()+30*86400000).toISOString()};
+    const token=randomBytes(32).toString("hex"),row={organization_id:c.organization.id,appointment_id:a.data.id,service_id:service.data.id,token_hash:createHash("sha256").update(token).digest("hex"),expires_at:new Date(Date.now()+30*86400000).toISOString()};
     const saved=current.data?await c.admin.from("provider_review_invites").update(row).eq("id",current.data.id).is("used_at",null).select("id").maybeSingle():await c.admin.from("provider_review_invites").insert(row).select("id").single();
     if(saved.error||!saved.data)return proFail("O convite já foi alterado. Atualize e tente novamente.",409);
     return NextResponse.json({ok:true,url:`${new URL(request.url).origin}/avaliar-prestador#token=${token}`,message:"Convite pronto. Envie o link ao cliente. Gerar outro invalida o link anterior."},{headers:noStore});

@@ -1,3 +1,6 @@
+import RecommendLink from "@/components/RecommendLink";
+import ProviderRating from "@/components/ProviderRating";
+import { loadProviderRatings, type ProviderRating as Rating } from "@/lib/provider-ratings";
 import ProviderShowcase from "@/components/ProviderShowcase";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -33,6 +36,7 @@ type PublicService = {
 };
 
 type PublicVitrine = {
+  rating?: Rating | null;
   profile: PublicProfile;
   services: PublicService[];
 };
@@ -87,7 +91,10 @@ const carregarVitrine = cache(async function carregarVitrine(
     throw new Error("Não foi possível carregar os serviços da Vitrine.");
   }
 
-  const planResult = await getPlanEntitlements(admin, profile.organization_id);
+  const [planResult, ratings] = await Promise.all([
+    getPlanEntitlements(admin, profile.organization_id),
+    loadProviderRatings(admin, [profile.organization_id]),
+  ]);
   if (!planResult.entitlements) throw new Error(planResult.error);
   const visibleServices = planResult.entitlements.maxServices === null
     ? services ?? []
@@ -96,6 +103,7 @@ const carregarVitrine = cache(async function carregarVitrine(
   return {
     profile,
     services: visibleServices,
+    rating: ratings ? ratings.get(profile.organization_id) ?? null : undefined,
   };
 });
 
@@ -179,7 +187,7 @@ export default async function PrestadorPage({
 }) {
   const { slug } = await params;
 
-  const { profile, services } =
+  const { profile, services, rating } =
     await carregarVitrine(slug);
   const whatsappNumber = (profile.whatsapp ?? "").replace(/\D/g, "");
   const whatsappNumberWithCountryCode =
@@ -233,7 +241,6 @@ Gostaria de saber mais sobre seus valores e condições de atendimento local, po
           </div>
         </div>
       </header>
-      <ProviderShowcase slug={profile.slug} />
 
       <section className="mx-auto max-w-5xl px-6 py-12">
         <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
@@ -245,6 +252,8 @@ Gostaria de saber mais sobre seus valores e condições de atendimento local, po
             <h2 className="mt-3 text-4xl font-bold tracking-tight text-slate-900">
               {profile.display_name}
             </h2>
+
+            <ProviderRating rating={rating} />
 
             {profile.description && (
               <p className="mt-5 whitespace-pre-line text-lg leading-8 text-slate-600">
@@ -356,6 +365,7 @@ Gostaria de saber mais sobre seus valores e condições de atendimento local, po
             >
               Ver serviços
             </Link>
+            <RecommendLink path={`/prestador/${encodeURIComponent(profile.slug)}`} title={profile.display_name} label="Indicar prestador" />
           </div>
         </div>
 
@@ -393,6 +403,7 @@ Gostaria de saber mais sobre seus valores e condições de atendimento local, po
               {services.map((service) => (
                 <article
                   key={service.id}
+                  id={`servico-${service.id}`}
                   className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-6 transition duration-200 hover:-translate-y-1 hover:border-purple-500 hover:shadow-md focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-100"
                 >
                   <div className="flex-1">
@@ -412,6 +423,13 @@ Gostaria de saber mais sobre seus valores e condições de atendimento local, po
                       {formatarPreco(service.price)}
                     </p>
                   </div>
+                  <div className="mt-4">
+                    <RecommendLink
+                      path={`/prestador/${encodeURIComponent(profile.slug)}#servico-${service.id}`}
+                      title={`${service.name} · ${profile.display_name}`}
+                      label="Indicar serviço"
+                    />
+                  </div>
                   <SolicitacaoForm
                     slug={profile.slug}
                     serviceId={service.id}
@@ -423,6 +441,8 @@ Gostaria de saber mais sobre seus valores e condições de atendimento local, po
           )}
         </section>
       </section>
+
+      <ProviderShowcase slug={profile.slug} services={services.map(({id,name})=>({id,name}))} />
 
       <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto max-w-5xl px-6 py-6 text-center">
