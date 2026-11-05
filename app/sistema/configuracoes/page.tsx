@@ -1,4 +1,5 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -123,8 +124,8 @@ export default function ConfiguracoesPage() {
       <header className="bg-[#210039] text-white"><div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-5 py-5"><SystemBrand /><Link href="/sistema" className="rounded-lg border border-purple-300 px-4 py-2 text-sm font-semibold hover:bg-purple-900">← Voltar ao painel</Link></div></header>
       <div className="mx-auto max-w-5xl px-5 py-10">
         <p className="text-sm text-slate-500">Gestão do negócio</p><h1 className="mt-1 text-3xl font-bold">Configurações</h1><p className="mt-2 text-lg text-slate-600">Mantenha os dados da organização e da conta atualizados.</p>
-        {error && <div role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{error}</div>}
-        {notice && <div role="status" className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-green-800">{notice}</div>}
+        {error && <ActionNotice message={error} error onClose={()=>setError("")}/>}
+        {notice && <ActionNotice message={notice} onClose={()=>setNotice("")}/>}
         {loading ? <div className="mt-7 rounded-2xl border border-slate-200 bg-white p-6 text-slate-600">Carregando configurações…</div> : <>
           <form onSubmit={save} className="mt-7 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-semibold">Dados do negócio</h2><p className="mt-1 text-sm text-slate-600">Esses dados identificam a organização dentro da plataforma. A apresentação pública é configurada separadamente.</p>

@@ -98,9 +98,7 @@ export default function TermosPage() {
                 contratação. Os planos pagos têm cobrança recorrente mensal,
                 processada pelo Asaas. Ao contratar, você autoriza a cobrança
                 mensal do preço então exibido até cancelar a renovação. Novas
-                organizações começam com 30 dias de teste do Basic; sem uma
-                assinatura paga confirmada ao final, o acesso passa ao plano
-                Free.
+                organizações começam no Basic gratuito, sem prazo de uso. Ao encerrar uma assinatura Professional, os recursos adicionais permanecem disponíveis até o fim do período pago; depois, a gestão continua no Basic, preservando os registros.
               </p>
               <p>
                 O cancelamento pode ser solicitado na área de planos e impede

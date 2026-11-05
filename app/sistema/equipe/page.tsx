@@ -1,4 +1,6 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
+import PhoneInput from "@/components/PhoneInput";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -494,12 +496,10 @@ export default function EquipePage() {
         </p>
 
         {error && (
-          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {error}
-          </div>
+          <ActionNotice message={error} error onClose={()=>setError("")}/>
         )}
 
-        {message && <p role="status" className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-700">{message}</p>}
+        {message && <ActionNotice message={message} onClose={()=>setMessage("")}/>}
 
         {team && (
           <>
@@ -559,7 +559,7 @@ export default function EquipePage() {
 
                   <div>
                     <label htmlFor="invite-phone" className="mb-2 block text-sm font-medium text-slate-700">Telefone de contato</label>
-                    <input id="invite-phone" type="tel" required maxLength={40} value={contactPhone} onChange={(event) => setContactPhone(event.target.value)} placeholder="(00) 00000-0000" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200" />
+                    <PhoneInput id="invite-phone" type="tel" required maxLength={40} value={contactPhone} onChange={(event) => setContactPhone(event.target.value)} placeholder="(00) 00000-0000" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200" />
                   </div>
 
                   <button
@@ -675,7 +675,7 @@ export default function EquipePage() {
                           </td>
                           <td className="px-3 py-3 text-slate-700">
                             {editingMemberId === member.user_id ? (
-                              <input aria-label="Telefone do colaborador" type="tel" required maxLength={40} value={editingMemberPhone} onChange={(event) => setEditingMemberPhone(event.target.value)} className="w-36 rounded border border-slate-300 px-2 py-1" />
+                              <PhoneInput aria-label="Telefone do colaborador" type="tel" required maxLength={40} value={editingMemberPhone} onChange={(event) => setEditingMemberPhone(event.target.value)} className="w-36 rounded border border-slate-300 px-2 py-1" />
                             ) : member.phone || "—"}
                           </td>
                           <td className="break-all px-3 py-3 text-slate-700">

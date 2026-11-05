@@ -1,4 +1,5 @@
 "use client";
+import PhoneInput from "@/components/PhoneInput";
 
 import { FormEvent, useState } from "react";
 
@@ -101,7 +102,7 @@ export default function ContactForm() {
               >
                 Telefone / WhatsApp *
               </label>
-              <input
+              <PhoneInput
                 id="telefone"
                 name="telefone"
                 type="tel"

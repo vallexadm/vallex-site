@@ -1,3 +1,4 @@
+import { getPlanEntitlements } from "@/lib/server/plan-entitlements";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -169,47 +170,10 @@ const membersWithContact = membersWithEmail.map((member) => {
       );
     }
 
-    const { data: subscriptions, error: subscriptionsError } =
-      await supabaseAdmin
-        .from("organization_subscriptions")
-        .select("plan_id")
-        .eq("organization_id", organization.id)
-        .in("status", ["active", "trialing", "past_due"])
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-    if (subscriptionsError) {
-      console.error("Erro ao consultar plano da equipe:", subscriptionsError);
-
-      return NextResponse.json(
-        { ok: false, message: "Não foi possível consultar o limite da equipe." },
-        { status: 500 }
-      );
-    }
-
-    const currentSubscription = subscriptions?.[0];
-    const planQuery = currentSubscription
-      ? supabaseAdmin
-          .from("plans")
-          .select("code,name,max_users")
-          .eq("id", currentSubscription.plan_id)
-          .maybeSingle()
-      : supabaseAdmin
-          .from("plans")
-          .select("code,name,max_users")
-          .eq("code", "free")
-          .eq("is_active", true)
-          .maybeSingle();
-    const { data: plan, error: planError } = await planQuery;
-
-    if (planError || !plan) {
-      console.error("Não foi possível determinar o limite da equipe:", planError);
-
-      return NextResponse.json(
-        { ok: false, message: "Não foi possível consultar o limite da equipe." },
-        { status: 500 }
-      );
-    }
+    const entitlementResult = await getPlanEntitlements(supabaseAdmin, organization.id);
+    if (!entitlementResult.entitlements) return NextResponse.json({ok:false,message:entitlementResult.error},{status:503});
+    const {data:plan,error:planError}=await supabaseAdmin.from("plans").select("code,name,max_users").eq("code",entitlementResult.entitlements.code).eq("is_active",true).maybeSingle();
+    if (planError || !plan) return NextResponse.json({ok:false,message:"Não foi possível consultar o limite da equipe."},{status:503});
 
     const additionalMemberIds = new Set(
       (members ?? [])

@@ -210,7 +210,7 @@ export async function POST(request: Request) {
     const document =
       typeof body?.document === "string" ? body.document.replace(/\D/g, "") : "";
 
-    if (!["basic", "professional"].includes(planCode)) {
+    if (planCode !== "professional") {
       return responseError("Selecione um plano pago disponível.", 400);
     }
     if (!["CREDIT_CARD", "PIX", "BOLETO"].includes(billingType)) {

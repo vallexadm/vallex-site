@@ -32,40 +32,29 @@ export async function GET(request: Request) {
     if (error) return fail("Não foi possível consultar seu plano atual.", 500);
     currentPlan = data;
   }
-  const trialExpired =
-    subscription?.status === "trialing" &&
-    (!subscription.current_period_end ||
-      isProviderTrialExpired(subscription.current_period_end));
-  if (trialExpired) {
-    const { data: freePlan, error: freePlanError } = await admin
-      .from("plans")
-      .select("id, code, name")
-      .eq("code", "free")
-      .eq("is_active", true)
-      .maybeSingle();
-    if (freePlanError) return fail("Não foi possível consultar o plano Free.", 500);
-    currentPlan = freePlan;
+  const trialExpired = subscription?.status === "trialing" && isProviderTrialExpired(subscription.current_period_end);
+  const expired = !!subscription?.current_period_end && isAsaasPeriodExpired(subscription.current_period_end);
+  const useBasic = !currentPlan || !["professional", "enterprise"].includes(currentPlan.code)
+    || !["active", "trialing"].includes(subscription?.status ?? "") || trialExpired || expired;
+  if (useBasic) {
+    const { data, error } = await admin.from("plans").select("id,code,name").eq("code", "basic").eq("is_active",true).maybeSingle();
+    if (error || !data) return fail("Não foi possível consultar o plano Básico.",503);
+    currentPlan = data;
   }
-  const currentStatus = trialExpired
-    ? "active"
-    : subscription?.status === "active" &&
-        subscription.current_period_end &&
-        isAsaasPeriodExpired(subscription.current_period_end)
-      ? "expired"
-      : subscription?.status ?? "active";
+  const currentStatus = useBasic ? "active" : subscription?.status ?? "active";
   const currentPeriodIsValid =
     currentStatus === "active" &&
     (!subscription?.current_period_end ||
       !isAsaasPeriodExpired(subscription.current_period_end));
   const isPaidAsaasPlan =
-    currentPlan?.code !== "free" && subscription?.billing_provider === "asaas";
+    !useBasic && subscription?.billing_provider === "asaas";
   return NextResponse.json({ ok: true,
-    plans: (plans ?? []).map((plan) => ({ id: plan.id, code: plan.code, name: plan.name, monthlyPrice: Number(plan.monthly_price), maxUsers: plan.max_users })),
+    plans: (plans ?? []).filter(plan => plan.code !== "free").map((plan) => ({ id: plan.id, code: plan.code, name: plan.name, monthlyPrice: plan.code === "basic" ? 0 : Number(plan.monthly_price), maxUsers: plan.max_users })),
     current: currentPlan ? {
       code: currentPlan.code,
       name: currentPlan.name,
       status: currentStatus,
-      currentPeriodEnd: trialExpired ? null : subscription?.current_period_end ?? null,
+      currentPeriodEnd: useBasic ? null : subscription?.current_period_end ?? null,
       cancellationPending: Boolean(subscription?.canceled_at) && currentPeriodIsValid,
       canCancel: Boolean(
         isPaidAsaasPlan &&

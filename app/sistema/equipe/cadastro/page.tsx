@@ -1,4 +1,6 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
+import PasswordInput from "@/components/PasswordInput";
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
@@ -55,14 +57,14 @@ export default function CadastroEquipePage() {
           <input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2.5" placeholder="pessoa@vallex.com.br" />
         </label>
         <label className="grid gap-1 text-sm font-medium text-slate-700">Senha
-          <input required type="password" minLength={6} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2.5" placeholder="Mínimo de 6 caracteres" />
+          <PasswordInput required  minLength={6} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2.5" placeholder="Mínimo de 6 caracteres" />
         </label>
         <label className="flex items-start gap-2 text-sm leading-5 text-slate-600">
           <input type="checkbox" required checked={acceptedLegal} onChange={(event) => setAcceptedLegal(event.target.checked)} className="mt-1 accent-violet-700" />
           <span>Tenho 18 anos ou mais, li e aceito os <Link className="font-semibold text-violet-700 underline" href="/termos" target="_blank" rel="noopener noreferrer">Termos de Uso</Link> e li a <Link className="font-semibold text-violet-700 underline" href="/privacidade" target="_blank" rel="noopener noreferrer">Política de Privacidade</Link>.</span>
         </label>
-        {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</p>}
-        {message && <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-900" role="status">{message}</p>}
+        {error && <ActionNotice message={error} error onClose={()=>setError("")}/>}
+        {message && <ActionNotice message={message} onClose={()=>setMessage("")}/>}
         <button type="submit" disabled={loading} className="vallex-admin-primary w-full">{loading ? "Criando conta…" : "Criar conta da equipe"}</button>
       </form>
       <p className="mt-5 text-sm text-slate-600">Use exatamente o e-mail que o administrador cadastrou. Após criar a conta, aguarde a liberação do acesso.</p>
