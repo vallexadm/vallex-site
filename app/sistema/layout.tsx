@@ -1,4 +1,6 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
+import { endCurrentSession } from "@/lib/end-current-session";
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -167,17 +169,15 @@ function ProviderLogoutBar({ children }: Readonly<{ children: React.ReactNode }>
   const [error, setError] = useState("");
 
   async function handleLogout() {
-    setSigningOut(true);
-    setError("");
-
-    const { error: signOutError } = await supabase.auth.signOut();
-    if (signOutError) {
+    if (signingOut) return;
+    setSigningOut(true); setError("");
+    try {
+      await endCurrentSession(supabase.auth);
+      window.location.replace("/sistema/login");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível sair. Tente novamente.");
       setSigningOut(false);
-      setError("Não foi possível encerrar a sessão. Tente novamente.");
-      return;
     }
-
-    window.location.replace("/sistema/login");
   }
 
   return (
@@ -196,12 +196,7 @@ function ProviderLogoutBar({ children }: Readonly<{ children: React.ReactNode }>
         </div>
       </div>
       {error && (
-        <p
-          role="alert"
-          className="border-b border-red-200 bg-red-50 px-4 py-2 text-right text-sm text-red-700"
-        >
-          {error}
-        </p>
+        <ActionNotice message={error} error onClose={()=>setError("")}/>
       )}
       {children}
     </>

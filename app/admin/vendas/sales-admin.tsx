@@ -1,4 +1,6 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
+import PhoneInput from "@/components/PhoneInput";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabase/client";
@@ -135,7 +137,7 @@ export default function SalesAdmin() {
     </section>
     <section className="vallex-admin-section">
       <div className="vallex-admin-section-heading"><div><span className="vallex-admin-eyebrow">Relacionamento comercial</span><h2>Clientes e oportunidades</h2><p>Registre o negócio, o nicho, o produto VALLEX de interesse, valores e o histórico de cada negociação.</p></div>{canCreate && <button type="button" className="vallex-admin-primary" onClick={startNew}>+ Cadastrar cliente</button>}</div>
-      {error && <p className="vallex-admin-error" role="alert">{error}</p>}{message && <p className="traffic-admin-notice" role="status">{message}</p>}
+      {error && <ActionNotice message={error} error onClose={()=>setError("")}/>}{message && <ActionNotice message={message} onClose={()=>setMessage("")}/>}
       {formOpen && <form onSubmit={(event) => void submit(event)} className="vallex-sales-form mb-6 rounded-2xl border border-violet-200 bg-slate-50 p-5">
         <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-lg font-semibold">{editingId ? "Editar cliente ou oportunidade" : "Novo cliente ou oportunidade"}</h3><button type="button" className="vallex-admin-back" onClick={() => setFormOpen(false)}>Fechar</button></div>
         <div className="grid min-w-0 gap-4 md:grid-cols-3">
@@ -143,7 +145,7 @@ export default function SalesAdmin() {
           <label className="grid gap-1 text-sm font-medium">Empresa / nome comercial<input maxLength={160} className="rounded-lg border border-slate-300 px-3 py-2" value={form.company_name ?? ""} onChange={(event) => setForm({ ...form, company_name: event.target.value })} /></label>
           <label className="grid gap-1 text-sm font-medium">Nicho de atuação<input maxLength={120} placeholder="Ex.: barbearia, alimentação, refrigeração" className="rounded-lg border border-slate-300 px-3 py-2" value={form.niche ?? ""} onChange={(event) => setForm({ ...form, niche: event.target.value })} /></label>
           <label className="grid gap-1 text-sm font-medium">E-mail<input type="email" maxLength={180} className="rounded-lg border border-slate-300 px-3 py-2" value={form.email ?? ""} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
-          <label className="grid gap-1 text-sm font-medium">Telefone / WhatsApp<input maxLength={40} className="rounded-lg border border-slate-300 px-3 py-2" value={form.phone ?? ""} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
+          <label className="grid gap-1 text-sm font-medium">Telefone / WhatsApp<PhoneInput maxLength={40} className="rounded-lg border border-slate-300 px-3 py-2" value={form.phone ?? ""} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,90px)] gap-3"><label className="grid min-w-0 gap-1 text-sm font-medium">Cidade<input maxLength={100} className="rounded-lg border border-slate-300 px-3 py-2" value={form.city ?? ""} onChange={(event) => setForm({ ...form, city: event.target.value })} /></label><label className="grid min-w-0 gap-1 text-sm font-medium">UF<input maxLength={2} className="rounded-lg border border-slate-300 px-3 py-2 uppercase" value={form.state ?? ""} onChange={(event) => setForm({ ...form, state: event.target.value.toUpperCase() })} /></label></div>
           <label className="grid gap-1 text-sm font-medium">Produto VALLEX<select className="vallex-sales-select rounded-lg border border-slate-300 px-3 py-2" value={form.product} onChange={(event) => setForm({ ...form, product: event.target.value })}>{products.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
           <label className="grid gap-1 text-sm font-medium">Plano / escopo desejado<input maxLength={180} placeholder="Ex.: Crescimento, Basic, site de agendamento" className="rounded-lg border border-slate-300 px-3 py-2" value={form.product_scope ?? ""} onChange={(event) => setForm({ ...form, product_scope: event.target.value })} /></label>

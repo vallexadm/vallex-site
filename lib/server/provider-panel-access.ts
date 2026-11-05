@@ -7,7 +7,7 @@ export async function requireProviderPanelAccess(admin: SupabaseClient, organiza
   if (!result.entitlements) return NextResponse.json({ ok: false, message: result.error }, { status: 503 });
   if (!result.entitlements.canAccessPanel) return NextResponse.json({
     ok: false, code: "PLAN_UPGRADE_REQUIRED",
-    message: "Seu acesso está no Free. Para usar os módulos de gestão, contrate um plano pago. Seus registros foram preservados.",
+    message: "Não foi possível liberar os módulos de gestão desta conta. Seus registros foram preservados.",
   }, { status: 402 });
   return null;
 }

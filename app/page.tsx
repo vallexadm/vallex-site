@@ -1,6 +1,6 @@
 import Header from "@/components/Header";
-import Hero from "@/components/Hero";
-import Services from "@/components/Services";
+import MarketplaceHome from "@/components/MarketplaceHome";
+import { marketplaceFiltersFromParams } from "@/lib/marketplace";
 import Footer from "@/components/Footer";
 import { loadPublicProviders } from "@/lib/public-providers";
 import { absoluteSiteUrl } from "@/lib/seo";
@@ -16,8 +16,11 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
-export default async function Home() {
-  const providers = await loadPublicProviders();
+export default async function Home({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const [providers, params] = await Promise.all([loadPublicProviders(), searchParams]);
+  const query = new URLSearchParams();
+  for (const [key,value] of Object.entries(params)) if (typeof value === "string") query.set(key,value);
+  const filters = marketplaceFiltersFromParams(query);
 
   return (
     <>
@@ -37,12 +40,9 @@ export default async function Home() {
           }).replace(/</g, "\\u003c"),
         }}
       />
-      <Header />
+      <Header initialSearch={filters.search} initialLocation={filters.location} />
 
-      <main>
-        <Hero />
-        <Services initialProviders={providers} isHome />
-      </main>
+      <MarketplaceHome providers={providers} initialFilters={filters} />
 
       <Footer />
     </>

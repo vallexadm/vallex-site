@@ -1,4 +1,6 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
+import PhoneInput from "@/components/PhoneInput";
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
@@ -119,8 +121,8 @@ export default function SistemaSuportePage() {
         <p className="text-sm font-medium text-violet-700">ATENDIMENTO VALLEX</p>
         <h1 className="mt-2 text-3xl font-bold">Como podemos ajudar?</h1>
         <p className="mt-2 max-w-2xl text-slate-600">Escolha a ferramenta relacionada à sua dúvida. A solicitação será identificada com seu negócio e plano para a equipe encaminhar corretamente.</p>
-        {error && <p role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{error}</p>}
-        {notice && <p role="status" className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">{notice}</p>}
+        {error && <ActionNotice message={error} error onClose={()=>setError("")}/>}
+        {notice && <ActionNotice message={notice} onClose={()=>setNotice("")}/>}
         <form onSubmit={submit} className="mt-7 space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Negócio</p><p className="mt-1 font-semibold">{loading ? "Carregando…" : context?.organization?.name ?? "Conta conectada"}</p></div>
@@ -138,7 +140,7 @@ export default function SistemaSuportePage() {
             <textarea required minLength={10} maxLength={3000} rows={6} value={description} onChange={(event) => setDescription(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-3 font-normal focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-200" placeholder="Conte o que aconteceu e quais passos você já tentou." />
           </label>
           <label className="block text-sm font-semibold">WhatsApp ou telefone para retorno
-            <input required type="tel" minLength={8} maxLength={30} value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-3 font-normal focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-200" placeholder="(62) 99999-9999" />
+            <PhoneInput required type="tel" minLength={8} maxLength={30} value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-3 font-normal focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-200" placeholder="(62) 99999-9999" />
           </label>
           <p className="text-xs leading-5 text-slate-500">A equipe receberá esta solicitação como enviada pelo acesso do prestador, junto com o plano atual e a ferramenta escolhida.</p>
           <button type="submit" disabled={loading || sending} className="inline-flex min-h-12 items-center justify-center rounded-lg bg-purple-700 px-6 font-semibold text-white transition hover:bg-purple-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60">{sending ? "Enviando…" : "Enviar solicitação"}</button>

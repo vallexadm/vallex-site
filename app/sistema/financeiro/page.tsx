@@ -1,4 +1,5 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
 
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -843,8 +844,8 @@ export default function FinanceiroPage() {
           </div>
         </div>
 
-        {error && <p role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>}
-        {message && <p role="status" className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">{message}</p>}
+        {error && <ActionNotice message={error} error onClose={()=>setError("")}/>}
+        {message && <ActionNotice message={message} onClose={()=>setMessage("")}/>}
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {[

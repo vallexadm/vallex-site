@@ -1,4 +1,5 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
@@ -123,10 +124,10 @@ export default function FinanceAdmin() {
     setEditingManualId(entry.id); setTab("overview"); setMessage(""); setError("");
   }
 
-  if (error && !data && !loading) return <section className="vallex-admin-section"><p className="vallex-admin-error">{error}</p>{error.includes("A estrutura do Financeiro VALLEX") && <p>Execute <code>supabase/financeiro_vallex.sql</code> no Supabase de teste e tente novamente.</p>}<button className="vallex-admin-secondary" type="button" onClick={() => void load()}>Tentar novamente</button></section>;
+  if (error && !data && !loading) return <section className="vallex-admin-section"><ActionNotice message={error} error onClose={()=>setError("")}/>{error.includes("A estrutura do Financeiro VALLEX") && <p>Execute <code>supabase/financeiro_vallex.sql</code> no Supabase de teste e tente novamente.</p>}<button className="vallex-admin-secondary" type="button" onClick={() => void load()}>Tentar novamente</button></section>;
 
   return <>
-    {error && <p className="vallex-admin-error" role="alert">{error}</p>}{message && <p className="traffic-admin-notice" role="status">{message}</p>}
+    {error && <ActionNotice message={error} error onClose={()=>setError("")}/>}{message && <ActionNotice message={message} onClose={()=>setMessage("")}/>}
     <section className="vallex-admin-section">
       <div className="vallex-admin-section-heading"><div><span className="vallex-admin-eyebrow">Financeiro da empresa</span><h2>Resumo de caixa e operação</h2><p>O saldo disponível vem do Asaas. Lançamentos do sistema, despesas fora da conta e valores comerciais aparecem identificados por origem.</p></div><div className="vallex-admin-header-actions"><label>De <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label><label>Até <input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label><button className="vallex-admin-secondary" type="button" onClick={() => void load()} disabled={loading}>{loading ? "Atualizando…" : "Atualizar dados"}</button></div></div>
       <div className="vallex-admin-metrics">
