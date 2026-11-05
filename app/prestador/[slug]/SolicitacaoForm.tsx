@@ -1,4 +1,6 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
+import PhoneInput from "@/components/PhoneInput";
 
 import { FormEvent, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
@@ -168,7 +170,7 @@ export default function SolicitacaoForm({
                 Telefone *
               </label>
 
-              <input
+              <PhoneInput
                 id={`telefone-${serviceId}`}
                 value={telefone}
                 onChange={(event) =>
@@ -341,60 +343,11 @@ export default function SolicitacaoForm({
               </button>
             )}
           </div>
+        {sucesso && <ActionNotice inline message="Solicitação enviada. O prestador recebeu seu pedido e entrará em contato." onClose={()=>setSucesso(false)}/>}
         </form>
       </div>
     </details>
-      {sucesso && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={`sucesso-${serviceId}`}
-        >
-          <div className="w-full max-w-md rounded-2xl bg-white p-7 shadow-2xl">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
-              <span className="text-2xl font-bold text-green-700">
-                ✓
-              </span>
-            </div>
 
-            <div className="mt-5 text-center">
-              <h4
-                id={`sucesso-${serviceId}`}
-                className="text-2xl font-bold text-slate-900"
-              >
-                Solicitação enviada!
-              </h4>
-
-              <p className="mt-3 text-sm leading-6 text-slate-600">
-                Sua solicitação para{" "}
-                <strong className="text-slate-900">
-                  {serviceName}
-                </strong>{" "}
-                {previewOnlyLocal
-                  ? "foi registrada como solicitação de teste."
-                  : "foi recebida com sucesso."}
-              </p>
-
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                {previewOnlyLocal
-                  ? "Confira se ela aparece no painel de solicitações da Sitech."
-                  : "O prestador entrará em contato em breve."}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-              setSucesso(false);
-            }}
-              className="mt-6 w-full rounded-lg bg-purple-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-800"
-            >
-              Continuar
-            </button>
-          </div>
-        </div>
-      )}
     </>
   );
 }

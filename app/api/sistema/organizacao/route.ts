@@ -1,5 +1,4 @@
 import { hasMemberAffiliation } from "@/lib/server/member-affiliation";
-import { createBasicTrialPeriod } from "@/lib/provider-trial";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { normalizeMemberPermissions, ownerPermissions } from "@/lib/team-permissions";
@@ -492,17 +491,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const { startedAt: trialStartedAt, endsAt: trialEndsAt } = createBasicTrialPeriod();
+    const trialStartedAt = new Date();
     const { error: subscriptionError } = await supabaseAdmin
       .from("organization_subscriptions")
       .insert({
         organization_id: organization.id,
         plan_id: basicPlan.id,
         billing_provider: "manual",
-        status: "trialing",
+        status: "active",
         started_at: trialStartedAt.toISOString(),
         current_period_start: trialStartedAt.toISOString(),
-        current_period_end: trialEndsAt.toISOString(),
+        current_period_end: null,
       });
 
     if (subscriptionError) {
@@ -523,7 +522,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { ok: true, organization, plan: basicPlan, trialEndsAt: trialEndsAt.toISOString() },
+      { ok: true, organization, plan: basicPlan, trialEndsAt: null },
       { status: 201 }
     );
   } catch (error) {

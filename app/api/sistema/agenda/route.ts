@@ -1,3 +1,5 @@
+import { randomBytes, createHash } from "node:crypto";
+import { activeAppointmentStatuses, isAppointmentStatus, canTransition, arrivalEstimate, trackingExpiry } from "@/lib/appointment-flow";
 import { hasMemberAffiliation } from "@/lib/server/member-affiliation";
 import { requireProviderPanelAccess } from "@/lib/server/provider-panel-access";
 import { NextResponse } from "next/server";
@@ -60,8 +62,18 @@ export async function GET(request: Request) {
     if ("error" in context) return context.error;
     const { admin, user, organization, role, permissions } = context;
     if (!permissions.agenda.view) return reply("O proprietário ainda não liberou o acesso à Agenda para sua conta.", 403);
+    const historyId = new URL(request.url).searchParams.get("history_id");
+    if (historyId) {
+      if (!uuid(historyId)) return reply("Atendimento inválido.", 400);
+      const { data: appointment, error: appointmentError } = await admin.from("organization_appointments").select("id,assigned_to").eq("organization_id", organization.id).eq("id", historyId).maybeSingle();
+      if (appointmentError) return reply("Não foi possível consultar o atendimento.", 503);
+      if (!appointment || (role === "member" && !permissions.agenda.manage && appointment.assigned_to !== user.id)) return reply("Atendimento não encontrado.", 404);
+      const { data: history, error } = await admin.from("organization_appointment_history").select("id,created_at,before_data,after_data").eq("appointment_id", historyId).eq("organization_id", organization.id).order("created_at", { ascending: false }).limit(30);
+      if (error) return reply("Não foi possível carregar o histórico.", 503);
+      return NextResponse.json({ ok: true, history }, { headers: { "Cache-Control": "no-store" } });
+    }
     let query = admin.from("organization_appointments").select(
-      "id, title, details, starts_at, ends_at, status, assigned_to, created_by, created_at, updated_at, customers(id, name, phone, address)"
+      "id, title, details, starts_at, ends_at, status, assigned_to, created_by, created_at, updated_at, revision, buffer_minutes, arrival_estimate_at, customers(id, name, phone, address)"
     ).eq("organization_id", organization.id).order("starts_at", { ascending: true });
     if (role === "member" && !permissions.agenda.manage) query = query.eq("assigned_to", user.id);
     const { data: appointments, error } = await query;
@@ -98,59 +110,51 @@ export async function GET(request: Request) {
       ...appointment,
       assigned_name: role === "owner" || permissions.agenda.manage ? namesByUser.get(appointment.assigned_to) ?? "Membro da equipe" : null,
     }));
-    return NextResponse.json({ ok: true, organization, role, permissions, appointments: visibleAppointments, customers, team });
+    return NextResponse.json({ ok: true, organization, role, permissions, appointments: visibleAppointments, customers, team }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Erro na API GET da agenda:", error);
     return reply("Ocorreu um erro ao carregar a agenda.", 500);
   }
 }
 
+function mutationError(error: { code?: string } | null) {
+  if (error?.code === "23P01") return reply("Este profissional já tem uma reserva nesse período, incluindo o intervalo. Escolha outro horário ou responsável.", 409);
+  if (error?.code === "23514") return reply("Confira a situação, os horários e o intervalo do atendimento.", 400);
+  if (["42703", "42P01", "PGRST204"].includes(error?.code ?? "")) return reply("A agenda precisa da atualização de estrutura. Entre em contato com a VALLEX.", 503);
+  return reply("Não foi possível salvar o atendimento. Tente novamente.", 500);
+}
+const uuid = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
 export async function POST(request: Request) {
   try {
     const context = await getContext(request);
     if ("error" in context) return context.error;
     const { admin, user, organization, role, permissions } = context;
-    if (role !== "owner" && !permissions.agenda.manage) return reply("O proprietário ainda não liberou o gerenciamento da Agenda para sua conta.", 403);
-    let body: unknown;
-    try { body = await request.json(); } catch { return reply("Corpo da requisição inválido.", 400); }
-    if (!body || typeof body !== "object") return reply("Dados do atendimento inválidos.", 400);
-    const data = body as Record<string, unknown>;
-    const customerId = typeof data.customer_id === "string" ? data.customer_id.trim() : "";
-    const assignee = typeof data.assigned_to === "string" ? data.assigned_to.trim() : "";
-    const title = typeof data.title === "string" ? data.title.trim() : "";
-    const details = typeof data.details === "string" ? data.details.trim() : "";
-    const startsAt = typeof data.starts_at === "string" ? new Date(data.starts_at) : new Date(NaN);
-    const endsAt = typeof data.ends_at === "string" && data.ends_at ? new Date(data.ends_at) : null;
-    if (!/^[0-9a-f-]{36}$/i.test(customerId) || !assignee || !title || Number.isNaN(startsAt.getTime())) return reply("Informe cliente, colaborador, título e data válidos.", 400);
-    if (title.length > 200 || details.length > 5000 || (endsAt && Number.isNaN(endsAt.getTime()))) return reply("Confira os dados e os limites dos campos.", 400);
-    if (endsAt && endsAt <= startsAt) return reply("O horário final deve ser depois do horário inicial.", 400);
-    const [{ data: customer }, { data: ownerMember }, { data: assigneeMember }] = await Promise.all([
-      admin.from("customers").select("id").eq("id", customerId).eq("organization_id", organization.id).maybeSingle(),
-      Promise.resolve({ data: assignee === organization.owner_id ? { user_id: organization.owner_id } : null }),
-      admin.from("organization_members").select("user_id").eq("is_active", true).eq("organization_id", organization.id).eq("user_id", assignee).maybeSingle(),
+    if (role !== "owner" && !permissions.agenda.manage) return reply("Seu acesso não permite gerenciar a agenda.", 403);
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) return reply("Dados inválidos.", 400);
+    const start = new Date(body.starts_at), end = new Date(body.ends_at);
+    const buffer = body.buffer_minutes ?? 0;
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const details = typeof body.details === "string" ? body.details.trim() : "";
+    if (!uuid(body.customer_id) || !uuid(body.assigned_to) || title.length < 2 || title.length > 200 || details.length > 5000 ||
+      !body.starts_at || !body.ends_at || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start || end.getTime()-start.getTime()>86400_000 ||
+      !Number.isInteger(buffer) || buffer < 0 || buffer > 240) return reply("Informe cliente, responsável, título, início e término válidos (até 24 horas) e intervalo entre 0 e 240 minutos.", 400);
+    const [{ data: customer, error: customerError }, { data: member, error: memberError }] = await Promise.all([
+      admin.from("customers").select("id").eq("id", body.customer_id).eq("organization_id", organization.id).eq("status", "ativo").maybeSingle(),
+      admin.from("organization_members").select("user_id").eq("organization_id", organization.id).eq("user_id", body.assigned_to).eq("is_active", true).maybeSingle(),
     ]);
-    if (!customer) return reply("O cliente não pertence à organização.", 404);
-    if (!ownerMember && !assigneeMember) return reply("O colaborador selecionado não pertence à equipe.", 400);
+    if (customerError || memberError) return reply("Não foi possível verificar cliente e responsável.", 503);
+    if (!customer) return reply("Cliente ativo não encontrado na organização.", 404);
+    if (body.assigned_to !== organization.owner_id && !member) return reply("Responsável não pertence à equipe ativa.", 400);
     const { data: appointment, error } = await admin.from("organization_appointments").insert({
-      organization_id: organization.id,
-      customer_id: customerId,
-      assigned_to: assignee,
-      created_by: user.id,
-      title,
-      details: details || null,
-      starts_at: startsAt.toISOString(),
-      ends_at: endsAt?.toISOString() ?? null,
-      status: "scheduled",
-    }).select("id, title, details, starts_at, ends_at, status, assigned_to, customers(id, name, phone, address)").single();
-    if (error) {
-      console.error("Erro ao criar atendimento:", error);
-      return reply("Não foi possível criar o atendimento.", 500);
-    }
+      organization_id: organization.id, customer_id: body.customer_id, assigned_to: body.assigned_to,
+      created_by: user.id, updated_by: user.id, title, details: details || null,
+      starts_at: start.toISOString(), ends_at: end.toISOString(), buffer_minutes: buffer, status: "scheduled",
+    }).select("id").single();
+    if (error) return mutationError(error);
     return NextResponse.json({ ok: true, appointment }, { status: 201 });
-  } catch (error) {
-    console.error("Erro na API POST da agenda:", error);
-    return reply("Ocorreu um erro ao criar o atendimento.", 500);
-  }
+  } catch { return reply("Ocorreu um erro ao criar o atendimento.", 500); }
 }
 
 export async function PATCH(request: Request) {
@@ -158,33 +162,64 @@ export async function PATCH(request: Request) {
     const context = await getContext(request);
     if ("error" in context) return context.error;
     const { admin, user, organization, role, permissions } = context;
-    let body: unknown;
-    try { body = await request.json(); } catch { return reply("Corpo da requisição inválido.", 400); }
-    if (!body || typeof body !== "object") return reply("Dados do atendimento inválidos.", 400);
-    const data = body as Record<string, unknown>;
-    const id = typeof data.id === "string" ? data.id.trim() : "";
-    const { data: existing } = await admin.from("organization_appointments").select("id, assigned_to, status").eq("id", id).eq("organization_id", organization.id).maybeSingle();
+    const body = await request.json().catch(() => null);
+    if (!body || !uuid(body.id) || Array.isArray(body)) return reply("Atendimento inválido.", 400);
+    const manager = role === "owner" || permissions.agenda.manage;
+    if (!permissions.agenda.view || (!manager && !permissions.agenda.updateAssigned)) return reply("Seu acesso não permite atualizar a agenda.", 403);
+    const { data: existing, error: readError } = await admin.from("organization_appointments")
+      .select("id, assigned_to, status, revision, ends_at, starts_at")
+      .eq("id", body.id).eq("organization_id", organization.id).maybeSingle();
+    if (readError) return mutationError(readError);
     if (!existing) return reply("Atendimento não encontrado.", 404);
+    if (!manager && existing.assigned_to !== user.id) return reply("Você só pode atualizar seus atendimentos.", 403);
 
-    if (role === "member" && !permissions.agenda.manage) {
-      if (!permissions.agenda.updateAssigned) return reply("O proprietário ainda não liberou a atualização da Agenda para sua conta.", 403);
-      if (existing.assigned_to !== user.id || Object.keys(data).some((key) => !["id", "status"].includes(key))) return reply("Você só pode atualizar o andamento dos seus atendimentos.", 403);
-      if (!(["in_progress", "completed"] as unknown[]).includes(data.status)) return reply("Status de atendimento inválido.", 400);
-      if (existing.status === "completed" || existing.status === "cancelled") return reply("Este atendimento já foi encerrado.", 409);
-      if ((existing.status === "scheduled" && data.status !== "in_progress") || (existing.status === "in_progress" && data.status !== "completed")) return reply("Atualize o atendimento na ordem: iniciar e depois concluir.", 409);
-      const { data: appointment, error } = await admin.from("organization_appointments").update({ status: data.status, updated_at: new Date().toISOString() }).eq("id", id).select("id, status").single();
-      if (error) return reply("Não foi possível atualizar o atendimento.", 500);
-      return NextResponse.json({ ok: true, appointment });
+    if (["tracking_create", "tracking_revoke"].includes(body.action)) {
+      if (!manager) return reply("Somente quem gerencia a agenda pode compartilhar o acompanhamento.", 403);
+      if (body.action === "tracking_revoke") {
+        const { error } = await admin.from("organization_appointment_tracking").update({ revoked_at: new Date().toISOString() }).eq("appointment_id", existing.id);
+        if (error) return mutationError(error);
+        return NextResponse.json({ ok: true, message: "Link de acompanhamento desativado." });
+      }
+      if (!activeAppointmentStatuses.includes(existing.status)) return reply("Gere o acompanhamento para um atendimento ativo.", 409);
+      const token = randomBytes(32).toString("hex"), expiresAt = trackingExpiry(existing.ends_at);
+      const { error } = await admin.from("organization_appointment_tracking").upsert({
+        appointment_id: existing.id, token_hash: createHash("sha256").update(token).digest("hex"),
+        expires_at: expiresAt, revoked_at: null, created_by: user.id, created_at: new Date().toISOString(),
+      }, { onConflict: "appointment_id" });
+      if (error) return mutationError(error);
+      // Token permanece no fragmento: nao integra URL de requisicao nem Referer.
+      return NextResponse.json({ ok: true, trackingPath: `/acompanhamento#token=${token}`, expiresAt }, { headers: { "Cache-Control": "no-store" } });
     }
-
-    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if (typeof data.status === "string" && ["scheduled", "in_progress", "completed", "cancelled"].includes(data.status)) updates.status = data.status;
-    else return reply("Informe um status válido.", 400);
-    const { data: appointment, error } = await admin.from("organization_appointments").update(updates).eq("id", id).select("id, status").single();
-    if (error) return reply("Não foi possível atualizar o atendimento.", 500);
+    if (!Number.isInteger(body.expected_revision) || body.expected_revision !== existing.revision) return reply("Este atendimento foi atualizado em outra tela. Atualize a agenda antes de tentar novamente.", 409);
+    const updates: Record<string, unknown> = { updated_by: user.id };
+    if (body.action === "reschedule") {
+      if (!manager) return reply("Somente quem gerencia a agenda pode remarcar.", 403);
+      if (!activeAppointmentStatuses.includes(existing.status)) return reply("Atendimento encerrado não pode ser remarcado.", 409);
+      if (typeof body.reason !== "string" || body.reason.trim().length < 3 || body.reason.length > 500) return reply("Informe o motivo da remarcação (3 a 500 caracteres).", 400);
+      const start = new Date(body.starts_at), end = new Date(body.ends_at);
+      if (!body.starts_at || !body.ends_at || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start || end.getTime()-start.getTime()>86400_000 || !uuid(body.assigned_to) || !Number.isInteger(body.buffer_minutes) || body.buffer_minutes<0 || body.buffer_minutes>240) return reply("Confira responsável, início, término e intervalo.", 400);
+      if (body.assigned_to !== organization.owner_id) {
+        const { data: member, error } = await admin.from("organization_members").select("user_id").eq("organization_id", organization.id).eq("user_id", body.assigned_to).eq("is_active", true).maybeSingle();
+        if (error) return reply("Não foi possível verificar o responsável.", 503);
+        if (!member) return reply("Responsável não pertence à equipe ativa.", 400);
+      }
+      Object.assign(updates, { starts_at: start.toISOString(), ends_at: end.toISOString(), assigned_to: body.assigned_to, buffer_minutes: body.buffer_minutes, status: "scheduled", arrival_estimate_at: null, change_reason: body.reason.trim() });
+    } else {
+      if (body.action !== "status" || Object.keys(body).some(key => !["id", "action", "status", "eta_minutes", "expected_revision"].includes(key))) return reply("Ação inválida.", 400);
+      if (!isAppointmentStatus(existing.status) || !isAppointmentStatus(body.status)) return reply("Situação inválida.", 400);
+      const refreshingEta = existing.status === "on_way" && body.status === "on_way" && body.eta_minutes !== undefined;
+      if (!refreshingEta && !canTransition(existing.status, body.status, manager)) return reply("Esta mudança de situação não é permitida para o atendimento.", 409);
+      let estimate: string | null = null;
+      if (body.eta_minutes !== undefined) {
+        estimate = arrivalEstimate(body.eta_minutes);
+        if (body.status !== "on_way" || !estimate) return reply("Informe previsão de 1 a 480 minutos somente durante o deslocamento.", 400);
+      }
+      Object.assign(updates, { status: body.status, arrival_estimate_at: estimate, change_reason: null });
+    }
+    const { data: appointment, error } = await admin.from("organization_appointments").update(updates)
+      .eq("id", body.id).eq("organization_id", organization.id).eq("revision", body.expected_revision).select("id").maybeSingle();
+    if (error) return mutationError(error);
+    if (!appointment) return reply("Outro usuário atualizou o atendimento. Atualize a agenda.", 409);
     return NextResponse.json({ ok: true, appointment });
-  } catch (error) {
-    console.error("Erro na API PATCH da agenda:", error);
-    return reply("Ocorreu um erro ao atualizar o atendimento.", 500);
-  }
+  } catch { return reply("Ocorreu um erro ao atualizar o atendimento.", 500); }
 }

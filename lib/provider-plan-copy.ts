@@ -17,7 +17,8 @@ export const providerPlanCopy = {
     features: [
       "Configure sua Vitrine e publique até 5 serviços.",
       "Gerencie solicitações, filtros e orçamentos.",
-      "Organize clientes, agenda e financeiro.",
+      "Organize clientes, agenda e financeiro, sem prazo de uso.",
+      "Uso gratuito com até 3 usuários na equipe.",
     ],
   },
   professional: {
@@ -28,7 +29,11 @@ export const providerPlanCopy = {
       "Inclui todos os recursos do Basic.",
       "Publique até 10 serviços na Vitrine.",
       "Exporte solicitações em arquivo CSV.",
-      "Mais usuários para dividir a operação.",
+      "Até 10 usuários para dividir a operação.",
+      "Gere e compartilhe orçamentos em PDF.",
+      "Acesse o emissor oficial e registre/anexe suas NFS-e.",
+      "Publique fotos dos seus serviços na Vitrine.",
+      "Receba avaliações de clientes de atendimentos concluídos.",
     ],
   },
 } as const;

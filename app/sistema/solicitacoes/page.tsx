@@ -1,4 +1,5 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -573,17 +574,7 @@ async function criarOrcamento(id: string) {
               </div>
             )}
             {mensagemStatus && (
-  <p
-    className={`mt-3 text-sm ${
-      mensagemStatus.includes("Erro") ||
-      mensagemStatus.includes("Não foi")
-        ? "text-red-600"
-        : "text-green-600"
-    }`}
-    role="status"
-  >
-    {mensagemStatus}
-  </p>
+  <ActionNotice error={/erro|não foi/i.test(mensagemStatus)} message={mensagemStatus} onClose={()=>setMensagemStatus("")}/>
 )}
           </div>
 
@@ -607,7 +598,7 @@ async function criarOrcamento(id: string) {
               Não foi possível carregar os dados.
             </p>
 
-            <p className="mt-1 text-sm">{erro}</p>
+            <ActionNotice message={erro} error onClose={()=>setErro("")}/>
           </div>
         )}
 

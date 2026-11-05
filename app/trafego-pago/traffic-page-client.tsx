@@ -1,4 +1,5 @@
 "use client";
+import PhoneInput from "@/components/PhoneInput";
 
 import { type FormEvent, useEffect, useState } from "react";
 
@@ -79,7 +80,7 @@ export default function TrafficPageClient() {
       <form className="traffic-lead-form" onSubmit={submit}>
         <div className="traffic-form-grid">
           <label>Seu nome<input required maxLength={120} autoComplete="name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
-          <label>WhatsApp ou telefone<input required maxLength={30} autoComplete="tel" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
+          <label>WhatsApp ou telefone<PhoneInput required maxLength={30} autoComplete="tel" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
           <label>E-mail (opcional)<input type="email" maxLength={160} autoComplete="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
           <label>Você é<select value={form.audience} onChange={(event) => setForm({ ...form, audience: event.target.value })}><option value="visitante">Visitante</option><option value="cliente">Cliente</option><option value="prestador">Prestador da VALLEX</option></select></label>
           {form.audience === "prestador" && <label className="traffic-full">Nome do negócio ou Vitrine<input maxLength={160} value={form.organizationName} onChange={(event) => setForm({ ...form, organizationName: event.target.value })} /></label>}

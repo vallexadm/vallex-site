@@ -1,4 +1,5 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import SystemBrand from "@/components/SystemBrand";
@@ -38,7 +39,7 @@ function PlanosContent() {
   };
   const message = paymentMessages[searchParams.get("pagamento") ?? ""] ?? "";
   const panelAccessMessage = searchParams.get("acesso") === "painel"
-    ? "No Free, você pode publicar 1 serviço na Vitrine, consultar solicitações e falar com o cliente pelo WhatsApp. Basic amplia o catálogo para 5 serviços e libera a gestão do negócio; Professional permite 10 serviços, exportação CSV e mais usuários."
+    ? "O Basic é gratuito, sem vencimento, com 5 serviços e todas as ferramentas de gestão. Professional amplia os limites e libera recursos exclusivos."
     : "";
   useEffect(() => {
     async function load() {
@@ -126,7 +127,7 @@ function PlanosContent() {
   return <main className="min-h-screen bg-slate-100">
     <header className="bg-[#17002E] px-6 py-5 text-white"><div className="mx-auto flex max-w-6xl items-center justify-between"><SystemBrand /><Link href="/sistema" className="inline-flex items-center gap-2 rounded-lg border border-purple-300 px-4 py-2 text-sm font-medium transition hover:bg-purple-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#17002E]"><span aria-hidden="true">←</span> Voltar ao painel</Link></div></header>
     <section className="mx-auto max-w-6xl px-6 py-10"><p className="text-sm text-slate-500">Gestão da organização</p><h2 className="mt-2 text-3xl font-bold text-slate-900">Planos e assinatura</h2><p className="mt-3 text-slate-600">Escolha o plano que acompanha o crescimento da sua empresa.</p>
-      {message && <p role="status" className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-900">{message}</p>}{panelAccessMessage && <p role="status" className="mt-6 rounded-xl border border-purple-200 bg-purple-50 p-4 text-purple-900">{panelAccessMessage}</p>}{notice && <p role="status" className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-green-800">{notice}</p>}{error && <p role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">{error}</p>}
+      {message && <p role="status" className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-900">{message}</p>}{panelAccessMessage && <p role="status" className="mt-6 rounded-xl border border-purple-200 bg-purple-50 p-4 text-purple-900">{panelAccessMessage}</p>}{notice && <ActionNotice message={notice} onClose={()=>setNotice("")}/>}{error && <ActionNotice message={error} error onClose={()=>setError("")}/>}
       {loading ? <p className="mt-8 rounded-xl bg-white p-6 text-slate-600">Carregando planos...</p> : data && <>
         {data.current && <div className="mt-6 rounded-xl border border-purple-200 bg-white p-4 text-slate-700">
           <p>Plano atual: <strong>{data.current.name}</strong> · Status: <strong>{data.current.status === "trialing" ? "teste grátis" : data.current.cancellationPending ? "renovação cancelada" : data.current.status}</strong>
@@ -158,7 +159,7 @@ function PlanosContent() {
           const copy = getProviderPlanCopy(plan.code);
           const reactivatingExpiredPlan =
             paid && data.current?.code === plan.code && data.current.status !== "active" && data.current.status !== "trialing";
-          return <article key={plan.id} className={"flex flex-col rounded-2xl border bg-white p-6 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-purple-500 hover:shadow-lg focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-100 " + (current ? "border-purple-400 ring-2 ring-purple-100" : "border-slate-200")}>
+          return <article key={plan.id} className={"flex flex-col rounded-2xl border bg-white p-6 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-purple-500 hover:shadow-lg focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-100 " + "border-slate-200"}>
             <p className="text-sm font-semibold uppercase tracking-wide text-purple-700">{plan.name}</p>
             <h3 className="mt-3 text-xl font-semibold leading-snug text-slate-900">{copy.title}</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">{copy.description}</p>
@@ -170,7 +171,7 @@ function PlanosContent() {
             </ul>
             <div className="mt-auto space-y-3 pt-6">
               {current ? <>
-                <button disabled className="w-full rounded-lg border border-slate-300 px-4 py-3 font-semibold text-slate-500">{data.current?.status === "trialing" ? "Teste Basic ativo" : "Plano atual"}</button>
+                <button disabled className="w-full rounded-lg border border-slate-300 px-4 py-3 font-semibold text-slate-500">{plan.code === "basic" ? "Basic gratuito, sem vencimento" : "Plano atual"}</button>
                 {data.current?.canCancel && <button onClick={() => {
                   const endDate = data.current?.currentPeriodEnd
                     ? new Date(data.current.currentPeriodEnd).toLocaleDateString("pt-BR")
@@ -193,7 +194,7 @@ function PlanosContent() {
             </div>
           </article>;
         })}</div>
-        <p className="mt-6 text-sm text-slate-500">Novas organizações começam com 30 dias de teste do Basic. Sem uma assinatura confirmada ao fim do teste, o acesso passa para o Free. O retorno do checkout não confirma o pagamento; a contratação dos planos pagos depende da confirmação do Asaas.</p>
+        <p className="mt-6 text-sm text-slate-500">O Basic é gratuito e não vence. O Professional adiciona recursos exclusivos e depende de assinatura confirmada. O retorno do checkout não confirma o pagamento; a contratação dos planos pagos depende da confirmação do Asaas.</p>
       </>}
     </section>
   </main>;

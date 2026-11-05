@@ -1,4 +1,5 @@
 "use client";
+import PhoneInput from "@/components/PhoneInput";
 
 import ActionNotice from "@/components/ActionNotice";
 
@@ -529,7 +530,7 @@ const [changingStatusId, setChangingStatusId] = useState<string | null>(
                   Telefone
                 </label>
 
-                <input
+                <PhoneInput
                   id="customer-phone"
                   type="text"
                   maxLength={40}

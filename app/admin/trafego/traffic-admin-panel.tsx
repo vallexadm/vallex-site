@@ -1,4 +1,5 @@
 "use client";
+import ActionNotice from "@/components/ActionNotice";
 
 import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -246,7 +247,7 @@ export default function TrafficAdminPanel() {
 
   return <div className="traffic-admin">
     <div className="traffic-admin-heading"><div><span className="vallex-admin-eyebrow">Operação VALLEX</span><h2>Tráfego pago</h2><p>Planos públicos, contatos interessados, negociações e resultados de campanhas.</p></div><button className="vallex-admin-secondary" type="button" onClick={() => void load()}>Atualizar dados</button></div>
-    {error && <p className="vallex-admin-error" role="alert">{error}</p>}{notice && <p className="traffic-admin-notice" role="status">{notice}</p>}
+    {error && <ActionNotice message={error} error onClose={()=>setError("")}/>}{notice && <ActionNotice message={notice} onClose={()=>setNotice("")}/>}
 
     <section className="traffic-admin-metrics" aria-label="Indicadores de tráfego pago">
       <article><span>Oportunidades abertas</span><strong>{pendingLeads}</strong><small>{data.leads.length} contato(s) no funil</small></article>

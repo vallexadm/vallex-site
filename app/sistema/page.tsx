@@ -1,4 +1,5 @@
 "use client";
+import { endCurrentSession } from "@/lib/end-current-session";
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -29,6 +30,8 @@ export default function SistemaPage() {
   const [organizationName, setOrganizationName] = useState("");
   const [businessType, setBusinessType] = useState("");
   const [role, setRole] = useState("");
+  const [professionalAccess, setProfessionalAccess] = useState(false);
+  const [planSummary,setPlanSummary]=useState("");
   const [isVallexAdmin, setIsVallexAdmin] = useState(false);
   const [modulePermissions, setModulePermissions] = useState<MemberPermissions>(defaultMemberPermissions);
   const [contextError, setContextError] = useState("");
@@ -111,6 +114,9 @@ export default function SistemaPage() {
     setOrganizationName(result.organization.name);
     setBusinessType(result.organization.business_type ?? "");
     setRole(result.role);
+    if(result.role==="owner"){try{const r=await fetch("/api/sistema/asaas/plans",{headers:{Authorization:`Bearer ${accessToken}`},cache:"no-store"});const b=await r.json();if(r.ok&&b.current)setPlanSummary(b.current.code==="basic"?"Basic gratuito · Sem vencimento":b.current.currentPeriodEnd?"Profissional · Acesso até "+new Date(b.current.currentPeriodEnd).toLocaleDateString("pt-BR",{timeZone:"America/Sao_Paulo"}):"Profissional · Sem data de vencimento definida");}catch{}}
+
+    setProfessionalAccess(["professional", "enterprise"].includes(result.plan?.code));
     setModulePermissions(normalizeMemberPermissions(result.permissions?.modules));
   } catch {
     setContextError("Erro ao consultar os dados da organização.");
@@ -169,8 +175,8 @@ export default function SistemaPage() {
   }, [role]);
 
   async function handleLogout() {
-    await supabase.auth.signOut();
-    router.replace("/sistema/login");
+    try { await endCurrentSession(supabase.auth); window.location.replace("/sistema/login"); }
+    catch (err) { setContextError(err instanceof Error ? err.message : "Não foi possível sair."); }
   }
 
   async function handleCreateOrganization(event: FormEvent<HTMLFormElement>) {
@@ -264,6 +270,7 @@ export default function SistemaPage() {
           <h2 className="mt-2 text-3xl font-bold text-slate-900">
             Configure sua área de prestador
           </h2>
+
           <p className="mt-3 max-w-2xl text-slate-600">
             Confirme os dados do seu negócio. Em seguida, você poderá configurar
             a Vitrine pública e cadastrar seus serviços.
@@ -312,8 +319,7 @@ export default function SistemaPage() {
             </div>
 
             <p className="text-sm text-slate-500">
-              Sua área começa com 30 dias grátis do plano Basic, sem cobrança.
-              Depois do teste, a conta volta ao Free. A Vitrine será criada
+              Sua área começa no plano Basic gratuito, sem prazo de uso e sem cobrança. A Vitrine será criada
               como não publicada; você decide quando torná-la pública.
             </p>
 
@@ -389,6 +395,7 @@ export default function SistemaPage() {
     </strong>
   </p>
 )}
+        {planSummary&&<p className="mt-4 rounded-lg border border-purple-200 bg-white px-4 py-3 text-sm font-semibold text-purple-800">Plano: {planSummary}</p>}
         {role === "owner" && (
           <section aria-labelledby="owner-dashboard-heading" className="mt-8">
             <div className="flex flex-wrap items-end justify-between gap-3">
@@ -431,6 +438,7 @@ export default function SistemaPage() {
 </div>
 )}
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {role === "owner" && (professionalAccess ? <Link href="/sistema/profissional" className="group flex flex-col justify-between gap-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-purple-500 hover:shadow-lg"><div><h3 className="text-lg font-semibold text-slate-900">Documentos e Vitrine</h3><p className="mt-2 text-sm text-slate-600">Orçamentos em PDF, registro de NFS-e, fotos e avaliações.</p></div><span className="mt-5 inline-flex self-start items-center gap-2 rounded-lg bg-purple-700 px-4 py-2 text-sm font-semibold text-white transition group-hover:bg-purple-800">Acessar recursos <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">→</span></span></Link> : <section className="flex flex-col justify-between gap-6 rounded-xl border border-slate-200 bg-slate-50 p-6 shadow-sm"><div><h3 className="text-lg font-semibold text-slate-600">Documentos e Vitrine</h3><p className="mt-2 text-sm text-slate-500">Orçamentos em PDF, registro de NFS-e, fotos e avaliações.</p></div><p className="text-sm font-medium text-slate-500">Exclusivo do plano Profissional · Indisponível no Basic</p></section>)}
   {[
   {
     title: "Clientes",
